@@ -314,7 +314,10 @@ def get_layer_info(service_name: str, layer_id: int) -> dict[str, Any]:
 
     Returns:
         Dict with keys: name, geometryType, description, fields, extent,
-        maxRecordCount, supportedQueryFormats.
+        maxRecordCount, supportedQueryFormats, capabilities (list of
+        supported operations, e.g. ["Map", "Query", "Data"]),
+        advancedQueryCapabilities (dict of supportsX booleans, e.g.
+        supportsQueryAnalytic, supportsStatistics — varies by service).
     """
     url = f"{EDW_BASE_URL}/{service_name}/MapServer/{layer_id}"
     data = fetch_json(url, {"f": "pjson"})
@@ -332,6 +335,8 @@ def get_layer_info(service_name: str, layer_id: int) -> dict[str, Any]:
             }
         )
 
+    capabilities = [c.strip() for c in data.get("capabilities", "").split(",") if c.strip()]
+
     return {
         "name": data.get("name", ""),
         "geometryType": data.get("geometryType", ""),
@@ -339,6 +344,8 @@ def get_layer_info(service_name: str, layer_id: int) -> dict[str, Any]:
         "fields": fields,
         "extent": data.get("extent", {}),
         "maxRecordCount": data.get("maxRecordCount", _MAX_RECORD_COUNT),
+        "capabilities": capabilities,
+        "advancedQueryCapabilities": data.get("advancedQueryCapabilities", {}),
         "supportedQueryFormats": data.get("supportedQueryFormats", ""),
     }
 
