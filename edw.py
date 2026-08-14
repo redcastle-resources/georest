@@ -692,6 +692,17 @@ def query_features_analytic(
     """
     url = f"{EDW_BASE_URL}/{service_name}/MapServer/{layer_id}/queryAnalytic"
 
+    if partition_by:
+        # queryAnalytic has no top-level partitionBy request parameter — the
+        # partition must be nested in each analytic's own analyticParameters,
+        # or the server silently computes the analytic over the whole result
+        # set instead of per partition (verified against the live EDW server).
+        partition_str = ",".join(partition_by) if isinstance(partition_by, list) else partition_by
+        out_analytics = [
+            {**a, "params": {**a.get("params", {}), "partitionBy": partition_str}}
+            for a in out_analytics
+        ]
+
     params: dict[str, str] = {
         "where": where,
         "outFields": out_fields,
@@ -700,10 +711,6 @@ def query_features_analytic(
         "returnGeometry": "true" if return_geometry else "false",
         "outAnalytics": _build_out_analytics(out_analytics),
     }
-    if partition_by:
-        params["partitionBy"] = (
-            ",".join(partition_by) if isinstance(partition_by, list) else partition_by
-        )
     if order_by_fields:
         params["orderByFields"] = order_by_fields
     if analytic_where:
@@ -761,7 +768,7 @@ def top_n_per_group(
 
     Returns:
         GeoJSON FeatureCollection dict containing only the top N features
-        per group, with a `rank_val` field appended to each.
+        per group, with a `rank_expr0` field appended to each.
 
     Example::
 
@@ -783,7 +790,10 @@ def top_n_per_group(
             "out_name": "rank_val",
         }],
         partition_by=group_by,
-        analytic_where=f"rank_val <= {n}",
+        # ArcGIS's queryAnalytic ignores outStatisticFieldName for RANK and
+        # always names the computed field "rank_expr0" (verified against the
+        # live EDW server) — filter on that name, not the requested out_name.
+        analytic_where=f"rank_expr0 <= {n}",
         where=where,
         geometry=geometry,
         geometry_type=geometry_type,
