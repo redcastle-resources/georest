@@ -559,6 +559,18 @@ def query_features(
 
     Returns:
         GeoJSON FeatureCollection dict, or {"count": N} if return_count_only.
+
+    Note:
+        Some EDW layers 500 or silently return zero features
+        (exceededTransferLimit=True with an empty features list) for a
+        spatial query against a geometrically complex AOI — many disjoint
+        polygon parts and/or holes, e.g. a national forest boundary — even
+        though the AOI itself is valid (returnCountOnly on the identical
+        geometry reports the correct match count). This is an upstream
+        ArcGIS Server limitation, not a client-side bug. When detected,
+        this function automatically falls back to fetching the matching
+        object IDs (which isn't subject to the same limitation) and then
+        re-fetching features by ID with a plain attribute filter.
     """
     url = f"{EDW_BASE_URL}/{service_name}/MapServer/{layer_id}/query"
 
@@ -590,7 +602,83 @@ def query_features(
     if return_count_only:
         return {"count": data.get("count", 0)}
 
+    if geometry is not None and data.get("exceededTransferLimit") and not data.get("features"):
+        id_field, ids = _query_object_ids(
+            service_name, layer_id, geometry, geometry_type, spatial_rel, where, out_sr
+        )
+        if ids:
+            return _fetch_features_by_ids(
+                service_name, layer_id, id_field, ids, out_fields, out_sr, max_features
+            )
+
     return _sanitize_geojson(data)
+
+
+def _query_object_ids(
+    service_name: str,
+    layer_id: int,
+    geometry: dict | str,
+    geometry_type: str,
+    spatial_rel: str,
+    where: str,
+    out_sr: int,
+) -> tuple[str, list[int]]:
+    """Fetch just the object IDs matching a spatial + attribute filter.
+
+    returnIdsOnly is cheap enough that it doesn't hit the exceededTransferLimit
+    empty-features bug that a full feature fetch can hit against a
+    geometrically complex AOI (verified against the live EDW server: a
+    161-part multipolygon returns 0 features via a normal query, but the
+    correct 40 object IDs via returnIdsOnly).
+    """
+    url = f"{EDW_BASE_URL}/{service_name}/MapServer/{layer_id}/query"
+    params: dict[str, str] = {
+        "where": where,
+        "f": "json",
+        "returnIdsOnly": "true",
+        "geometry": _convert_geometry(geometry, geometry_type),
+        "geometryType": geometry_type,
+        "spatialRel": spatial_rel,
+        "inSR": str(out_sr),
+    }
+    data = post_json(url, params)
+    if "error" in data:
+        raise RuntimeError(f"EDW query error: {data['error'].get('message', data['error'])}")
+    return data.get("objectIdFieldName", "OBJECTID"), data.get("objectIds") or []
+
+
+def _fetch_features_by_ids(
+    service_name: str,
+    layer_id: int,
+    id_field: str,
+    ids: list[int],
+    out_fields: str,
+    out_sr: int,
+    max_features: int,
+    chunk_size: int = _MAX_RECORD_COUNT,
+) -> dict:
+    """Fetch features for a known list of object IDs, in chunks.
+
+    A plain attribute IN (...) filter carries no geometry payload, so it
+    sidesteps the complex-geometry query limitation entirely — used to
+    retrieve attributes/geometry for IDs already resolved by
+    _query_object_ids.
+    """
+    ids = ids[:max_features]
+    all_features: list[dict] = []
+    for start in range(0, len(ids), chunk_size):
+        chunk = ids[start : start + chunk_size]
+        id_list = ",".join(str(oid) for oid in chunk)
+        result = query_features(
+            service_name,
+            layer_id,
+            where=f"{id_field} IN ({id_list})",
+            out_fields=out_fields,
+            max_features=chunk_size,
+            out_sr=out_sr,
+        )
+        all_features.extend(result["features"])
+    return _sanitize_geojson({"type": "FeatureCollection", "features": all_features})
 
 
 def _build_out_analytics(out_analytics: list[dict[str, Any]]) -> str:
