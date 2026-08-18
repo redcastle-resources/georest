@@ -303,6 +303,15 @@ def getLayerInfo(url_or_result: str | dict, token: str | None = None) -> dict[st
         err = data["error"]
         raise ValueError(f"Layer returned an error: {err.get('code')} — {err.get('message', str(err))}")
 
+    sub_layers = data.get("subLayers") or []
+    if sub_layers:
+        options = ", ".join(f"{s.get('name')} ({s.get('id')})" for s in sub_layers)
+        raise ValueError(
+            f"{url} is a {data.get('type', 'container layer')} ({data.get('name', '')!r}) — "
+            f"it has no geometry of its own and is not directly queryable. "
+            f"Point at one of its sub-layers instead: {options}."
+        )
+
     fields = [
         {
             "name": f.get("name"),
