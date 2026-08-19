@@ -68,6 +68,28 @@ def fetch_text(url: str, params: dict[str, str] | None = None) -> str:
         raise RuntimeError(f"Request error: {exc.reason}") from exc
 
 
+def fetch_bytes(url: str, params: dict[str, str] | None = None) -> tuple[bytes, str]:
+    """GET a URL with optional query params, return (raw bytes, content-type).
+
+    Use for binary endpoints (e.g. the Esri REST `exportImage` operation)
+    where `fetch_text`'s UTF-8 decode would corrupt the response body.
+
+    Raises:
+        RuntimeError: If the request fails with an HTTP error status or a
+            connection/URL error.
+    """
+    if params:
+        url = url + "?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
+    try:
+        with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
+            return resp.read(), resp.headers.get("Content-Type", "")
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"Request failed ({exc.code}): {url}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"Request error: {exc.reason}") from exc
+
+
 def post_json(url: str, params: dict[str, str]) -> dict:
     """POST form-encoded params, return parsed JSON. Used for large queries.
 
