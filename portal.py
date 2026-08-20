@@ -144,10 +144,13 @@ def searchPortal(
     token: str | None = None,
     **filters: Any,
 ) -> list[dict[str, Any]]:
-    """Search any ArcGIS Portal for hosted services.
+    """Search any ArcGIS Portal for hosted services. Defaults to IIPP.
 
     Uses the standard ``/sharing/rest/search`` endpoint present on ArcGIS
-    Online, IIPP, and any ArcGIS Enterprise install.
+    Online, IIPP, and any ArcGIS Enterprise install. This is a raw portal
+    search — it has no theme/keyword-alias matching. To search the USFS EDW
+    catalog specifically (a separate, non-portal REST endpoint), use
+    ``RESTesri.edw.search_edw_services(query, theme=...)`` instead.
 
     Args:
         query (str): Free-text search query (e.g. ``"naip 2023"``,
