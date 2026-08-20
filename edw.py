@@ -385,6 +385,75 @@ def get_service_info(service_name: str) -> dict[str, Any]:
     }
 
 
+_EXTENT_SUFFIX_RE = re.compile(r"\s*[-(]\s*(National|Regional)\s+Extent\)?\s*$", re.IGNORECASE)
+
+
+def get_detail_layers(service_name: str) -> list[dict[str, Any]]:
+    """Get an EDW service's layers with coarse national-extent duplicates dropped.
+
+    ~13% of EDW services (19 of 142 — EDW_NorWeST_StreamTemperatures_01, the
+    EDW_HydroFlowMetrics* family, EDW_County_01, EDW_State_01,
+    EDW_RangerDistricts_01/03, ...) publish each theme twice: a coarse layer
+    meant only for small-scale cartographic overview (visible zoomed far
+    out, invisible once you zoom in — minScale=0, maxScale>0) alongside a
+    detailed layer carrying the real geometry/attribute resolution (visible
+    only once zoomed in — minScale>0, maxScale=0). For feature-level work
+    (query_features, spatial joins, attribute stats) the coarse layer is
+    almost never what you want — querying it directly can also just return
+    generalized/simplified geometry rather than an error, so this is an easy
+    trap to fall into silently, not just a wasted lookup.
+
+    This groups sibling layers — by shared parent Group Layer if one
+    exists, otherwise by name with a trailing "- National/Regional Extent"
+    or "(National/Regional Extent)" stripped — and within any group that
+    splits along that coarse/detail scale signature, keeps only the detail
+    member(s). Services with no such split return all layers unchanged, so
+    this is safe to call on anything.
+
+    Returns the same shape as get_service_info()['layers'], plus "type" and
+    "parentLayerId".
+    """
+    url = f"{EDW_BASE_URL}/{service_name}/MapServer"
+    data = fetch_json(url, {"f": "pjson"})
+
+    if "error" in data:
+        raise RuntimeError(f"EDW service error: {data['error'].get('message', data['error'])}")
+
+    layers = [
+        {
+            "id": lyr.get("id"),
+            "name": lyr.get("name", ""),
+            "type": lyr.get("type", ""),
+            "parentLayerId": lyr.get("parentLayerId", -1),
+            "defaultVisibility": lyr.get("defaultVisibility", False),
+            "minScale": lyr.get("minScale", 0),
+            "maxScale": lyr.get("maxScale", 0),
+        }
+        for lyr in data.get("layers", [])
+    ]
+
+    group_ids = {lyr["id"] for lyr in layers if lyr["type"] == "Group Layer"}
+
+    groups: dict[Any, list[dict[str, Any]]] = {}
+    for lyr in layers:
+        if lyr["type"] == "Group Layer":
+            continue  # containers, not data layers
+        if lyr["parentLayerId"] in group_ids:
+            key: Any = ("parent", lyr["parentLayerId"])
+        else:
+            key = ("name", _EXTENT_SUFFIX_RE.sub("", lyr["name"]).strip())
+        groups.setdefault(key, []).append(lyr)
+
+    result: list[dict[str, Any]] = []
+    for members in groups.values():
+        detail = [m for m in members if m["minScale"] > 0 and m["maxScale"] == 0]
+        coarse = [m for m in members if m["maxScale"] > 0]
+        result.extend(detail if detail and coarse else members)
+
+    result.sort(key=lambda lyr: lyr["id"])
+    return result
+
+
 def get_layer_info(service_name: str, layer_id: int) -> dict[str, Any]:
     """Get detailed metadata for a specific layer: fields, geometry type, capabilities.
 
