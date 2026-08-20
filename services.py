@@ -32,12 +32,14 @@ You may obtain a copy of the License at
 
 from __future__ import annotations
 
+import html
 import json
+import re
 import urllib.error
 import urllib.parse
 from typing import Any
 
-from ._http import build_params, fetch_bytes, fetch_json
+from ._http import build_params, fetch_bytes, fetch_json, fetch_text
 from .portal import _resolve_url
 
 _FEATURE_QUERY_SUFFIX = "/query"
@@ -459,3 +461,179 @@ def exportImage(
         return out_path
 
     return raw
+
+
+def getSupportedOperations(url_or_result: str | dict, token: str | None = None) -> list[dict[str, str]]:
+    """List every REST operation actually exposed by a service or layer.
+
+    ArcGIS Server does not expose the full operations list as structured
+    JSON — the ``?f=json`` representation only carries a coarse
+    ``capabilities`` string (e.g. ``"Image,Metadata,Catalog,Mensuration"``),
+    which is not a reliable stand-in: a service can expose operations
+    (``computeStatisticsHistograms``, ``getSamples``, etc.) with no
+    corresponding capability flag present at all. The authoritative list is
+    only rendered on the plain HTML browse page (``?f=html``), as a
+    "Supported Operations" section of links — this function fetches that
+    page and parses those links out.
+
+    Args:
+        url_or_result (str or dict): Service or layer URL, or a
+            :func:`portal.searchPortal` result dict.
+        token (str, optional): ArcGIS token for secured services.
+
+    Returns:
+        list of dict: Each entry has ``name`` (human-readable, e.g.
+        ``"Export Image"``), ``operation`` (URL segment, e.g.
+        ``"exportImage"``), and ``url`` (full operation URL).
+
+    Raises:
+        ConnectionError: If the URL is unreachable.
+    """
+    url = _resolve_url(url_or_result)
+    params = build_params({"f": "html"}, token)
+    try:
+        page = fetch_text(url, params)
+    except urllib.error.URLError as exc:
+        raise ConnectionError(f"Could not reach service at {url!r}: {exc}") from exc
+
+    section = re.search(r"Supported Operations</b>:(.*?)(?:<b>|\Z)", page, re.DOTALL | re.IGNORECASE)
+    if not section:
+        return []
+
+    # `url` is absolute (scheme + host + path) but the HTML's <a href> values
+    # are server-relative (just the path) — compare path components only,
+    # via urlparse, rather than the raw strings (which would never match).
+    base_url_path = urllib.parse.urlparse(url).path.rstrip("/")
+    operations = []
+    for href, name in re.findall(r'<a href="([^"]+)">([^<]+)</a>', section.group(1)):
+        clean_name = html.unescape(name).strip()
+        path, _, query = href.partition("?")
+        path = urllib.parse.urlparse(path).path.rstrip("/")
+
+        if path == base_url_path or path == "":
+            # Not a distinct sub-resource — a query-string flag on the
+            # resource itself, e.g. "...?f=pjson&returnUpdates=true&"
+            # ("Return Updates" on a MapServer layer). Pull the real flag
+            # name out of the query string rather than guessing from a URL
+            # path segment (which would otherwise grab the layer ID).
+            flag_keys = [k for k in urllib.parse.parse_qs(query) if k != "f"]
+            operation = flag_keys[0] if flag_keys else clean_name
+            op_url = f"{url}?{query.rstrip('&')}" if query else url
+        else:
+            operation = path.rsplit("/", 1)[-1]
+            op_url = f"{url}/{operation}"
+
+        operations.append({"name": clean_name, "operation": operation, "url": op_url})
+    return operations
+
+
+def computeStatisticsHistograms(
+    url_or_result: str | dict,
+    geometry: dict | str,
+    geometry_type: str = "esriGeometryPolygon",
+    in_sr: int = 4326,
+    mosaic_rule: dict | None = None,
+    rendering_rule: dict | None = None,
+    pixel_size: dict | None = None,
+    token: str | None = None,
+) -> list[dict[str, Any]]:
+    """Compute per-band pixel statistics and a value histogram over an area
+    of an ArcGIS Image Service.
+
+    Uses the ``computeStatisticsHistograms`` operation rather than the
+    narrower ``computeHistograms`` — it returns both statistics and a
+    histogram together for the same single request, so there's no reason
+    to call the histogram-only operation separately.
+
+    Args:
+        url_or_result (str or dict): ImageServer URL (e.g.
+            ``".../ImageServer"``), or a :func:`portal.searchPortal` result
+            dict.
+        geometry: Area to compute over. Can be a GeoJSON geometry dict, an
+            Esri JSON geometry dict/string, a bbox string
+            ``"xmin,ymin,xmax,ymax"``, or an Esri JSON polygon/envelope.
+        geometry_type (str, optional): Esri geometry type, e.g.
+            ``esriGeometryPolygon``, ``esriGeometryEnvelope``. Defaults to
+            ``esriGeometryPolygon``.
+        in_sr (int, optional): Spatial reference WKID of *geometry*.
+            Defaults to 4326 (WGS84).
+        mosaic_rule (dict, optional): Esri mosaic rule JSON, to select which
+            raster(s) in a mosaic dataset contribute (e.g. by attribute or
+            lock a specific raster).
+        rendering_rule (dict, optional): Esri raster function JSON, applied
+            server-side before computing statistics.
+        pixel_size (dict, optional): ``{"x", "y", "spatialReference"}`` to
+            compute at a coarser/finer resolution than native. Omit to use
+            the service default.
+        token (str, optional): ArcGIS token for secured services.
+
+    Returns:
+        list of dict: One entry per band, each with ``band`` (int index),
+        ``min``, ``max``, ``mean``, ``stddev``, ``sum``, ``median``,
+        ``mode``, ``count``, and ``histogram`` (a dict with ``min``,
+        ``max``, ``size``, ``counts``).
+
+    Raises:
+        ValueError: If the service returns an error.
+        ConnectionError: If the service URL is unreachable.
+    """
+    url = _resolve_url(url_or_result)
+
+    # Unlike /query, computeStatisticsHistograms silently ignores a separate
+    # inSR param (returns empty statistics, no error) — verified against the
+    # live service. The spatial reference must be embedded in the geometry
+    # JSON itself.
+    converted = _convert_geometry(geometry, geometry_type)
+    try:
+        geom_json = json.loads(converted)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"geometry could not be converted to Esri JSON: {geometry!r}") from exc
+    geom_json.setdefault("spatialReference", {"wkid": in_sr})
+
+    params: dict[str, str] = {
+        "geometry": json.dumps(geom_json),
+        "geometryType": geometry_type,
+        "f": "json",
+    }
+    if mosaic_rule is not None:
+        params["mosaicRule"] = json.dumps(mosaic_rule)
+    if rendering_rule is not None:
+        params["renderingRule"] = json.dumps(rendering_rule)
+    if pixel_size is not None:
+        params["pixelSize"] = json.dumps(pixel_size)
+    if token:
+        params["token"] = token
+
+    stats_url = f"{url}/computeStatisticsHistograms"
+    try:
+        data = fetch_json(stats_url, params)
+    except urllib.error.URLError as exc:
+        raise ConnectionError(f"Could not reach ImageServer at {stats_url!r}: {exc}") from exc
+
+    if "error" in data:
+        err = data["error"]
+        raise ValueError(f"computeStatisticsHistograms error: {err.get('code')} — {err.get('message', str(err))}")
+
+    statistics = data.get("statistics") or []
+    histograms = data.get("histograms") or []
+
+    return [
+        {
+            "band": i,
+            "min": stat.get("min"),
+            "max": stat.get("max"),
+            "mean": stat.get("mean"),
+            "stddev": stat.get("standardDeviation"),
+            "sum": stat.get("sum"),
+            "median": stat.get("median"),
+            "mode": stat.get("mode"),
+            "count": stat.get("count"),
+            "histogram": {
+                "min": hist.get("min"),
+                "max": hist.get("max"),
+                "size": hist.get("size"),
+                "counts": hist.get("counts", []),
+            },
+        }
+        for i, (stat, hist) in enumerate(zip(statistics, histograms))
+    ]
