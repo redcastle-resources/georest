@@ -37,9 +37,9 @@ Tile URLs, feature queries, and image export for any Image/Map/Feature Service.
 
 ### `edw.py` — USFS Enterprise Data Warehouse (EDW) client
 
-Search, metadata, and spatial queries against `https://apps.fs.usda.gov/arcx/rest/services/EDW`.
+Search, metadata, and spatial queries against `https://apps.fs.usda.gov/arcx/rest/services/EDW` only. This is a single flat catalog, not a portal — for portal search (IIPP, ArcGIS Online, etc.) see `portal.py` below.
 
-- `search_services(query="", theme="")` — search EDW services by keyword and/or theme (biota, boundaries, environment, geoscientific, inland_waters, planning_cadastre, structure, transportation), using substring, theme, and keyword-alias matching (e.g. "riparian" → inland waters services).
+- `search_edw_services(query="", theme="")` — search the EDW catalog (and only the EDW catalog) by keyword and/or theme (biota, boundaries, environment, geoscientific, inland_waters, planning_cadastre, structure, transportation), using substring, theme, and keyword-alias matching (e.g. "riparian" → inland waters services). To search IIPP or another portal instead, use `portal.searchPortal(query, portal="iipp")`.
 - `get_service_info(service_name)` — metadata for an EDW MapServer service: description, spatial reference, layer list.
 - `get_layer_info(service_name, layer_id)` — layer metadata: fields, geometry type, extent, capabilities.
 - `get_layer_metadata(service_name, layer_id, include_domains=False)` — parse a layer's FGDC/ISO metadata XML for abstract, purpose, keywords, and per-field definitions (and coded-value/range domains if requested).
