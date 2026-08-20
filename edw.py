@@ -8,8 +8,8 @@ Quick start::
 
     import edw
 
-    # Search for fire-related services
-    services = edw.search_services("fire")
+    # Search for fire-related services (EDW catalog only — see search_edw_services)
+    services = edw.search_edw_services("fire")
 
     # Get layer info
     info = edw.get_service_info("EDW_MTBS_01")
@@ -248,8 +248,16 @@ _KEYWORD_ALIASES: dict[str, list[str]] = {
 # ---------------------------------------------------------------------------
 
 
-def search_services(query: str = "", theme: str = "") -> list[dict[str, str]]:
-    """Search EDW services by keyword and/or theme.
+def search_edw_services(query: str = "", theme: str = "") -> list[dict[str, str]]:
+    """Search the USFS EDW catalog ONLY by keyword and/or theme.
+
+    IMPORTANT — scope: this searches exactly one flat catalog,
+    ``EDW_BASE_URL`` (https://apps.fs.usda.gov/arcx/rest/services/EDW). It
+    does NOT search IIPP, ArcGIS Online, or any other portal. To search
+    IIPP (or another portal) instead, use
+    ``RESTesri.portal.searchPortal(query, portal="iipp")`` — that function
+    hits the portal's ``/sharing/rest/search`` endpoint directly and has no
+    EDW-specific theme/keyword-alias matching.
 
     Uses three matching strategies (results are deduplicated):
     1. Substring match on service name (e.g. "mtbs" → EDW_MTBS_01)
