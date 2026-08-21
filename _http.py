@@ -11,16 +11,22 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-_TIMEOUT = 30  # seconds for HTTP requests
+_TIMEOUT = 60  # default seconds for HTTP requests; override per-call via `timeout`
 _USER_AGENT = "hostedServiceTools/1.0"
 
 
-def fetch_json(url: str, params: dict[str, str] | None = None) -> dict:
+def fetch_json(url: str, params: dict[str, str] | None = None, timeout: int | None = None) -> dict:
     """GET a URL with optional query params, return parsed JSON.
 
     Args:
         url: The base URL to request.
         params: Optional query parameters, URL-encoded and appended to `url`.
+        timeout: Request timeout in seconds. Defaults to `_TIMEOUT`. Some
+            ArcGIS Image Service operations against large mosaic catalogs
+            (hundreds of contributing rasters) or fine `pixelSize` requests
+            over a sizable area can genuinely take 30-45+ seconds server-side
+            even for a simple answer (verified against live services) — pass
+            a larger value for those rather than assuming a hang.
 
     Returns:
         The response body parsed as JSON.
@@ -34,7 +40,7 @@ def fetch_json(url: str, params: dict[str, str] | None = None) -> dict:
         url = url + "?" + urllib.parse.urlencode(params)
     req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
     try:
-        with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
+        with urllib.request.urlopen(req, timeout=timeout or _TIMEOUT) as resp:
             raw = resp.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
         raise RuntimeError(f"Request failed ({exc.code}): {url}") from exc
@@ -46,11 +52,14 @@ def fetch_json(url: str, params: dict[str, str] | None = None) -> dict:
         raise ValueError(f"Expected JSON from {url!r} but got:\n{raw[:400]}") from exc
 
 
-def fetch_text(url: str, params: dict[str, str] | None = None) -> str:
+def fetch_text(url: str, params: dict[str, str] | None = None, timeout: int | None = None) -> str:
     """GET a URL with optional query params, return the raw response body as text.
 
     Use for endpoints that return XML/HTML rather than JSON (e.g. the Esri
     REST `/metadata` operation).
+
+    Args:
+        timeout: Request timeout in seconds. Defaults to `_TIMEOUT`.
 
     Raises:
         RuntimeError: If the request fails with an HTTP error status or a
@@ -60,7 +69,7 @@ def fetch_text(url: str, params: dict[str, str] | None = None) -> str:
         url = url + "?" + urllib.parse.urlencode(params)
     req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
     try:
-        with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
+        with urllib.request.urlopen(req, timeout=timeout or _TIMEOUT) as resp:
             return resp.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
         raise RuntimeError(f"Request failed ({exc.code}): {url}") from exc
@@ -68,11 +77,14 @@ def fetch_text(url: str, params: dict[str, str] | None = None) -> str:
         raise RuntimeError(f"Request error: {exc.reason}") from exc
 
 
-def fetch_bytes(url: str, params: dict[str, str] | None = None) -> tuple[bytes, str]:
+def fetch_bytes(url: str, params: dict[str, str] | None = None, timeout: int | None = None) -> tuple[bytes, str]:
     """GET a URL with optional query params, return (raw bytes, content-type).
 
     Use for binary endpoints (e.g. the Esri REST `exportImage` operation)
     where `fetch_text`'s UTF-8 decode would corrupt the response body.
+
+    Args:
+        timeout: Request timeout in seconds. Defaults to `_TIMEOUT`.
 
     Raises:
         RuntimeError: If the request fails with an HTTP error status or a
@@ -82,7 +94,7 @@ def fetch_bytes(url: str, params: dict[str, str] | None = None) -> tuple[bytes, 
         url = url + "?" + urllib.parse.urlencode(params)
     req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
     try:
-        with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
+        with urllib.request.urlopen(req, timeout=timeout or _TIMEOUT) as resp:
             return resp.read(), resp.headers.get("Content-Type", "")
     except urllib.error.HTTPError as exc:
         raise RuntimeError(f"Request failed ({exc.code}): {url}") from exc
@@ -90,12 +102,13 @@ def fetch_bytes(url: str, params: dict[str, str] | None = None) -> tuple[bytes, 
         raise RuntimeError(f"Request error: {exc.reason}") from exc
 
 
-def post_json(url: str, params: dict[str, str]) -> dict:
+def post_json(url: str, params: dict[str, str], timeout: int | None = None) -> dict:
     """POST form-encoded params, return parsed JSON. Used for large queries.
 
     Args:
         url: The URL to POST to.
         params: Form parameters, URL-encoded into the request body.
+        timeout: Request timeout in seconds. Defaults to `_TIMEOUT`.
 
     Returns:
         The response body parsed as JSON.
@@ -115,7 +128,7 @@ def post_json(url: str, params: dict[str, str]) -> dict:
         },
     )
     try:
-        with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
+        with urllib.request.urlopen(req, timeout=timeout or _TIMEOUT) as resp:
             raw = resp.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
         raise RuntimeError(f"Request failed ({exc.code}): {url}") from exc
