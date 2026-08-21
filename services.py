@@ -46,6 +46,22 @@ _FEATURE_QUERY_SUFFIX = "/query"
 _MAX_RECORD_COUNT = 2000  # ArcGIS server default max
 
 
+def _format_esri_error(err: dict) -> str:
+    """Format an Esri error object for a raised exception message.
+
+    Esri's `err["message"]` is frequently a generic, unhelpful string (e.g.
+    "Invalid or missing input parameters") while the actually-diagnostic
+    text lives in `err["details"]` (e.g. "The requested image exceeds the
+    size limit.") — verified against a live service, where the bare message
+    alone was actively misleading. Always include details when present.
+    """
+    msg = f"{err.get('code')} — {err.get('message', str(err))}"
+    details = err.get("details")
+    if details:
+        msg += f" ({'; '.join(str(d) for d in details)})"
+    return msg
+
+
 def getImageServiceTileUrl(url_or_result: str | dict, token: str | None = None) -> str:
     """Build the ``{z}/{y}/{x}`` tile URL template for an ArcGIS Image
     Service or cached Map Service.
@@ -79,6 +95,7 @@ def queryFeatureServiceCount(
     spatial_rel: str = "esriSpatialRelIntersects",
     in_sr: int = 4326,
     token: str | None = None,
+    timeout: int | None = None,
 ) -> int:
     """Return the number of features matching *where* (and an optional
     spatial filter) on a Feature Service, Map Service, or mosaic layer.
@@ -98,6 +115,10 @@ def queryFeatureServiceCount(
         in_sr (int, optional): Spatial reference WKID of *geometry*.
             Defaults to 4326 (WGS84).
         token (str, optional): ArcGIS token for secured services.
+        timeout (int, optional): Request timeout in seconds. Defaults to
+            60 — some services with large mosaic catalogs can genuinely
+            take longer than that to respond (verified against a live
+            service); pass a larger value rather than assuming a hang.
 
     Raises:
         ConnectionError: If the service URL is unreachable.
@@ -118,13 +139,12 @@ def queryFeatureServiceCount(
 
     count_url = f"{url}{_FEATURE_QUERY_SUFFIX}"
     try:
-        resp = fetch_json(count_url, params)
+        resp = fetch_json(count_url, params, timeout=timeout)
     except urllib.error.URLError as exc:
         raise ConnectionError(f"Could not reach Feature Service at {count_url!r}: {exc}") from exc
 
     if "error" in resp:
-        err = resp["error"]
-        raise ValueError(f"Feature Service returned an error: {err.get('code')} — {err.get('message', str(err))}")
+        raise ValueError(f"Feature Service returned an error: {_format_esri_error(resp['error'])}")
 
     return resp.get("count", 0)
 
@@ -139,6 +159,7 @@ def queryFeatureService(
     max_features: int = 1000,
     out_sr: int = 4326,
     token: str | None = None,
+    timeout: int | None = None,
 ) -> dict[str, Any]:
     """Fetch features from an ArcGIS Feature Service, Map Service, or mosaic
     layer as GeoJSON, optionally filtered by spatial intersection.
@@ -170,6 +191,10 @@ def queryFeatureService(
             the input spatial reference for *geometry*. Defaults to 4326
             (WGS84).
         token (str, optional): ArcGIS token for secured services.
+        timeout (int, optional): Request timeout in seconds. Defaults to
+            60 — some services with large mosaic catalogs can genuinely
+            take longer than that to respond; pass a larger value rather
+            than assuming a hang.
 
     Returns:
         dict: GeoJSON FeatureCollection.
@@ -191,6 +216,7 @@ def queryFeatureService(
         spatial_rel=spatial_rel,
         in_sr=out_sr,
         token=token,
+        timeout=timeout,
     )
     if feature_count > max_features:
         raise ValueError(
@@ -216,13 +242,28 @@ def queryFeatureService(
 
     query_url = f"{url}{_FEATURE_QUERY_SUFFIX}"
     try:
-        geojson = fetch_json(query_url, query_params)
+        geojson = fetch_json(query_url, query_params, timeout=timeout)
     except urllib.error.URLError as exc:
         raise ConnectionError(f"Could not fetch features from {query_url!r}: {exc}") from exc
+    except RuntimeError:
+        # Some services — notably an ImageServer's native /query, which
+        # exposes its raster catalog table — reject f=geojson outright
+        # (verified against a live service: HTTP 400, "Output format not
+        # supported"). By this point the count pre-flight above has already
+        # proven `where`/`geometry` are valid using f=json, so fall back to
+        # f=json here too and convert to GeoJSON client-side instead of
+        # surfacing this as a hard failure.
+        fallback_params = {**query_params, "f": "json"}
+        try:
+            esri_json = fetch_json(query_url, fallback_params, timeout=timeout)
+        except urllib.error.URLError as exc:
+            raise ConnectionError(f"Could not fetch features from {query_url!r}: {exc}") from exc
+        if "error" in esri_json:
+            raise ValueError(f"Feature Service query returned an error: {_format_esri_error(esri_json['error'])}")
+        return _sanitize_geojson(_esri_json_to_geojson(esri_json))
 
     if "error" in geojson:
-        err = geojson["error"]
-        raise ValueError(f"Feature Service query returned an error: {err.get('code')} — {err.get('message', str(err))}")
+        raise ValueError(f"Feature Service query returned an error: {_format_esri_error(geojson['error'])}")
 
     return geojson
 
@@ -270,7 +311,59 @@ def _convert_geometry(geometry: dict | str, geometry_type: str) -> str:
     return json.dumps(geometry)
 
 
-def getLayerInfo(url_or_result: str | dict, token: str | None = None) -> dict[str, Any]:
+def _esri_geometry_to_geojson(geometry: dict | None) -> dict | None:
+    """Convert an Esri JSON geometry (x/y, points, paths, or rings) to GeoJSON.
+
+    Polygons are converted as a flat list of rings without hole/multipart
+    detection — fine for simple polygons, but a ring-orientation pass would
+    be needed to correctly split true multipart polygons or interior holes.
+    """
+    if not geometry:
+        return None
+    if "x" in geometry and "y" in geometry:
+        return {"type": "Point", "coordinates": [geometry["x"], geometry["y"]]}
+    if "points" in geometry:
+        return {"type": "MultiPoint", "coordinates": geometry["points"]}
+    if "paths" in geometry:
+        paths = geometry["paths"]
+        if len(paths) == 1:
+            return {"type": "LineString", "coordinates": paths[0]}
+        return {"type": "MultiLineString", "coordinates": paths}
+    if "rings" in geometry:
+        return {"type": "Polygon", "coordinates": geometry["rings"]}
+    return None
+
+
+def _esri_json_to_geojson(data: dict) -> dict:
+    """Convert an Esri JSON (f=json) query response into a GeoJSON FeatureCollection."""
+    features = [
+        {
+            "type": "Feature",
+            "properties": feat.get("attributes", {}),
+            "geometry": _esri_geometry_to_geojson(feat.get("geometry")),
+        }
+        for feat in data.get("features", [])
+    ]
+    return {"type": "FeatureCollection", "features": features}
+
+
+def _sanitize_geojson(geojson: dict) -> dict:
+    """Sanitize a GeoJSON FeatureCollection for downstream compatibility.
+
+    - Removes properties with dots in the name (e.g. 'SHAPE.LEN') — many
+      consumers (e.g. Earth Engine) reject dotted property keys
+    - Ensures each feature has a string 'id'
+    """
+    for i, feat in enumerate(geojson.get("features", [])):
+        props = feat.get("properties", {})
+        bad_keys = [k for k in props if "." in k]
+        for k in bad_keys:
+            del props[k]
+        feat["id"] = str(i)
+    return geojson
+
+
+def getLayerInfo(url_or_result: str | dict, token: str | None = None, timeout: int | None = None) -> dict[str, Any]:
     """Get detailed metadata for a single service layer: fields, geometry
     type, and capabilities.
 
@@ -282,6 +375,7 @@ def getLayerInfo(url_or_result: str | dict, token: str | None = None) -> dict[st
             ``".../FeatureServer/0"``), or a :func:`portal.searchPortal`
             result dict.
         token (str, optional): ArcGIS token for secured services.
+        timeout (int, optional): Request timeout in seconds. Defaults to 60.
 
     Returns:
         dict: Keys: ``name``, ``geometryType``, ``description``, ``fields``
@@ -297,13 +391,12 @@ def getLayerInfo(url_or_result: str | dict, token: str | None = None) -> dict[st
     url = _resolve_url(url_or_result)
     params = build_params({"f": "pjson"}, token)
     try:
-        data = fetch_json(url, params)
+        data = fetch_json(url, params, timeout=timeout)
     except urllib.error.URLError as exc:
         raise ConnectionError(f"Could not reach layer at {url!r}: {exc}") from exc
 
     if "error" in data:
-        err = data["error"]
-        raise ValueError(f"Layer returned an error: {err.get('code')} — {err.get('message', str(err))}")
+        raise ValueError(f"Layer returned an error: {_format_esri_error(data['error'])}")
 
     sub_layers = data.get("subLayers") or []
     if sub_layers:
@@ -368,6 +461,7 @@ def exportImage(
     interpolation: str = "RSP_BilinearInterpolation",
     out_path: str | None = None,
     token: str | None = None,
+    timeout: int | None = None,
 ) -> bytes | str:
     """Export a rendered image from an ArcGIS Image Service.
 
@@ -405,6 +499,7 @@ def exportImage(
         out_path (str, optional): If given, write the image bytes to this
             path and return the path instead of the raw bytes.
         token (str, optional): ArcGIS token for secured services.
+        timeout (int, optional): Request timeout in seconds. Defaults to 60.
 
     Returns:
         bytes: The raw image bytes, or the value of *out_path* if given.
@@ -437,7 +532,7 @@ def exportImage(
 
     export_url = f"{url}/exportImage"
     try:
-        raw, _content_type = fetch_bytes(export_url, params)
+        raw, _content_type = fetch_bytes(export_url, params, timeout=timeout)
     except urllib.error.URLError as exc:
         raise ConnectionError(f"Could not reach ImageServer at {export_url!r}: {exc}") from exc
 
@@ -451,7 +546,7 @@ def exportImage(
     if raw.lstrip()[:1] == b"{":
         try:
             err = json.loads(raw.decode("utf-8", errors="replace")).get("error", {})
-            raise ValueError(f"exportImage error: {err.get('code')} — {err.get('message', str(err))}")
+            raise ValueError(f"exportImage error: {_format_esri_error(err)}")
         except json.JSONDecodeError:
             raise ValueError(f"exportImage returned unexpected content: {raw[:300]!r}") from None
 
@@ -463,7 +558,9 @@ def exportImage(
     return raw
 
 
-def getSupportedOperations(url_or_result: str | dict, token: str | None = None) -> list[dict[str, str]]:
+def getSupportedOperations(
+    url_or_result: str | dict, token: str | None = None, timeout: int | None = None
+) -> list[dict[str, str]]:
     """List every REST operation actually exposed by a service or layer.
 
     ArcGIS Server does not expose the full operations list as structured
@@ -480,6 +577,7 @@ def getSupportedOperations(url_or_result: str | dict, token: str | None = None) 
         url_or_result (str or dict): Service or layer URL, or a
             :func:`portal.searchPortal` result dict.
         token (str, optional): ArcGIS token for secured services.
+        timeout (int, optional): Request timeout in seconds. Defaults to 60.
 
     Returns:
         list of dict: Each entry has ``name`` (human-readable, e.g.
@@ -492,7 +590,7 @@ def getSupportedOperations(url_or_result: str | dict, token: str | None = None) 
     url = _resolve_url(url_or_result)
     params = build_params({"f": "html"}, token)
     try:
-        page = fetch_text(url, params)
+        page = fetch_text(url, params, timeout=timeout)
     except urllib.error.URLError as exc:
         raise ConnectionError(f"Could not reach service at {url!r}: {exc}") from exc
 
@@ -536,6 +634,7 @@ def computeStatisticsHistograms(
     rendering_rule: dict | None = None,
     pixel_size: dict | None = None,
     token: str | None = None,
+    timeout: int | None = None,
 ) -> list[dict[str, Any]]:
     """Compute per-band pixel statistics and a value histogram over an area
     of an ArcGIS Image Service.
@@ -566,6 +665,15 @@ def computeStatisticsHistograms(
             compute at a coarser/finer resolution than native. Omit to use
             the service default.
         token (str, optional): ArcGIS token for secured services.
+        timeout (int, optional): Request timeout in seconds. Defaults to
+            60. At the native resolution of a high-resolution service (e.g.
+            sub-meter imagery), this operation over any non-trivial area can
+            exceed a server-side pixel-count limit outright — pass a
+            coarser `pixel_size` to avoid that. Even with a reasonable
+            `pixel_size`, a large area or a service with a big/complex
+            mosaic catalog can legitimately take 30-45+ seconds to respond
+            (verified against live services) — raise this rather than
+            assuming a hang.
 
     Returns:
         list of dict: One entry per band, each with ``band`` (int index),
@@ -606,13 +714,12 @@ def computeStatisticsHistograms(
 
     stats_url = f"{url}/computeStatisticsHistograms"
     try:
-        data = fetch_json(stats_url, params)
+        data = fetch_json(stats_url, params, timeout=timeout)
     except urllib.error.URLError as exc:
         raise ConnectionError(f"Could not reach ImageServer at {stats_url!r}: {exc}") from exc
 
     if "error" in data:
-        err = data["error"]
-        raise ValueError(f"computeStatisticsHistograms error: {err.get('code')} — {err.get('message', str(err))}")
+        raise ValueError(f"computeStatisticsHistograms error: {_format_esri_error(data['error'])}")
 
     statistics = data.get("statistics") or []
     histograms = data.get("histograms") or []
@@ -637,3 +744,285 @@ def computeStatisticsHistograms(
         }
         for i, (stat, hist) in enumerate(zip(statistics, histograms))
     ]
+
+
+def identifyPixelValue(
+    url_or_result: str | dict,
+    x: float,
+    y: float,
+    in_sr: int = 4326,
+    mosaic_rule: dict | None = None,
+    rendering_rule: dict | None = None,
+    return_catalog_items: bool = False,
+    token: str | None = None,
+    timeout: int | None = None,
+) -> dict[str, Any]:
+    """Identify the pixel value at a single point on an ArcGIS Image Service.
+
+    This is inherently a point operation: the underlying ``identify``
+    operation accepts other geometry types (e.g. polygon), but silently
+    collapses them to their centroid rather than sampling the area
+    (verified against a live service), so this function only takes a
+    single x/y rather than pretending to support area input. For area-wide
+    pixel-value distribution, use :func:`computeStatisticsHistograms`
+    instead.
+
+    Args:
+        url_or_result (str or dict): ImageServer URL (e.g.
+            ``".../ImageServer"``), or a :func:`portal.searchPortal` result
+            dict.
+        x (float): X coordinate (longitude, if *in_sr* is 4326).
+        y (float): Y coordinate (latitude, if *in_sr* is 4326).
+        in_sr (int, optional): Spatial reference WKID of *x*/*y*. Defaults
+            to 4326 (WGS84).
+        mosaic_rule (dict, optional): Esri mosaic rule JSON, to select which
+            raster(s) in a mosaic dataset contribute (e.g. by attribute or
+            lock a specific raster).
+        rendering_rule (dict, optional): Esri raster function JSON, applied
+            server-side before identifying the value.
+        return_catalog_items (bool, optional): If True, also return the
+            footprint attributes of the raster(s) covering this point
+            (e.g. which mosaic source/year contributed) in the ``catalog_items``
+            result key. Defaults to False. Note: this does *not* control
+            whether ``band_values`` is populated — see below.
+        token (str, optional): ArcGIS token for secured services.
+        timeout (int, optional): Request timeout in seconds. Defaults to
+            60 — a service with a large/complex mosaic catalog (many
+            overlapping contributing rasters at a given point) can
+            genuinely take 30-45+ seconds to respond (verified against a
+            live service); pass a larger value rather than assuming a hang.
+
+    Returns:
+        dict: ``value`` (str, the composited pixel value, or ``"NoData"``),
+        ``band_values`` (list of str, one per band/raster contributing at
+        this point), ``location`` (``{"x", "y"}`` echoed back from the
+        service), and ``catalog_items`` (list of raster footprint
+        ``{"attributes", "geometry"}`` dicts if *return_catalog_items* is
+        True, else ``None``).
+
+    Raises:
+        ValueError: If the service returns an error.
+        ConnectionError: If the service URL is unreachable.
+    """
+    url = _resolve_url(url_or_result)
+
+    params: dict[str, str] = {
+        # Like computeStatisticsHistograms, identify silently ignores a
+        # separate inSR param — it echoes the raw x/y straight back
+        # mislabeled as already being in the target SR, instead of
+        # reprojecting or erroring (verified against a live service). The
+        # spatial reference must be embedded directly in the geometry JSON.
+        "geometry": json.dumps({"x": x, "y": y, "spatialReference": {"wkid": in_sr}}),
+        "geometryType": "esriGeometryPoint",
+        # Always request catalog items on the wire, regardless of
+        # `return_catalog_items` — Esri only populates `properties.Values`
+        # (this function's `band_values`) when `returnCatalogItems=true` is
+        # sent (verified against a live service: with it false, `properties`
+        # comes back null even at a point with real, non-NoData data). What
+        # `return_catalog_items` actually controls is only whether we
+        # include the (often large) footprint geometries in our own return
+        # value below.
+        "returnCatalogItems": "true",
+        "f": "json",
+    }
+    if mosaic_rule is not None:
+        params["mosaicRule"] = json.dumps(mosaic_rule)
+    if rendering_rule is not None:
+        params["renderingRule"] = json.dumps(rendering_rule)
+    if token:
+        params["token"] = token
+
+    identify_url = f"{url}/identify"
+    try:
+        data = fetch_json(identify_url, params, timeout=timeout)
+    except urllib.error.URLError as exc:
+        raise ConnectionError(f"Could not reach ImageServer at {identify_url!r}: {exc}") from exc
+
+    if "error" in data:
+        raise ValueError(f"identify error: {_format_esri_error(data['error'])}")
+
+    props = data.get("properties") or {}
+    catalog = data.get("catalogItems") or {}
+
+    return {
+        "value": data.get("value"),
+        "band_values": props.get("Values", []),
+        "location": data.get("location", {}),
+        "catalog_items": catalog.get("features") if return_catalog_items else None,
+    }
+
+
+def getSamples(
+    url_or_result: str | dict,
+    points: list[tuple[float, float]],
+    in_sr: int = 4326,
+    mosaic_rule: dict | None = None,
+    pixel_size: dict | None = None,
+    token: str | None = None,
+    timeout: int | None = None,
+) -> list[dict[str, Any]]:
+    """Sample pixel values at multiple points on an ArcGIS Image Service.
+
+    Tries the batch ``getSamples`` operation first (one request for every
+    point). If that fails, falls back to calling :func:`identifyPixelValue`
+    once per point instead.
+
+    This fallback isn't defensive boilerplate — verified against a live
+    service, ``getSamples`` can fail outright (HTTP 400, sometimes even
+    500) for a perfectly valid, correctly-formatted request at specific
+    locations (e.g. a point landing on a NoData pixel), while ``identify``
+    handles the identical location cleanly. Since a single bad point would
+    otherwise cost every other point's result too, the fallback keeps
+    results for whichever points can succeed.
+
+    Args:
+        url_or_result (str or dict): ImageServer URL (e.g.
+            ``".../ImageServer"``), or a :func:`portal.searchPortal` result
+            dict.
+        points (list of tuple): ``(x, y)`` coordinate pairs to sample.
+        in_sr (int, optional): Spatial reference WKID of *points*. Defaults
+            to 4326 (WGS84).
+        mosaic_rule (dict, optional): Esri mosaic rule JSON, to select which
+            raster(s) in a mosaic dataset contribute.
+        pixel_size (dict, optional): ``{"x", "y", "spatialReference"}`` to
+            sample at a coarser/finer resolution than native.
+        token (str, optional): ArcGIS token for secured services.
+        timeout (int, optional): Request timeout in seconds, applied to
+            both the batch call and any per-point identify fallback.
+            Defaults to 60.
+
+    Returns:
+        list of dict: One entry per input point, in the same order as
+        *points*, each with ``x``, ``y``, ``value`` (str, or ``None`` if
+        both the batch call and the fallback failed for this point), and
+        ``source`` (``"getSamples"``, ``"identify"``, or an ``"error: ..."``
+        string if this specific point could not be sampled at all).
+    """
+    url = _resolve_url(url_or_result)
+
+    params: dict[str, str] = {
+        # Same embedded-spatialReference requirement as identify/
+        # computeStatisticsHistograms — a separate inSR param is not
+        # reliable here either.
+        "geometry": json.dumps({"points": [[x, y] for x, y in points], "spatialReference": {"wkid": in_sr}}),
+        "geometryType": "esriGeometryMultipoint",
+        "f": "json",
+    }
+    if mosaic_rule is not None:
+        params["mosaicRule"] = json.dumps(mosaic_rule)
+    if pixel_size is not None:
+        params["pixelSize"] = json.dumps(pixel_size)
+    if token:
+        params["token"] = token
+
+    # The batch call doesn't reliably behave all-or-nothing: it can also
+    # return a `samples` array shorter than `points` (silently dropping
+    # ones it couldn't resolve, verified against a live service) rather
+    # than erroring outright. Match results back to input points by
+    # `locationId` and only fall back to identify for whichever specific
+    # points didn't come back — not the whole batch.
+    samples_url = f"{url}/getSamples"
+    by_location_id: dict[int, dict[str, Any]] = {}
+    try:
+        data = fetch_json(samples_url, params, timeout=timeout)
+        if "error" not in data:
+            for s in data.get("samples", []):
+                loc_id = s.get("locationId")
+                if loc_id is not None:
+                    by_location_id[loc_id] = {
+                        "x": s.get("location", {}).get("x"),
+                        "y": s.get("location", {}).get("y"),
+                        "value": s.get("value"),
+                        "source": "getSamples",
+                    }
+    except (urllib.error.URLError, RuntimeError):
+        pass
+
+    results = []
+    for i, (x, y) in enumerate(points):
+        if i in by_location_id:
+            results.append(by_location_id[i])
+            continue
+        try:
+            r = identifyPixelValue(url, x, y, in_sr=in_sr, mosaic_rule=mosaic_rule, token=token, timeout=timeout)
+            results.append({"x": x, "y": y, "value": r.get("value"), "source": "identify"})
+        except (ValueError, ConnectionError) as exc:
+            results.append({"x": x, "y": y, "value": None, "source": f"error: {exc}"})
+    return results
+
+
+def queryBoundary(
+    url_or_result: str | dict,
+    mosaic_rule: dict | None = None,
+    out_sr: int = 4326,
+    token: str | None = None,
+    timeout: int | None = None,
+) -> dict[str, Any]:
+    """Get the true coverage boundary of an ArcGIS Image Service.
+
+    Unlike the rectangular ``extent`` returned by :func:`getLayerInfo` /
+    :func:`portal.getServiceMetadata`, this is the actual coverage shape —
+    useful as a pre-flight check for whether a service actually covers an
+    AOI before spending an :func:`exportImage` /
+    :func:`computeStatisticsHistograms` call on it.
+
+    Unlike ``identify``/``computeStatisticsHistograms``/``getSamples``,
+    this operation *does* respect a plain ``outSR`` param directly
+    (verified against a live service) — there's no geometry input here to
+    embed a spatial reference into in the first place.
+
+    Args:
+        url_or_result (str or dict): ImageServer URL (e.g.
+            ``".../ImageServer"``), or a :func:`portal.searchPortal` result
+            dict.
+        mosaic_rule (dict, optional): Esri mosaic rule JSON, to scope the
+            boundary to a subset of the mosaic (e.g. one raster/year). Note:
+            not every mosaic rule type actually changes this operation's
+            result — verified against a live service, a ``where``-clause
+            rule that should lock to a single raster returned an identical
+            boundary to no rule at all, and the operation doesn't validate
+            the rule (a garbage rule is silently ignored rather than
+            erroring).
+        out_sr (int, optional): Output spatial reference WKID. Defaults to
+            4326 (WGS84).
+        token (str, optional): ArcGIS token for secured services.
+        timeout (int, optional): Request timeout in seconds. Defaults to
+            60 — a service with a large/complex mosaic catalog can
+            genuinely take 30-45+ seconds to respond even for this
+            operation's simple result (verified against a live service);
+            pass a larger value rather than assuming a hang.
+
+    Returns:
+        dict: GeoJSON-shaped ``{"type": "Polygon", "coordinates": [...],
+        "area": <float>}``. Note: unlike the coordinates, ``area`` does
+        *not* vary with *out_sr* — verified against a live service, it's
+        always reported in the service's native storage spatial reference
+        (e.g. square meters in Web Mercator), regardless of what SR the
+        geometry itself was requested in.
+
+    Raises:
+        ValueError: If the service returns an error.
+        ConnectionError: If the service URL is unreachable.
+    """
+    url = _resolve_url(url_or_result)
+
+    params: dict[str, str] = {
+        "outSR": str(out_sr),
+        "f": "json",
+    }
+    if mosaic_rule is not None:
+        params["mosaicRule"] = json.dumps(mosaic_rule)
+    if token:
+        params["token"] = token
+
+    boundary_url = f"{url}/queryBoundary"
+    try:
+        data = fetch_json(boundary_url, params, timeout=timeout)
+    except urllib.error.URLError as exc:
+        raise ConnectionError(f"Could not reach ImageServer at {boundary_url!r}: {exc}") from exc
+
+    if "error" in data:
+        raise ValueError(f"queryBoundary error: {_format_esri_error(data['error'])}")
+
+    geom = _esri_geometry_to_geojson(data.get("shape")) or {}
+    return {**geom, "area": data.get("area")}
