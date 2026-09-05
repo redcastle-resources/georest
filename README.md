@@ -31,12 +31,14 @@ Search, metadata, and spatial queries against `https://apps.fs.usda.gov/arcx/res
 
 - `search_edw_services(query="", theme="")` — search the EDW catalog (and only the EDW catalog) by keyword and/or theme (biota, boundaries, environment, geoscientific, inland_waters, planning_cadastre, structure, transportation), using substring, theme, and keyword-alias matching (e.g. "riparian" → inland waters services). To search IIPP or another portal instead, use `portal.searchPortal(query, portal="iipp")`.
 - `get_service_info(service_name)` — metadata for an EDW MapServer service: description, spatial reference, layer list.
+- `get_layer_roles(service_name)` — every layer tagged with its cartographic `role`: `group` (a container, not queryable), `detail` (full resolution), `coarse` (a small-scale duplicate superseded by a `detail` sibling), or `standalone`. Many EDW services publish a theme at several resolutions; querying the coarse one can silently return generalized geometry. Nothing is dropped, and `groupKey` shows why two layers were treated as versions of each other.
+- `get_detail_layers(service_name)` — convenience filter over `get_layer_roles`: just the `detail` and `standalone` layers, i.e. the ones you normally want to query.
 - `get_layer_info(service_name, layer_id)` — layer metadata: fields, geometry type, extent, capabilities.
 - `get_layer_metadata(service_name, layer_id, include_domains=False)` — parse a layer's FGDC/ISO metadata XML for abstract, purpose, keywords, and per-field definitions (and coded-value/range domains if requested).
 - `query_features(service_name, layer_id, geometry=None, where="1=1", max_features=1000, ...)` — query features as GeoJSON, with an automatic object-ID fallback for layers that silently drop features on complex spatial queries.
 - `query_features_analytic(service_name, layer_id, out_analytics, partition_by=None, ...)` — run SQL window-function analytics (RANK, SUM, LAG/LEAD, etc.) via the `queryAnalytic` operation.
 - `top_n_per_group(service_name, layer_id, field, group_by, n=1, ...)` — convenience wrapper over `query_features_analytic` to get the top N features by a field within each group.
-- `query_features_with_pagination(service_name, layer_id, max_features=5000, ...)` — like `query_features` but pages past the 2000-record server limit.
+- `query_features_with_pagination(service_name, layer_id, max_features=5000, ...)` — like `query_features` but pages past the server's per-request cap, using the layer's own `maxRecordCount` as the page size.
 
 ### `portal.py` — ArcGIS Portal search and service metadata
 
@@ -57,3 +59,11 @@ Stdlib-only (`urllib`) GET/POST/JSON helpers used by all the modules above.
 - `build_params(base, token)` — merge an optional token into a params dict.
 
 Default request timeout is 60 seconds (`_TIMEOUT`) — every fetch function above accepts an optional `timeout` override for services that legitimately need longer.
+
+Errors surface two ways: `RuntimeError` for HTTP and URL failures, and `ValueError` when a response won't parse as JSON — which is what a degraded HTML error page served with status 200 looks like. Callers retrying around a flaky server need to catch both.
+
+## Tests
+
+`python -m unittest discover -s tests -t .` from the repository root — stdlib `unittest`, no install needed. Offline and deterministic by default; set `EDW_LIVE=1` to include tests that hit the real EDW server. See [tests/README.md](../tests/README.md).
+
+`python tests/check_service_themes.py` reports drift between the live catalog and the hand-curated `_SERVICE_THEMES` table in `edw.py` (`--emit` prints paste-ready entries).
