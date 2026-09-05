@@ -6,7 +6,7 @@ the ArcGIS REST services at https://apps.fs.usda.gov/arcx/rest/services/EDW.
 
 Quick start::
 
-    import edw
+    from RESTesri import edw
 
     # Search for fire-related services (EDW catalog only — see search_edw_services)
     services = edw.search_edw_services("fire")
@@ -14,10 +14,17 @@ Quick start::
     # Get layer info
     info = edw.get_service_info("EDW_MTBS_01")
 
-    # Query features as GeoJSON
-    geojson = edw.query_features("EDW_MTBS_01", 15,
-        where="FIRE_NAME LIKE '%CAMERON PEAK%'",
-        out_fields="FIRE_NAME,ACRES,YEAR")
+    # Query features as GeoJSON (layer 63 = "Burned Area Boundaries (All Years)";
+    # the lower-numbered layers are single years)
+    geojson = edw.query_features("EDW_MTBS_01", 63,
+        where="fire_name LIKE '%CAMERON PEAK%'",
+        out_fields="fire_name,acres,year")
+
+Field naming gotcha: `where` and `out_fields` take field *names*, which on most
+EDW layers are lowercase (fire_name, acres, year). The uppercase forms shown in
+ArcGIS clients (FIRE_NAME, ACRES, YEAR) are display *aliases*; passing those in
+out_fields makes the server reject the whole query with "Failed to execute
+query." Use get_layer_info(service, layer)["fields"] to get the real names.
 """
 
 from __future__ import annotations
@@ -355,8 +362,12 @@ def get_service_info(service_name: str) -> dict[str, Any]:
         service_name: Short service name, e.g. "EDW_MTBS_01".
 
     Returns:
-        Dict with keys: name, description, spatialReference, layers (id, name,
-        geometryType, defaultVisibility, minScale, maxScale).
+        Dict with keys: name, description, spatialReference, fullExtent,
+        layers (id, name, defaultVisibility, minScale, maxScale).
+
+        Note there is no geometryType here: the MapServer catalog's `layers`
+        array doesn't carry it. Use get_layer_info(service_name, layer_id)
+        for a layer's geometryType and fields.
     """
     url = f"{EDW_BASE_URL}/{service_name}/MapServer"
     data = fetch_json(url, {"f": "pjson"})
@@ -388,30 +399,74 @@ def get_service_info(service_name: str) -> dict[str, Any]:
 _EXTENT_SUFFIX_RE = re.compile(r"\s*[-(]\s*(National|Regional)\s+Extent\)?\s*$", re.IGNORECASE)
 
 
-def get_detail_layers(service_name: str) -> list[dict[str, Any]]:
-    """Get an EDW service's layers with coarse national-extent duplicates dropped.
+def _int_or(value: Any, default: int) -> int:
+    """Coerce a possibly-null/missing/non-numeric field to an int.
 
-    ~13% of EDW services (19 of 142 — EDW_NorWeST_StreamTemperatures_01, the
-    EDW_HydroFlowMetrics* family, EDW_County_01, EDW_State_01,
-    EDW_RangerDistricts_01/03, ...) publish each theme twice: a coarse layer
-    meant only for small-scale cartographic overview (visible zoomed far
-    out, invisible once you zoom in — minScale=0, maxScale>0) alongside a
-    detailed layer carrying the real geometry/attribute resolution (visible
-    only once zoomed in — minScale>0, maxScale=0). For feature-level work
-    (query_features, spatial joins, attribute stats) the coarse layer is
-    almost never what you want — querying it directly can also just return
-    generalized/simplified geometry rather than an error, so this is an easy
-    trap to fall into silently, not just a wasted lookup.
+    dict.get(key, default) only supplies the default when the key is
+    *absent* — ArcGIS also emits keys that are present with a null value
+    (minScale, maxScale, parentLayerId, id all show up this way), and those
+    come back as None and blow up the numeric comparisons downstream.
+    """
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
-    This groups sibling layers — by shared parent Group Layer if one
-    exists, otherwise by name with a trailing "- National/Regional Extent"
-    or "(National/Regional Extent)" stripped — and within any group that
-    splits along that coarse/detail scale signature, keeps only the detail
-    member(s). Services with no such split return all layers unchanged, so
-    this is safe to call on anything.
 
-    Returns the same shape as get_service_info()['layers'], plus "type" and
-    "parentLayerId".
+#: Roles assigned by get_layer_roles(). See that function for the criteria.
+LAYER_ROLES = ("group", "detail", "coarse", "standalone")
+
+
+def get_layer_roles(service_name: str) -> list[dict[str, Any]]:
+    """Every layer in an EDW service, tagged with its cartographic role.
+
+    ~18% of EDW services (19 of the 105 whose layer trees were surveyed —
+    EDW_NorWeST_StreamTemperatures_01, the EDW_HydroFlowMetrics* family,
+    EDW_County_01, EDW_State_01, EDW_RangerDistricts_01/03, ...) publish a
+    theme more than once: a coarse layer meant only for small-scale
+    cartographic overview (drawn when zoomed far out, switched off once you
+    zoom in) alongside a detailed layer carrying the real
+    geometry/attribute resolution (drawn only once zoomed in). For
+    feature-level work (query_features, spatial joins, attribute stats) the
+    coarse layer is almost never what you want — querying it can silently
+    return generalized geometry rather than an error.
+
+    Rather than drop anything, this returns the full layer list with each
+    entry tagged, so a mis-grouping is visible instead of silently losing a
+    layer. Each dict is get_service_info()['layers'] shape plus:
+
+        type, parentLayerId — as reported by the server
+        role — one of:
+            "group"      a Group Layer container. Has no /query endpoint,
+                         so it is never directly queryable.
+            "detail"     the full-resolution member of a coarse/detail split
+            "coarse"     a small-scale sibling superseded by a "detail"
+                         layer in the same group
+            "standalone" no split applies to its group; use it as-is
+        groupKey — the ("parent", id) or ("name", base) key its siblings
+                   were matched on (None for group layers), so you can audit
+                   why two layers were treated as versions of each other
+
+    Role criteria, within one group: a member is coarse if maxScale > 0
+    (i.e. it stops drawing past some scale), and detail if minScale > 0 and
+    maxScale == 0. A group only splits when it has at least one of each;
+    otherwise every member is "standalone". Note a coarse layer may itself
+    have minScale > 0 (EDW_CongressionalDistricts_04 publishes its national
+    tier as minScale=77000000, maxScale=1000000), which is why the coarse
+    test is maxScale > 0 alone. Any member of a splitting group that is not
+    detail — including a mid-resolution tier banded on both sides — is
+    tagged coarse.
+
+    Grouping caveat: siblings are matched by shared parent Group Layer when
+    there is one, else by name with a trailing "- National/Regional Extent"
+    or "(National/Regional Extent)" stripped. Parent-based matching assumes
+    a group holds one dataset at several resolutions. That holds throughout
+    the current EDW catalog, but a group mixing genuinely different
+    datasets could see one tagged "coarse" against another — inspect
+    groupKey if a result looks wrong.
+
+    Raises:
+        RuntimeError: if the service errors, or returns no layers at all.
     """
     url = f"{EDW_BASE_URL}/{service_name}/MapServer"
     data = fetch_json(url, {"f": "pjson"})
@@ -419,17 +474,31 @@ def get_detail_layers(service_name: str) -> list[dict[str, Any]]:
     if "error" in data:
         raise RuntimeError(f"EDW service error: {data['error'].get('message', data['error'])}")
 
+    raw_layers = data.get("layers")
+    if not raw_layers:
+        # EDW intermittently answers 200 with the layers array missing or
+        # empty. Every service seen doing this had layers on retry, so an
+        # empty list means a degraded response, not a layerless service —
+        # returning [] here would look identical to "nothing to query".
+        raise RuntimeError(
+            f"EDW returned no layers for {service_name}. The MapServer "
+            f"response was empty or truncated (EDW does this intermittently) "
+            f"— retry before concluding the service has no layers."
+        )
+
     layers = [
         {
             "id": lyr.get("id"),
-            "name": lyr.get("name", ""),
-            "type": lyr.get("type", ""),
-            "parentLayerId": lyr.get("parentLayerId", -1),
+            # `or ""` rather than a get() default: a null name would otherwise
+            # reach the extent-suffix regex and raise.
+            "name": lyr.get("name") or "",
+            "type": lyr.get("type") or "",
+            "parentLayerId": _int_or(lyr.get("parentLayerId"), -1),
             "defaultVisibility": lyr.get("defaultVisibility", False),
-            "minScale": lyr.get("minScale", 0),
-            "maxScale": lyr.get("maxScale", 0),
+            "minScale": _int_or(lyr.get("minScale"), 0),
+            "maxScale": _int_or(lyr.get("maxScale"), 0),
         }
-        for lyr in data.get("layers", [])
+        for lyr in raw_layers
     ]
 
     group_ids = {lyr["id"] for lyr in layers if lyr["type"] == "Group Layer"}
@@ -437,21 +506,48 @@ def get_detail_layers(service_name: str) -> list[dict[str, Any]]:
     groups: dict[Any, list[dict[str, Any]]] = {}
     for lyr in layers:
         if lyr["type"] == "Group Layer":
-            continue  # containers, not data layers
+            lyr["role"] = "group"
+            lyr["groupKey"] = None
+            continue
         if lyr["parentLayerId"] in group_ids:
             key: Any = ("parent", lyr["parentLayerId"])
         else:
             key = ("name", _EXTENT_SUFFIX_RE.sub("", lyr["name"]).strip())
+        lyr["groupKey"] = key
         groups.setdefault(key, []).append(lyr)
 
-    result: list[dict[str, Any]] = []
     for members in groups.values():
-        detail = [m for m in members if m["minScale"] > 0 and m["maxScale"] == 0]
-        coarse = [m for m in members if m["maxScale"] > 0]
-        result.extend(detail if detail and coarse else members)
+        has_detail = any(m["minScale"] > 0 and m["maxScale"] == 0 for m in members)
+        has_coarse = any(m["maxScale"] > 0 for m in members)
+        for member in members:
+            if has_detail and has_coarse:
+                is_detail = member["minScale"] > 0 and member["maxScale"] == 0
+                member["role"] = "detail" if is_detail else "coarse"
+            else:
+                member["role"] = "standalone"
 
-    result.sort(key=lambda lyr: lyr["id"])
-    return result
+    # id is left as-is in the output (a null id is the server's fact to
+    # report, not ours to invent) but must not be compared raw, or one null
+    # among two or more layers raises TypeError mid-sort.
+    layers.sort(key=lambda lyr: _int_or(lyr["id"], -1))
+    return layers
+
+
+def get_detail_layers(service_name: str) -> list[dict[str, Any]]:
+    """An EDW service's queryable layers, minus coarse cartographic duplicates.
+
+    Convenience filter over get_layer_roles(): keeps the "detail" and
+    "standalone" layers and sets aside Group Layers (not queryable) and
+    "coarse" small-scale duplicates. Safe to call on any service — one with
+    no coarse/detail split returns all of its data layers.
+
+    Use get_layer_roles() directly when you need to see what was set aside
+    and why; this function reports only what survived.
+    """
+    return [
+        lyr for lyr in get_layer_roles(service_name)
+        if lyr["role"] in ("detail", "standalone")
+    ]
 
 
 def get_layer_info(service_name: str, layer_id: int) -> dict[str, Any]:
@@ -497,6 +593,33 @@ def get_layer_info(service_name: str, layer_id: int) -> dict[str, Any]:
         "advancedQueryCapabilities": data.get("advancedQueryCapabilities", {}),
         "supportedQueryFormats": data.get("supportedQueryFormats", ""),
     }
+
+
+_MAX_RECORD_COUNT_CACHE: dict[tuple[str, int], int] = {}
+
+
+def _get_max_record_count(service_name: str, layer_id: int) -> int:
+    """The layer's own maxRecordCount, fetched once and cached.
+
+    The server silently truncates every response to this many records, so it
+    — not the _MAX_RECORD_COUNT fallback — is the only safe page/chunk
+    stride. Striding wider than the server will actually return makes the
+    caller skip past records it never received: page 2 starts at offset
+    `stride` while the server only handed back `maxRecordCount` rows, and the
+    gap is dropped silently, with no error and no flag.
+    """
+    key = (service_name, layer_id)
+    if key not in _MAX_RECORD_COUNT_CACHE:
+        try:
+            count = int(get_layer_info(service_name, layer_id)["maxRecordCount"])
+        except (RuntimeError, KeyError, TypeError, ValueError):
+            # A metadata fetch failure shouldn't sink an otherwise fine query;
+            # callers pair this with an exceededTransferLimit / short-chunk
+            # check so a wrong guess here still can't silently lose records.
+            count = 0
+        _MAX_RECORD_COUNT_CACHE[key] = count if count > 0 else _MAX_RECORD_COUNT
+    return _MAX_RECORD_COUNT_CACHE[key]
+
 
 def get_layer_metadata(
     service_name: str, layer_id: int, include_domains: bool = False
@@ -614,6 +737,7 @@ def query_features(
     max_features: int = 1000,
     out_sr: int = 4326,
     return_count_only: bool = False,
+    in_sr: int | None = None,
 ) -> dict:
     """Query features from an EDW layer, optionally filtered by spatial intersection.
 
@@ -629,10 +753,19 @@ def query_features(
             esriGeometryPoint, esriGeometryEnvelope, esriGeometryPolygon
         spatial_rel: Spatial relationship. Default: esriSpatialRelIntersects.
         where: SQL WHERE clause. Default: "1=1" (all features).
-        out_fields: Comma-separated field names or "*" for all.
+        out_fields: Comma-separated field names or "*" for all. Include the
+            layer's object-id field (usually "objectid") if you need stable
+            feature ids: EDW omits the GeoJSON `id` when that field isn't
+            requested, leaving only a positional index that shifts between
+            calls.
         max_features: Maximum features to return (capped at server max).
         out_sr: Output spatial reference WKID. Default: 4326 (WGS84).
         return_count_only: If True, return only the count of matching features.
+        in_sr: Spatial reference WKID the input `geometry` is expressed in.
+            Defaults to 4326 (WGS84), matching GeoJSON's own coordinate
+            convention. This is deliberately independent of `out_sr` —
+            asking for output in another projection must not change how the
+            input geometry is read.
 
     Returns:
         GeoJSON FeatureCollection dict, or {"count": N} if return_count_only.
@@ -656,7 +789,11 @@ def query_features(
         "outFields": out_fields,
         "outSR": str(out_sr),
         "f": "geojson",
-        "resultRecordCount": str(min(max_features, _MAX_RECORD_COUNT)),
+        # Sent unclamped: the server caps this at the layer's own
+        # maxRecordCount anyway (verified — asking 100000 of a 2000-record
+        # layer returns 2000 + exceededTransferLimit, not an error). Clamping
+        # to a hardcoded 2000 here only under-fetched layers allowing more.
+        "resultRecordCount": str(max_features),
     }
 
     if return_count_only:
@@ -668,7 +805,7 @@ def query_features(
         params["geometry"] = geom_str
         params["geometryType"] = geometry_type
         params["spatialRel"] = spatial_rel
-        params["inSR"] = str(out_sr)
+        params["inSR"] = str(4326 if in_sr is None else in_sr)
 
     # Use POST for large payloads (polygon geometries can be big)
     data = post_json(url, params)
@@ -681,7 +818,8 @@ def query_features(
 
     if geometry is not None and data.get("exceededTransferLimit") and not data.get("features"):
         id_field, ids = _query_object_ids(
-            service_name, layer_id, geometry, geometry_type, spatial_rel, where, out_sr
+            service_name, layer_id, geometry, geometry_type, spatial_rel, where,
+            4326 if in_sr is None else in_sr,
         )
         if ids:
             return _fetch_features_by_ids(
@@ -698,7 +836,7 @@ def _query_object_ids(
     geometry_type: str,
     spatial_rel: str,
     where: str,
-    out_sr: int,
+    in_sr: int,
 ) -> tuple[str, list[int]]:
     """Fetch just the object IDs matching a spatial + attribute filter.
 
@@ -716,7 +854,7 @@ def _query_object_ids(
         "geometry": _convert_geometry(geometry, geometry_type),
         "geometryType": geometry_type,
         "spatialRel": spatial_rel,
-        "inSR": str(out_sr),
+        "inSR": str(in_sr),
     }
     data = post_json(url, params)
     if "error" in data:
@@ -732,7 +870,7 @@ def _fetch_features_by_ids(
     out_fields: str,
     out_sr: int,
     max_features: int,
-    chunk_size: int = _MAX_RECORD_COUNT,
+    chunk_size: int | None = None,
 ) -> dict:
     """Fetch features for a known list of object IDs, in chunks.
 
@@ -740,8 +878,15 @@ def _fetch_features_by_ids(
     sidesteps the complex-geometry query limitation entirely — used to
     retrieve attributes/geometry for IDs already resolved by
     _query_object_ids.
+
+    chunk_size defaults to the layer's own maxRecordCount. It must not exceed
+    it: asking for more IDs than the server will return in one response
+    silently drops the overflow, since each chunk is fetched once and never
+    revisited.
     """
     ids = ids[:max_features]
+    if chunk_size is None:
+        chunk_size = _get_max_record_count(service_name, layer_id)
     all_features: list[dict] = []
     for start in range(0, len(ids), chunk_size):
         chunk = ids[start : start + chunk_size]
@@ -754,8 +899,28 @@ def _fetch_features_by_ids(
             max_features=chunk_size,
             out_sr=out_sr,
         )
-        all_features.extend(result["features"])
+        features = result.get("features", [])
+        # Every ID came from this same layer via returnIdsOnly and the filter
+        # is a bare IN (...), so a short chunk means records were dropped
+        # rather than legitimately filtered out. Fail loudly — silently
+        # returning a subset would corrupt any downstream analysis.
+        if len(features) < len(chunk):
+            raise RuntimeError(
+                f"EDW returned {len(features)} features for a chunk of "
+                f"{len(chunk)} object IDs on {service_name}/{layer_id} "
+                f"(chunk_size={chunk_size}). Records were dropped; the "
+                f"layer's maxRecordCount may be below the chunk size."
+            )
+        all_features.extend(features)
     return _sanitize_geojson({"type": "FeatureCollection", "features": all_features})
+
+
+# Ranking/numbering analytics are computed over the window itself rather than
+# over an input field, and take no onAnalyticField. Any `field` supplied for
+# these is dropped rather than forwarded (see _build_out_analytics).
+_FIELDLESS_ANALYTICS = frozenset(
+    {"RANK", "DENSE_RANK", "ROW_NUMBER", "NTILE", "PERCENT_RANK", "CUME_DIST"}
+)
 
 
 def _build_out_analytics(out_analytics: list[dict[str, Any]]) -> str:
@@ -765,15 +930,23 @@ def _build_out_analytics(out_analytics: list[dict[str, Any]]) -> str:
     out_name, and optionally order_by (for LAG/LEAD/ranking functions) and
     params (dict merged into analyticParameters, e.g. {"offset": 1} for
     LAG/LEAD or {"buckets": 4} for NTILE).
+
+    Note the key names: queryAnalytic expects onAnalyticField /
+    outAnalyticFieldName. The similar-looking onStatisticField /
+    outStatisticFieldName belong to the separate outStatistics and
+    queryTopFeatures operations; sending those here makes the server reject
+    any analytic that takes an input field ("Unable to complete operation")
+    and silently ignore the requested output name for those that don't.
     """
     analytics = []
     for a in out_analytics:
+        analytic_type = a["type"]
         entry: dict[str, Any] = {
-            "analyticType": a["type"],
-            "outStatisticFieldName": a["out_name"],
+            "analyticType": analytic_type,
+            "outAnalyticFieldName": a["out_name"],
         }
-        if "field" in a:
-            entry["onStatisticField"] = a["field"]
+        if "field" in a and str(analytic_type).upper() not in _FIELDLESS_ANALYTICS:
+            entry["onAnalyticField"] = a["field"]
 
         analytic_params: dict[str, Any] = dict(a.get("params", {}))
         if "order_by" in a:
@@ -799,6 +972,7 @@ def query_features_analytic(
     out_fields: str = "*",
     out_sr: int = 4326,
     return_geometry: bool = True,
+    in_sr: int | None = None,
 ) -> dict:
     """Run SQL window-function analytics (rank, running total, LAG/LEAD, ...)
     against an EDW layer via the ArcGIS queryAnalytic operation.
@@ -809,7 +983,7 @@ def query_features_analytic(
     the top-ranked feature per partition).
 
     Args:
-        service_name: Short service name, e.g. "EDW_ActivityTimberHarvests_01".
+        service_name: Short service name, e.g. "EDW_TimberHarvest_01".
         layer_id: Layer ID within the service.
         out_analytics: List of analytic definitions, each a dict with:
             - type (str): Esri analytic type, e.g. "RANK", "SUM", "LAG",
@@ -823,8 +997,9 @@ def query_features_analytic(
             - params (dict, optional): Extra analyticParameters, e.g.
               {"offset": 1} for LAG/LEAD, {"buckets": 4} for NTILE.
         partition_by: Field name(s) to group rows into separate windows,
-            e.g. "RANGER_DISTRICT" or ["FOREST_NAME", "YEAR"]. Omit to
-            treat the whole result set as one partition.
+            e.g. "admin_district_name" or ["admin_forest_name",
+            "fy_completed"]. Omit to treat the whole result set as one
+            partition.
         order_by_fields: Sort order applied before analytics are computed
             (separate from an analytic's own `order_by`).
         where: SQL WHERE clause filtering the source rows.
@@ -836,6 +1011,8 @@ def query_features_analytic(
         out_sr: Output spatial reference WKID. Default: 4326 (WGS84).
         return_geometry: If False, omit geometry from results (cheaper when
             only the computed analytic values are needed).
+        in_sr: Spatial reference WKID of the input `geometry`, independent of
+            `out_sr`. Default: 4326 (WGS84).
 
     Returns:
         GeoJSON FeatureCollection dict with analytic fields appended to
@@ -843,16 +1020,21 @@ def query_features_analytic(
 
     Example::
 
-        # Largest timber harvest per ranger district within an AOI
+        # Largest timber harvest per ranger district on one forest
+        # (layer 8 = "Timber Harvest (All Years)")
         result = query_features_analytic(
-            "EDW_ActivityTimberHarvests_01", 0,
+            "EDW_TimberHarvest_01", 8,
             out_analytics=[{
-                "type": "RANK", "field": "ACRES",
-                "order_by": "ACRES DESC", "out_name": "acres_rank",
+                # RANK takes no input field — the field being ranked is
+                # named in order_by.
+                "type": "RANK",
+                "order_by": "gis_acres DESC", "out_name": "acres_rank",
             }],
-            partition_by="RANGER_DISTRICT",
+            partition_by="admin_district_name",
             analytic_where="acres_rank = 1",
-            geometry=aoi_bbox,
+            where="admin_forest_name = 'Medicine Bow-Routt National Forest'"
+                  " AND gis_acres IS NOT NULL",
+            out_fields="sale_name,admin_district_name,gis_acres",
         )
     """
     url = f"{EDW_BASE_URL}/{service_name}/MapServer/{layer_id}/queryAnalytic"
@@ -886,7 +1068,7 @@ def query_features_analytic(
         params["geometry"] = geom_str
         params["geometryType"] = geometry_type
         params["spatialRel"] = spatial_rel
-        params["inSR"] = str(out_sr)
+        params["inSR"] = str(4326 if in_sr is None else in_sr)
 
     data = post_json(url, params)
 
@@ -909,6 +1091,7 @@ def top_n_per_group(
     spatial_rel: str = "esriSpatialRelIntersects",
     out_fields: str = "*",
     out_sr: int = 4326,
+    in_sr: int | None = None,
 ) -> dict:
     """Get the top N features by `field` within each `group_by` partition.
 
@@ -917,11 +1100,11 @@ def top_n_per_group(
     e.g. the largest timber harvest per ranger district.
 
     Args:
-        service_name: Short service name, e.g. "EDW_ActivityTimberHarvests_01".
+        service_name: Short service name, e.g. "EDW_TimberHarvest_01".
         layer_id: Layer ID within the service.
-        field: Field to rank by, e.g. "ACRES".
+        field: Field to rank by, e.g. "gis_acres".
         group_by: Field name(s) defining each group/partition, e.g.
-            "RANGER_DISTRICT" or ["FOREST_NAME", "YEAR"].
+            "admin_district_name" or ["admin_forest_name", "fy_completed"].
         n: How many top features to keep per group. Default: 1.
         descending: If True (default), rank largest-first (top = max value).
             If False, rank smallest-first (top = min value).
@@ -930,18 +1113,27 @@ def top_n_per_group(
             query_features.
         out_fields: Comma-separated field names or "*" for all.
         out_sr: Output spatial reference WKID. Default: 4326 (WGS84).
+        in_sr: Spatial reference WKID of the input `geometry`, independent of
+            `out_sr`. Default: 4326 (WGS84).
 
     Returns:
         GeoJSON FeatureCollection dict containing only the top N features
-        per group, with a `rank_expr0` field appended to each.
+        per group, with a `rank_val` field appended to each.
+
+        Note: RANK gives tied values the same rank, so a group with ties at
+        the cutoff returns more than `n` rows (three features tied at rank 1
+        all satisfy rank_val <= 1).
 
     Example::
 
-        # Largest timber harvest per ranger district within an AOI
+        # Largest timber harvest per ranger district on one forest
+        # (layer 8 = "Timber Harvest (All Years)")
         result = top_n_per_group(
-            "EDW_ActivityTimberHarvests_01", 0,
-            field="ACRES", group_by="RANGER_DISTRICT",
-            geometry=aoi_bbox,
+            "EDW_TimberHarvest_01", 8,
+            field="gis_acres", group_by="admin_district_name",
+            where="admin_forest_name = 'Medicine Bow-Routt National Forest'"
+                  " AND gis_acres IS NOT NULL",
+            out_fields="sale_name,admin_district_name,gis_acres",
         )
     """
     direction = "DESC" if descending else "ASC"
@@ -949,22 +1141,21 @@ def top_n_per_group(
         service_name,
         layer_id,
         out_analytics=[{
+            # RANK takes no input field — `field` reaches the server via the
+            # window's own orderBy below.
             "type": "RANK",
-            "field": field,
             "order_by": f"{field} {direction}",
             "out_name": "rank_val",
         }],
         partition_by=group_by,
-        # ArcGIS's queryAnalytic ignores outStatisticFieldName for RANK and
-        # always names the computed field "rank_expr0" (verified against the
-        # live EDW server) — filter on that name, not the requested out_name.
-        analytic_where=f"rank_expr0 <= {n}",
+        analytic_where=f"rank_val <= {int(n)}",
         where=where,
         geometry=geometry,
         geometry_type=geometry_type,
         spatial_rel=spatial_rel,
         out_fields=out_fields,
         out_sr=out_sr,
+        in_sr=in_sr,
     )
 
 
@@ -1024,13 +1215,54 @@ def _convert_geometry(geometry: dict | str, geometry_type: str) -> str:
     return json.dumps(geometry)
 
 
-def _esri_geometry_to_geojson(geometry: dict | None) -> dict | None:
-    """Convert an Esri JSON geometry (x/y, points, paths, or rings) to GeoJSON.
+def _ring_signed_area(ring: list) -> float:
+    """Shoelace signed area of a ring. Positive = counter-clockwise."""
+    total = 0.0
+    count = len(ring)
+    for i in range(count):
+        x1, y1 = ring[i][0], ring[i][1]
+        x2, y2 = ring[(i + 1) % count][0], ring[(i + 1) % count][1]
+        total += x1 * y2 - x2 * y1
+    return total / 2.0
 
-    Polygons are converted as a flat list of rings without hole/multipart
-    detection — fine for simple polygons, but a ring-orientation pass would
-    be needed to correctly split true multipart polygons or interior holes.
+
+def _esri_rings_to_geojson(rings: list) -> dict | None:
+    """Split a flat Esri ring list into a GeoJSON Polygon or MultiPolygon.
+
+    Esri packs both multipart polygons and interior holes into a single flat
+    `rings` list, distinguished only by winding: clockwise (negative signed
+    area) rings are exterior, counter-clockwise rings are holes belonging to
+    the most recently seen exterior ring. GeoJSON instead nests holes inside
+    their parent polygon and treats *every* ring after the first as a hole —
+    so handing Esri's flat list straight to a GeoJSON Polygon silently turns
+    the separate parts of e.g. Maui County into holes punched out of Maui.
+
+    Output rings follow the RFC 7946 right-hand rule (exterior
+    counter-clockwise, holes clockwise) — the opposite of Esri's convention,
+    so each ring is reversed on the way out.
     """
+    polygons: list[list[list]] = []
+    for ring in rings:
+        if not ring:
+            continue
+        # A degenerate (zero-area) ring can't be classified by winding; treat
+        # it as exterior so its coordinates aren't silently absorbed as a
+        # hole. A hole with no preceding exterior ring is likewise promoted
+        # rather than dropped.
+        if _ring_signed_area(ring) > 0 and polygons:
+            polygons[-1].append(list(reversed(ring)))  # hole: CCW -> CW
+        else:
+            polygons.append([list(reversed(ring))])  # exterior: CW -> CCW
+
+    if not polygons:
+        return None
+    if len(polygons) == 1:
+        return {"type": "Polygon", "coordinates": polygons[0]}
+    return {"type": "MultiPolygon", "coordinates": polygons}
+
+
+def _esri_geometry_to_geojson(geometry: dict | None) -> dict | None:
+    """Convert an Esri JSON geometry (x/y, points, paths, or rings) to GeoJSON."""
     if not geometry:
         return None
     if "x" in geometry and "y" in geometry:
@@ -1043,7 +1275,7 @@ def _esri_geometry_to_geojson(geometry: dict | None) -> dict | None:
             return {"type": "LineString", "coordinates": paths[0]}
         return {"type": "MultiLineString", "coordinates": paths}
     if "rings" in geometry:
-        return {"type": "Polygon", "coordinates": geometry["rings"]}
+        return _esri_rings_to_geojson(geometry["rings"])
     return None
 
 
@@ -1060,19 +1292,40 @@ def _esri_json_to_geojson(data: dict) -> dict:
     return {"type": "FeatureCollection", "features": features}
 
 
+# Object-ID attribute names to fall back on when a feature carries no "id".
+# The f=json path (_esri_json_to_geojson) produces features without one,
+# unlike f=geojson which sets it from the layer's object-id field.
+_OBJECT_ID_KEYS = ("objectid", "OBJECTID", "fid", "FID", "oid", "OID")
+
+
 def _sanitize_geojson(geojson: dict) -> dict:
     """Sanitize a GeoJSON FeatureCollection for downstream compatibility.
 
     - Removes properties with dots in the name (e.g. 'SHAPE.LEN') — many
       consumers (e.g. Earth Engine) reject dotted property keys
-    - Ensures each feature has a string 'id'
+    - Gives each feature a string 'id' it doesn't already have, preferring
+      its object-id attribute and falling back to the positional index.
+
+    The id is only ever filled in, never overwritten. A positional index is
+    not stable — it shifts with paging, filtering and result ordering, so the
+    same feature would answer to a different id on every call — and clobbering
+    a server-supplied OBJECTID with one would destroy the only durable handle
+    the caller has on a feature.
     """
     for i, feat in enumerate(geojson.get("features", [])):
-        props = feat.get("properties", {})
-        bad_keys = [k for k in props if "." in k]
-        for k in bad_keys:
-            del props[k]
-        feat["id"] = str(i)
+        # `or {}` — properties is legally null in GeoJSON, and iterating None
+        # raises.
+        props = feat.get("properties") or {}
+        for key in [k for k in props if "." in k]:
+            del props[key]
+
+        feature_id = feat.get("id")
+        if feature_id is None:
+            feature_id = next(
+                (props[k] for k in _OBJECT_ID_KEYS if props.get(k) is not None),
+                None,
+            )
+        feat["id"] = str(feature_id) if feature_id is not None else str(i)
     return geojson
 
 
@@ -1086,17 +1339,29 @@ def query_features_with_pagination(
     out_fields: str = "*",
     max_features: int = 5000,
     out_sr: int = 4326,
+    in_sr: int | None = None,
 ) -> dict:
-    """Query features with automatic pagination to get more than 2000 results.
+    """Query features with automatic pagination past the server's per-request cap.
 
-    Same args as query_features, but max_features can exceed the server limit.
+    Same args as query_features, but max_features can exceed the layer's
+    maxRecordCount — results are fetched a page at a time and combined.
     Returns a combined GeoJSON FeatureCollection.
+
+    Note: pages are taken by resultOffset without an explicit sort. ArcGIS
+    doesn't guarantee a stable row order across requests absent
+    orderByFields, so a layer that reorders between pages could in principle
+    duplicate or skip rows.
     """
     all_features = []
     offset = 0
-    page_size = min(max_features, _MAX_RECORD_COUNT)
+    # Page at the layer's real limit, not a hardcoded guess: a stride wider
+    # than the server will return makes the next offset skip the records it
+    # withheld, and the old `len(features) < page_size` break then fired on
+    # the very first page and reported partial results as complete.
+    server_max = _get_max_record_count(service_name, layer_id)
 
     while len(all_features) < max_features:
+        page_size = min(max_features - len(all_features), server_max)
         url = f"{EDW_BASE_URL}/{service_name}/MapServer/{layer_id}/query"
         params: dict[str, str] = {
             "where": where,
@@ -1112,7 +1377,7 @@ def query_features_with_pagination(
             params["geometry"] = geom_str
             params["geometryType"] = geometry_type
             params["spatialRel"] = spatial_rel
-            params["inSR"] = str(out_sr)
+            params["inSR"] = str(4326 if in_sr is None else in_sr)
 
         data = post_json(url, params)
 
@@ -1126,8 +1391,10 @@ def query_features_with_pagination(
         all_features.extend(features)
         offset += len(features)
 
-        # If we got fewer than page_size, we've hit the end
-        if len(features) < page_size:
+        # A short page means end-of-data only if the server isn't also
+        # flagging more rows behind it — belt and braces in case server_max
+        # fell back to a guess after a failed metadata fetch.
+        if len(features) < page_size and not data.get("exceededTransferLimit"):
             break
 
     # Trim to max_features
