@@ -40,10 +40,9 @@ You may obtain a copy of the License at
 
 from __future__ import annotations
 
-import urllib.error
 from typing import Any
 
-from ._http import build_params, fetch_json
+from ._http import build_params, fetch_json, format_esri_error
 
 # ---------------------------------------------------------------------------
 # Known public portals
@@ -190,6 +189,20 @@ def searchPortal(
         - ``thumbnail`` (str or None): Thumbnail URL, or ``None`` if absent.
         - ``_raw`` (dict): Full raw portal item dict for advanced access.
 
+        An empty list means the search genuinely matched nothing — a
+        rejected search raises rather than returning ``[]`` (see below).
+
+    Raises:
+        ValueError: If the portal answers 200 with an error object — most
+            commonly code 498, an invalid or expired *token* — or with a
+            body that isn't JSON. This case used to be swallowed into an
+            empty result list, which read as "no matches".
+        RuntimeError: If the portal is unreachable or answers with an HTTP
+            error status. ``_http`` converts both
+            :class:`urllib.error.HTTPError` and
+            :class:`urllib.error.URLError` into :class:`RuntimeError`, so a
+            dead host and a 500 surface the same way.
+
     Example::
 
         import portal
@@ -232,10 +245,22 @@ def searchPortal(
 
     try:
         data = fetch_json(search_url, params)
-    except urllib.error.URLError as exc:
-        raise ConnectionError(
+    except RuntimeError as exc:
+        raise RuntimeError(
             f"Could not reach portal at {search_url!r}: {exc}"
         ) from exc
+
+    # A portal reports a rejected search with a 200 and an error object, not
+    # an HTTP status — an expired or invalid token comes back as code 498
+    # (verified against ArcGIS Online). Reading `results` straight off that
+    # body yields [], which is indistinguishable from a search that simply
+    # matched nothing, so a caller with a bad token is told "no data" rather
+    # than "your token is invalid". Surface it instead.
+    if "error" in data:
+        raise ValueError(
+            f"Portal search at {search_url!r} returned an error: "
+            f"{format_esri_error(data['error'])}"
+        )
 
     items = data.get("results", [])
     parsed = []
@@ -291,8 +316,12 @@ def getServiceMetadata(url: str, token: str | None = None) -> dict[str, Any]:
         - ``capabilities`` (str): Comma-separated capabilities string.
 
     Raises:
-        ConnectionError: If the URL is unreachable.
-        ValueError: If the response is not valid JSON.
+        ValueError: If the service answers 200 with an Esri error object —
+            which is how ArcGIS reports a service that does not exist,
+            rather than with an HTTP 404 — or if the response is not valid
+            JSON.
+        RuntimeError: If the URL is unreachable or answers with an HTTP
+            error status (see :func:`searchPortal`).
 
     Example::
 
@@ -309,11 +338,23 @@ def getServiceMetadata(url: str, token: str | None = None) -> dict[str, Any]:
     clean_url = url.rstrip("/")
     params = build_params({"f": "json"}, token)
     try:
-        return fetch_json(clean_url, params)
-    except urllib.error.URLError as exc:
-        raise ConnectionError(
+        meta = fetch_json(clean_url, params)
+    except RuntimeError as exc:
+        raise RuntimeError(
             f"Could not reach service at {clean_url!r}: {exc}"
         ) from exc
+
+    # ArcGIS answers a missing service with a 200 and an Esri error object
+    # rather than an HTTP 404 (verified against a live server). Returning
+    # that dict as if it were metadata makes the failure the caller's to
+    # notice, and every caller has to remember to check — so raise instead,
+    # matching how `services.py` treats the same response shape.
+    if "error" in meta:
+        raise ValueError(
+            f"Service at {clean_url!r} returned an error: "
+            f"{format_esri_error(meta['error'])}"
+        )
+    return meta
 
 
 # ---------------------------------------------------------------------------

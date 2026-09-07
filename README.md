@@ -12,10 +12,10 @@ Stdlib-only Python clients for ArcGIS REST services (Image/Map/Feature Services,
 
 Tile URLs, feature queries, and Image Service raster operations (export, statistics, pixel identify/sampling, boundary, supported-operations discovery) for any Image/Map/Feature Service.
 
-- `getImageServiceTileUrl(url_or_result, token=None)` — build the `{z}/{y}/{x}` tile URL template for an Image Service or cached Map Service.
+- `getImageServiceTileUrl(url_or_result, token=None)` — build the `{z}/{y}/{x}` tile URL template for an Image Service or cached Map Service. Pure string construction, so it cannot tell whether the service is actually tiled: an **uncached** service yields a well-formed template whose tiles all answer 404. Check for `tileInfo` in the service's `?f=json` first; render uncached Image Services with `exportImage` instead.
 - `queryFeatureServiceCount(url_or_result, where="1=1", geometry=None, ..., timeout=None)` — return the count of features matching a where clause and/or spatial filter.
 - `queryFeatureService(url_or_result, where="1=1", geometry=None, max_features=1000, ..., timeout=None)` — fetch features as GeoJSON, with a pre-flight count check against `max_features` to avoid huge payloads. Falls back to `f=json` + client-side GeoJSON conversion for services that reject `f=geojson` outright (e.g. an ImageServer's native raster-catalog `/query`).
-- `getLayerInfo(url_or_result, token=None, timeout=None)` — get layer metadata: fields, geometry type, extent, capabilities. Raises a clear error naming the real sub-layers if pointed at a mosaic/group container layer instead of a queryable layer.
+- `getLayerInfo(url_or_result, token=None, timeout=None)` — get layer metadata: fields, geometry type, extent, capabilities. Raises a clear error naming the real sub-layers if pointed at a container rather than a queryable layer — either a group layer (`subLayers`) or a MapServer/FeatureServer **service root** (`layers` and no `fields`). An ImageServer root stays a valid target: it carries its mosaic catalog's own fields.
 - `getSupportedOperations(url_or_result, token=None, timeout=None)` — **added 2026-08-19.** List every REST operation a service or layer actually exposes, parsed from the HTML browse page — the only place ArcGIS Server publishes the full list (the JSON `capabilities` string is an incomplete substitute; a service can expose e.g. `computeStatisticsHistograms` with no corresponding capability flag at all).
 - `exportImage(url_or_result, bbox, size=(512, 512), image_format="tiff", mosaic_rule=None, rendering_rule=None, ..., timeout=None)` — **added 2026-08-19.** Export a rendered image from an ArcGIS Image Service, with support for mosaic/rendering rules, pixel type, NoData, and resampling. Returns raw bytes, or writes to `out_path` if given. Depends on the `fetch_bytes` helper in `_http.py` (see below).
 - `computeStatisticsHistograms(url_or_result, geometry, geometry_type="esriGeometryPolygon", mosaic_rule=None, rendering_rule=None, pixel_size=None, ..., timeout=None)` — **added 2026-08-19.** Per-band pixel statistics (min/max/mean/stddev/median/mode/count) and a value histogram over an area of an Image Service, merged into one result per band from a single request. At native resolution, a high-resolution service (e.g. sub-meter imagery) can exceed a server-side size limit over any non-trivial area — pass a coarser `pixel_size` to avoid that.
@@ -24,6 +24,8 @@ Tile URLs, feature queries, and Image Service raster operations (export, statist
 - `queryBoundary(url_or_result, mosaic_rule=None, out_sr=4326, ..., timeout=None)` — **added 2026-08-19.** Get an Image Service's true coverage boundary (not just its rectangular `extent`) — useful as a pre-flight check before spending an `exportImage`/`computeStatisticsHistograms` call on an AOI the service doesn't actually cover.
 
 Every function above accepts an optional `timeout` (seconds; default 60, set in `_http.py`). Some Image Services with large or complex mosaic catalogs (hundreds of contributing rasters) can genuinely take 30–45+ seconds to respond even for a simple result — pass a larger value rather than assuming a hang.
+
+**Error contract.** These functions raise `RuntimeError` for transport failures (unreachable host, HTTP error status) and `ValueError` when a service answers 200 with an Esri error object, or with a body that isn't JSON. They do **not** raise `ConnectionError` — earlier docstrings promised it, but `_http` converts `URLError` to `RuntimeError` before it can be caught, so no caller could ever have received one. The single exception to raising at all is `getSamples`, which reports a point it cannot sample in-band via that entry's `source` field so the remaining points still return values.
 
 ### `edw.py` — USFS Enterprise Data Warehouse (EDW) client
 
@@ -44,8 +46,8 @@ Search, metadata, and spatial queries against `https://apps.fs.usda.gov/arcx/res
 
 Search any ArcGIS Portal (IIPP, ArcGIS Online, USGS, NOAA, USFS, NASA, or a custom Enterprise portal) and inspect services.
 
-- `searchPortal(query, portal="iipp", limit=20, data_only=True, raw_q=None, token=None, **filters)` — free-text search against `/sharing/rest/search`, with a bundled exclusion list to filter out non-data items (styles, dashboards, web apps, etc.).
-- `getServiceMetadata(url, token=None)` — fetch `?f=json` metadata for any ArcGIS service or sub-layer URL.
+- `searchPortal(query, portal="iipp", limit=20, data_only=True, raw_q=None, token=None, **filters)` — free-text search against `/sharing/rest/search`, with a bundled exclusion list to filter out non-data items (styles, dashboards, web apps, etc.). An empty list means the search genuinely matched nothing: a portal error (notably code 498, an invalid or expired token) raises `ValueError` rather than being swallowed into `[]`.
+- `getServiceMetadata(url, token=None)` — fetch `?f=json` metadata for any ArcGIS service or sub-layer URL. Raises `ValueError` if the service answers with an Esri error object — which is how ArcGIS reports a missing service, rather than with an HTTP 404.
 - `PORTALS` — module-level dict of short portal names to base URLs (extend at runtime by adding keys).
 
 ### `_http.py` — shared HTTP helpers
@@ -57,13 +59,14 @@ Stdlib-only (`urllib`) GET/POST/JSON helpers used by all the modules above.
 - `fetch_bytes(url, params=None, timeout=None)` — **added 2026-08-19.** GET and return `(raw bytes, content-type)`, for binary endpoints like `exportImage` where a UTF-8 decode would corrupt the response.
 - `post_json(url, params, timeout=None)` — POST form-encoded params and parse JSON (used for large query payloads).
 - `build_params(base, token)` — merge an optional token into a params dict.
+- `format_esri_error(err)` — render an Esri error object (`code`, `message`, `details`) into one diagnostic string. Lives here so `services.py` and `portal.py` can share it without a circular import; `services._format_esri_error` remains as an alias.
 
 Default request timeout is 60 seconds (`_TIMEOUT`) — every fetch function above accepts an optional `timeout` override for services that legitimately need longer.
 
-Errors surface two ways: `RuntimeError` for HTTP and URL failures, and `ValueError` when a response won't parse as JSON — which is what a degraded HTML error page served with status 200 looks like. Callers retrying around a flaky server need to catch both.
+Errors surface two ways: `RuntimeError` for HTTP and URL failures, and `ValueError` when a response won't parse as JSON — which is what a degraded HTML error page served with status 200 looks like. Callers retrying around a flaky server need to catch both. `services.py` and `portal.py` follow the same contract and add one more case: a service that answers **200 with an Esri error object** (a missing service, a bad `where` clause, an expired token) raises `ValueError` too. None of these modules raise `ConnectionError`, despite what earlier docstrings claimed.
 
 ## Tests
 
-`python -m unittest discover -s tests -t .` from the repository root — stdlib `unittest`, no install needed. Offline and deterministic by default; set `EDW_LIVE=1` to include tests that hit the real EDW server. See [tests/README.md](../tests/README.md).
+`python -m unittest discover -s tests -t .` from the repository root — stdlib `unittest`, no install needed. Offline and deterministic by default; set `EDW_LIVE=1` to include tests that hit the real EDW server, and `SERVICES_LIVE=1` for the `services.py` tests that hit public ArcGIS hosts. See [tests/README.md](../tests/README.md).
 
 `python tests/check_service_themes.py` reports drift between the live catalog and the hand-curated `_SERVICE_THEMES` table in `edw.py` (`--emit` prints paste-ready entries).

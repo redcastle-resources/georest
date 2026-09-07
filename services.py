@@ -35,31 +35,20 @@ from __future__ import annotations
 import html
 import json
 import re
-import urllib.error
 import urllib.parse
 from typing import Any
 
-from ._http import build_params, fetch_bytes, fetch_json, fetch_text
+from ._http import build_params, fetch_bytes, fetch_json, fetch_text, format_esri_error
 from .portal import _resolve_url
 
 _FEATURE_QUERY_SUFFIX = "/query"
 _MAX_RECORD_COUNT = 2000  # ArcGIS server default max
 
 
-def _format_esri_error(err: dict) -> str:
-    """Format an Esri error object for a raised exception message.
-
-    Esri's `err["message"]` is frequently a generic, unhelpful string (e.g.
-    "Invalid or missing input parameters") while the actually-diagnostic
-    text lives in `err["details"]` (e.g. "The requested image exceeds the
-    size limit.") — verified against a live service, where the bare message
-    alone was actively misleading. Always include details when present.
-    """
-    msg = f"{err.get('code')} — {err.get('message', str(err))}"
-    details = err.get("details")
-    if details:
-        msg += f" ({'; '.join(str(d) for d in details)})"
-    return msg
+#: Backwards-compatible alias. The implementation moved to `_http` so
+#: `portal.py` can share it — `services` imports from `portal`, so importing
+#: the other way around would be a circular import.
+_format_esri_error = format_esri_error
 
 
 def getImageServiceTileUrl(url_or_result: str | dict, token: str | None = None) -> str:
@@ -70,6 +59,17 @@ def getImageServiceTileUrl(url_or_result: str | dict, token: str | None = None) 
         ArcGIS tile URLs use ``{z}/{y}/{x}`` order (y before x), not the
         XYZ standard ``{z}/{x}/{y}``.
 
+    .. warning::
+        This is pure string construction — no request is made, and nothing
+        is validated. In particular it does **not** check that the service
+        is actually tiled, and it cannot: a service with no tile cache
+        yields a well-formed template whose tiles all answer HTTP 404
+        (verified against a live, uncached Image Service). Only *cached*
+        services serve ``/tile``. Confirm with ``?f=json`` first — a tiled
+        service reports ``tileInfo`` (and a Map Service also reports
+        ``singleFusedMapCache: true``); an uncached Image Service reports
+        neither and must be rendered through :func:`exportImage` instead.
+
     Args:
         url_or_result (str or dict): Service URL, or a
             :func:`portal.searchPortal` result dict.
@@ -79,6 +79,10 @@ def getImageServiceTileUrl(url_or_result: str | dict, token: str | None = None) 
     Returns:
         str: Tile URL template, e.g.
         ``"https://.../ImageServer/tile/{z}/{y}/{x}"``.
+
+    Raises:
+        TypeError: If *url_or_result* is neither a string nor a dict.
+        ValueError: If a result dict carries no ``url`` key.
     """
     url = _resolve_url(url_or_result)
     tile_url = f"{url}/tile/{{z}}/{{y}}/{{x}}"
@@ -120,9 +124,20 @@ def queryFeatureServiceCount(
             take longer than that to respond (verified against a live
             service); pass a larger value rather than assuming a hang.
 
+    Returns:
+        int: The number of matching features. ``0`` if the service answers
+        without a ``count`` key at all.
+
     Raises:
-        ConnectionError: If the service URL is unreachable.
-        ValueError: If the service returns an error.
+        RuntimeError: If the service is unreachable or answers with an HTTP
+            error status. Note this is the transport-level failure mode for
+            *every* function in this module — ``_http`` converts both
+            :class:`urllib.error.HTTPError` and :class:`urllib.error.URLError`
+            into :class:`RuntimeError`, so a dead host and a 500 surface the
+            same way.
+        ValueError: If the service answers 200 with an Esri error object in
+            the body (e.g. an invalid *where* clause), or with a body that
+            isn't JSON at all (what a degraded HTML error page looks like).
     """
     url = _resolve_url(url_or_result)
     if url.lower().endswith("featureserver"):
@@ -140,8 +155,8 @@ def queryFeatureServiceCount(
     count_url = f"{url}{_FEATURE_QUERY_SUFFIX}"
     try:
         resp = fetch_json(count_url, params, timeout=timeout)
-    except urllib.error.URLError as exc:
-        raise ConnectionError(f"Could not reach Feature Service at {count_url!r}: {exc}") from exc
+    except RuntimeError as exc:
+        raise RuntimeError(f"Could not reach Feature Service at {count_url!r}: {exc}") from exc
 
     if "error" in resp:
         raise ValueError(f"Feature Service returned an error: {_format_esri_error(resp['error'])}")
@@ -197,12 +212,27 @@ def queryFeatureService(
             than assuming a hang.
 
     Returns:
-        dict: GeoJSON FeatureCollection.
+        dict: GeoJSON ``FeatureCollection``.
+
+        .. note::
+            Feature ``id`` values differ depending on which of the two
+            response paths served the request — verified against live
+            services. On the normal ``f=geojson`` path the ids are whatever
+            the server emitted (typically the layer's integer OBJECTIDs,
+            e.g. ``20``), and property names are passed through untouched.
+            On the ``f=json`` fallback path (see below) ids are assigned
+            client-side as positional strings ``"0"``, ``"1"``, … and
+            properties whose names contain a dot (e.g. ``SHAPE.LEN``) are
+            dropped, since many consumers reject dotted keys. Don't rely on
+            ``id`` as a stable feature identifier — read the OBJECTID out of
+            ``properties`` instead.
 
     Raises:
         ValueError: If the feature count exceeds *max_features*, or the
-            service returns an error.
-        ConnectionError: If the service URL is unreachable.
+            service answers 200 with an Esri error object in the body, or
+            with a body that isn't JSON at all.
+        RuntimeError: If the service is unreachable or answers with an HTTP
+            error status (see :func:`queryFeatureServiceCount`).
     """
     url = _resolve_url(url_or_result)
     if url.lower().endswith("featureserver"):
@@ -243,8 +273,6 @@ def queryFeatureService(
     query_url = f"{url}{_FEATURE_QUERY_SUFFIX}"
     try:
         geojson = fetch_json(query_url, query_params, timeout=timeout)
-    except urllib.error.URLError as exc:
-        raise ConnectionError(f"Could not fetch features from {query_url!r}: {exc}") from exc
     except RuntimeError:
         # Some services — notably an ImageServer's native /query, which
         # exposes its raster catalog table — reject f=geojson outright
@@ -253,11 +281,18 @@ def queryFeatureService(
         # proven `where`/`geometry` are valid using f=json, so fall back to
         # f=json here too and convert to GeoJSON client-side instead of
         # surfacing this as a hard failure.
+        #
+        # A genuine transport failure (dead host, 500) also lands here,
+        # since _http collapses every HTTP/URL failure into RuntimeError and
+        # there's no way to tell "this format is unsupported" apart from
+        # "this server is down" without parsing error strings. That costs
+        # one extra request on an already-failing call, and the retry's own
+        # RuntimeError is re-raised below with the URL attached.
         fallback_params = {**query_params, "f": "json"}
         try:
             esri_json = fetch_json(query_url, fallback_params, timeout=timeout)
-        except urllib.error.URLError as exc:
-            raise ConnectionError(f"Could not fetch features from {query_url!r}: {exc}") from exc
+        except RuntimeError as exc:
+            raise RuntimeError(f"Could not fetch features from {query_url!r}: {exc}") from exc
         if "error" in esri_json:
             raise ValueError(f"Feature Service query returned an error: {_format_esri_error(esri_json['error'])}")
         return _sanitize_geojson(_esri_json_to_geojson(esri_json))
@@ -384,25 +419,45 @@ def getLayerInfo(url_or_result: str | dict, token: str | None = None, timeout: i
         ``["Map", "Query"]``), ``advancedQueryCapabilities``,
         ``supportedQueryFormats``.
 
+        An ImageServer *root* URL is a valid target and returns the mosaic
+        catalog's own fields; ``geometryType`` is empty for it, since the
+        service root has no single geometry type of its own.
+
     Raises:
-        ConnectionError: If the URL is unreachable.
-        ValueError: If the service returns an error.
+        ValueError: If *url* points at a container rather than a queryable
+            layer — either a group layer or a MapServer/FeatureServer
+            service root — in which case the message names the sub-layers to
+            use instead. Also raised if the service answers with an Esri
+            error object, or with a body that isn't JSON.
+        RuntimeError: If the URL is unreachable or answers with an HTTP
+            error status (see :func:`queryFeatureServiceCount`).
     """
     url = _resolve_url(url_or_result)
     params = build_params({"f": "pjson"}, token)
     try:
         data = fetch_json(url, params, timeout=timeout)
-    except urllib.error.URLError as exc:
-        raise ConnectionError(f"Could not reach layer at {url!r}: {exc}") from exc
+    except RuntimeError as exc:
+        raise RuntimeError(f"Could not reach layer at {url!r}: {exc}") from exc
 
     if "error" in data:
         raise ValueError(f"Layer returned an error: {_format_esri_error(data['error'])}")
 
-    sub_layers = data.get("subLayers") or []
-    if sub_layers:
-        options = ", ".join(f"{s.get('name')} ({s.get('id')})" for s in sub_layers)
+    # Two distinct shapes of "you pointed at a container, not a layer", which
+    # ArcGIS reports with different keys:
+    #   - a group *layer* carries `subLayers`
+    #   - a MapServer/FeatureServer *service root* carries `layers` and no
+    #     `fields` at all (verified against live services)
+    # Without the second check, a service-root URL — an easy and common
+    # mistake — returned a hollow result (empty name/geometryType, `fields`
+    # []) that reads as "this layer has no fields" rather than as an error.
+    # An ImageServer root is deliberately excluded: it carries real `fields`
+    # (its mosaic catalog's) and no `layers`, and is a supported target.
+    container_layers = data.get("subLayers") or data.get("layers") or []
+    if container_layers and not (data.get("fields") or []):
+        options = ", ".join(f"{s.get('name')} ({s.get('id')})" for s in container_layers)
+        kind = data.get("type") or "service root"
         raise ValueError(
-            f"{url} is a {data.get('type', 'container layer')} ({data.get('name', '')!r}) — "
+            f"{url} is a {kind} ({data.get('name') or 'unnamed'!r}) — "
             f"it has no geometry of its own and is not directly queryable. "
             f"Point at one of its sub-layers instead: {options}."
         )
@@ -505,8 +560,13 @@ def exportImage(
         bytes: The raw image bytes, or the value of *out_path* if given.
 
     Raises:
-        ValueError: If the service returns an error instead of an image.
-        ConnectionError: If the service URL is unreachable.
+        ValueError: If the service returns an error instead of an image —
+            including the 200-with-a-JSON-error-body case described below —
+            or if *bbox* is malformed.
+        RuntimeError: If the service is unreachable or answers with an HTTP
+            error status (see :func:`queryFeatureServiceCount`). Note an
+            over-large *size* is reported this way, as a server-side 500,
+            rather than as a clean Esri error object.
     """
     url = _resolve_url(url_or_result)
 
@@ -533,8 +593,8 @@ def exportImage(
     export_url = f"{url}/exportImage"
     try:
         raw, _content_type = fetch_bytes(export_url, params, timeout=timeout)
-    except urllib.error.URLError as exc:
-        raise ConnectionError(f"Could not reach ImageServer at {export_url!r}: {exc}") from exc
+    except RuntimeError as exc:
+        raise RuntimeError(f"Could not reach ImageServer at {export_url!r}: {exc}") from exc
 
     # ArcGIS Server sometimes reports a 200 with a JSON error body instead of
     # raising an HTTP error status (e.g. for an invalid renderingRule) — and
@@ -585,14 +645,16 @@ def getSupportedOperations(
         ``"exportImage"``), and ``url`` (full operation URL).
 
     Raises:
-        ConnectionError: If the URL is unreachable.
+        RuntimeError: If the URL is unreachable or answers with an HTTP
+            error status — including the 404 served for a service that does
+            not exist (see :func:`queryFeatureServiceCount`).
     """
     url = _resolve_url(url_or_result)
     params = build_params({"f": "html"}, token)
     try:
         page = fetch_text(url, params, timeout=timeout)
-    except urllib.error.URLError as exc:
-        raise ConnectionError(f"Could not reach service at {url!r}: {exc}") from exc
+    except RuntimeError as exc:
+        raise RuntimeError(f"Could not reach service at {url!r}: {exc}") from exc
 
     section = re.search(r"Supported Operations</b>:(.*?)(?:<b>|\Z)", page, re.DOTALL | re.IGNORECASE)
     if not section:
@@ -681,9 +743,21 @@ def computeStatisticsHistograms(
         ``mode``, ``count``, and ``histogram`` (a dict with ``min``,
         ``max``, ``size``, ``counts``).
 
+        Returns an **empty list** — not an error — when the service computed
+        nothing for the request. The most common cause is a *pixel_size*
+        that is absurdly coarse for its own spatial reference: it is
+        interpreted in the units of the ``spatialReference`` inside
+        *pixel_size*, not the raster's native units, so
+        ``{"x": 90, "y": 90, "spatialReference": {"wkid": 4326}}`` asks for
+        90-*degree* pixels rather than 90-metre ones, and the service
+        silently returns nothing (verified against a live service). Check
+        for an empty result rather than assuming at least one band.
+
     Raises:
-        ValueError: If the service returns an error.
-        ConnectionError: If the service URL is unreachable.
+        ValueError: If *geometry* cannot be converted to Esri JSON, or the
+            service answers with an Esri error object or a non-JSON body.
+        RuntimeError: If the service is unreachable or answers with an HTTP
+            error status (see :func:`queryFeatureServiceCount`).
     """
     url = _resolve_url(url_or_result)
 
@@ -715,8 +789,8 @@ def computeStatisticsHistograms(
     stats_url = f"{url}/computeStatisticsHistograms"
     try:
         data = fetch_json(stats_url, params, timeout=timeout)
-    except urllib.error.URLError as exc:
-        raise ConnectionError(f"Could not reach ImageServer at {stats_url!r}: {exc}") from exc
+    except RuntimeError as exc:
+        raise RuntimeError(f"Could not reach ImageServer at {stats_url!r}: {exc}") from exc
 
     if "error" in data:
         raise ValueError(f"computeStatisticsHistograms error: {_format_esri_error(data['error'])}")
@@ -795,14 +869,24 @@ def identifyPixelValue(
     Returns:
         dict: ``value`` (str, the composited pixel value, or ``"NoData"``),
         ``band_values`` (list of str, one per band/raster contributing at
-        this point), ``location`` (``{"x", "y"}`` echoed back from the
-        service), and ``catalog_items`` (list of raster footprint
+        this point — **empty** where the point is NoData), ``location``, and
+        ``catalog_items`` (list of raster footprint
         ``{"attributes", "geometry"}`` dicts if *return_catalog_items* is
         True, else ``None``).
 
+        ``location`` is ``{"x", "y", "spatialReference"}`` as returned by the
+        service, reprojected into the service's **native** spatial reference
+        — *not* echoed back in *in_sr*. Querying a WGS84 point on a Web
+        Mercator service returns Web Mercator metres with
+        ``{"wkid": 102100}`` (verified against a live service), so read the
+        ``spatialReference`` rather than assuming the coordinates come back
+        in the units you sent.
+
     Raises:
-        ValueError: If the service returns an error.
-        ConnectionError: If the service URL is unreachable.
+        ValueError: If the service answers with an Esri error object or a
+            non-JSON body.
+        RuntimeError: If the service is unreachable or answers with an HTTP
+            error status (see :func:`queryFeatureServiceCount`).
     """
     url = _resolve_url(url_or_result)
 
@@ -835,8 +919,8 @@ def identifyPixelValue(
     identify_url = f"{url}/identify"
     try:
         data = fetch_json(identify_url, params, timeout=timeout)
-    except urllib.error.URLError as exc:
-        raise ConnectionError(f"Could not reach ImageServer at {identify_url!r}: {exc}") from exc
+    except RuntimeError as exc:
+        raise RuntimeError(f"Could not reach ImageServer at {identify_url!r}: {exc}") from exc
 
     if "error" in data:
         raise ValueError(f"identify error: {_format_esri_error(data['error'])}")
@@ -897,6 +981,25 @@ def getSamples(
         both the batch call and the fallback failed for this point), and
         ``source`` (``"getSamples"``, ``"identify"``, or an ``"error: ..."``
         string if this specific point could not be sampled at all).
+
+        This function does not raise for a point it cannot sample — a
+        failing point is reported in-band via ``source`` so the remaining
+        points still return their values.
+
+        ``x``/``y`` are in *in_sr* on both paths, but they do not come from
+        the same place: on the ``getSamples`` path they are echoed back by
+        the service, and on the ``identify`` fallback they are the input
+        coordinates, copied through unchanged. (The fallback deliberately
+        does not surface :func:`identifyPixelValue`'s own ``location``,
+        which the service returns in its *native* spatial reference rather
+        than in *in_sr* — mixing the two would put different coordinate
+        systems in one result list.)
+
+    Note:
+        *pixel_size* applies only to the batch ``getSamples`` call; the
+        ``identify`` fallback has no equivalent parameter, so a point
+        resolved by the fallback is sampled at the service's native
+        resolution regardless.
     """
     url = _resolve_url(url_or_result)
 
@@ -935,7 +1038,12 @@ def getSamples(
                         "value": s.get("value"),
                         "source": "getSamples",
                     }
-    except (urllib.error.URLError, RuntimeError):
+    except (RuntimeError, ValueError):
+        # RuntimeError is every HTTP/transport failure (_http converts
+        # HTTPError and URLError alike); ValueError is a body that won't
+        # parse as JSON, which is what a degraded HTML error page served
+        # with status 200 looks like. Either way the batch produced nothing,
+        # and every point falls through to the per-point identify below.
         pass
 
     results = []
@@ -946,7 +1054,13 @@ def getSamples(
         try:
             r = identifyPixelValue(url, x, y, in_sr=in_sr, mosaic_rule=mosaic_rule, token=token, timeout=timeout)
             results.append({"x": x, "y": y, "value": r.get("value"), "source": "identify"})
-        except (ValueError, ConnectionError) as exc:
+        except (RuntimeError, ValueError, ConnectionError) as exc:
+            # RuntimeError matters most here and was previously missing: it
+            # is what identifyPixelValue actually raises for an unreachable
+            # host or an HTTP error status, so without it a single transport
+            # failure escaped and destroyed the results for every other
+            # point — exactly the all-or-nothing behaviour this per-point
+            # fallback exists to prevent.
             results.append({"x": x, "y": y, "value": None, "source": f"error: {exc}"})
     return results
 
@@ -1001,8 +1115,10 @@ def queryBoundary(
         geometry itself was requested in.
 
     Raises:
-        ValueError: If the service returns an error.
-        ConnectionError: If the service URL is unreachable.
+        ValueError: If the service answers with an Esri error object or a
+            non-JSON body.
+        RuntimeError: If the service is unreachable or answers with an HTTP
+            error status (see :func:`queryFeatureServiceCount`).
     """
     url = _resolve_url(url_or_result)
 
@@ -1018,8 +1134,8 @@ def queryBoundary(
     boundary_url = f"{url}/queryBoundary"
     try:
         data = fetch_json(boundary_url, params, timeout=timeout)
-    except urllib.error.URLError as exc:
-        raise ConnectionError(f"Could not reach ImageServer at {boundary_url!r}: {exc}") from exc
+    except RuntimeError as exc:
+        raise RuntimeError(f"Could not reach ImageServer at {boundary_url!r}: {exc}") from exc
 
     if "error" in data:
         raise ValueError(f"queryBoundary error: {_format_esri_error(data['error'])}")

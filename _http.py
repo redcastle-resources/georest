@@ -145,3 +145,22 @@ def build_params(base: dict, token: str | None) -> dict:
     if token:
         return {**base, "token": token}
     return base
+
+
+def format_esri_error(err: dict) -> str:
+    """Format an Esri error object for a raised exception message.
+
+    Esri's `err["message"]` is frequently a generic, unhelpful string (e.g.
+    "Invalid or missing input parameters") while the actually-diagnostic
+    text lives in `err["details"]` (e.g. "The requested image exceeds the
+    size limit.") — verified against a live service, where the bare message
+    alone was actively misleading. Always include details when present.
+
+    Lives here rather than in `services.py` so `portal.py` can use it too:
+    `services` imports from `portal`, so the reverse import would be a cycle.
+    """
+    msg = f"{err.get('code')} — {err.get('message', str(err))}"
+    details = err.get("details")
+    if details:
+        msg += f" ({'; '.join(str(d) for d in details)})"
+    return msg
