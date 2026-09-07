@@ -1,7 +1,15 @@
 """
-Shared stdlib-only HTTP/JSON helpers used across hostedServiceTools modules.
+Shared stdlib-only HTTP/JSON helpers used across the geoREST.RESTesri modules.
 
 No third-party dependencies — GET/POST + JSON parsing via urllib only.
+
+Copyright 2026 Ian Housman
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -11,8 +19,13 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from .. import __version__ as _VERSION
+
 _TIMEOUT = 60  # default seconds for HTTP requests; override per-call via `timeout`
-_USER_AGENT = "hostedServiceTools/1.0"
+
+#: Sent on every outbound request. Derived from the package version so the
+#: servers we query can attribute traffic to a specific release.
+_USER_AGENT = f"geoREST/{_VERSION} (+https://github.com/redcastle-resources/geoREST)"
 
 
 def fetch_json(url: str, params: dict[str, str] | None = None, timeout: int | None = None) -> dict:

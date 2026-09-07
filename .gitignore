@@ -127,3 +127,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Claude Code local session state
+.claude/
+
+# Backup archives produced during the geoREST restructure
+*.bak-*.tar.gz

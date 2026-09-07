@@ -1,0 +1,119 @@
+name: Publish
+
+# Uses PyPI Trusted Publishing (OIDC) — no API tokens are stored anywhere.
+#
+# One-time setup, before the first run:
+#   1. pypi.org      -> Publishing -> "Add a pending publisher"
+#        Project: georest | Owner: redcastle-resources | Repo: geoREST
+#        Workflow: publish.yml | Environment: pypi
+#      (It must be the *pending* flow: the project does not exist yet.)
+#   2. test.pypi.org -> the same, with Environment: testpypi
+#   3. GitHub -> Settings -> Environments -> create `pypi` and `testpypi`.
+#      Put required reviewers on `pypi` and restrict it to main + tags, so a
+#      compromised workflow on a feature branch still cannot publish.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: python -m pip install build "twine>=6.1"
+      - run: python -m build
+      - run: python -m twine check --strict dist/*
+
+      - name: The git tag must match __version__
+        if: github.event_name == 'release'
+        run: |
+          python - <<'PY'
+          import os, pathlib, re, sys
+          src = pathlib.Path("src/geoREST/__init__.py").read_text(encoding="utf-8")
+          ver = re.search(r'^__version__\s*=\s*"([^"]+)"', src, re.M).group(1)
+          tag = os.environ["GITHUB_REF_NAME"].lstrip("v")
+          print(f"__version__={ver}  tag={tag}")
+          sys.exit(0 if ver == tag else f"MISMATCH: tag {tag!r} vs __version__ {ver!r}")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  testpypi:
+    name: Publish to TestPyPI (rehearsal)
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/georest
+    permissions:
+      id-token: write            # required for OIDC Trusted Publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+
+  verify-testpypi:
+    name: Install from TestPyPI and smoke test
+    needs: testpypi
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install from TestPyPI
+        # No --extra-index-url needed: georest has zero dependencies, so
+        # TestPyPI alone satisfies the whole install. The retry loop is not
+        # optional — the index takes 10-60s to serve a freshly uploaded file.
+        run: |
+          for i in 1 2 3 4 5; do
+            python -m pip install --index-url https://test.pypi.org/simple/ georest && break
+            echo "index not caught up yet; retrying in 20s"; sleep 20
+          done
+
+      - name: Smoke test
+        run: |
+          python -c "
+          import geoREST
+          from geoREST.RESTesri import edw, portal, services
+          assert geoREST.edw is edw
+          print(geoREST.__version__, len(edw._SERVICE_THEMES), sorted(portal.PORTALS))
+          "
+          georest-check-themes --help
+
+  pypi:
+    name: Publish to PyPI
+    needs: verify-testpypi
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/georest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

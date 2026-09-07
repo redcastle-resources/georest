@@ -1,0 +1,181 @@
+# ---------------------------------------------------------------------------
+# Build
+# ---------------------------------------------------------------------------
+[build-system]
+requires = ["hatchling>=1.27"]        # >=1.27 for PEP 639 license expressions
+build-backend = "hatchling.build"
+
+
+# ---------------------------------------------------------------------------
+# Project metadata
+# ---------------------------------------------------------------------------
+[project]
+name = "georest"
+dynamic = ["version"]
+description = "Stdlib-only Python clients for geospatial REST APIs: ArcGIS Image, Map and Feature Services, the USFS Enterprise Data Warehouse, and ArcGIS Portal search."
+readme = "README.md"
+requires-python = ">=3.9"
+
+# PEP 639. Do NOT also add a "License :: OSI Approved ::" classifier below —
+# modern backends reject the combination.
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+
+# TODO(attribution): the module headers say "Copyright 2026 Ian Housman" while
+# the repository lives under the redcastle-resources organization. Confirm the
+# holder of record before the first PyPI upload, and make LICENSE, these
+# fields, and the four module headers agree.
+authors = [
+    { name = "Ian Housman" },
+]
+maintainers = [
+    { name = "RedCastle Resources", email = "ryan.rock@redcastleresources.com" },
+]
+
+keywords = [
+    "arcgis", "esri", "rest", "gis", "geospatial", "geojson",
+    "feature-service", "image-service", "map-service",
+    "edw", "usfs", "forest-service", "portal", "agol",
+]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+
+# Deliberately empty. Stdlib-only is a stated design goal of this library
+# (see the _http module docstring and tests/README.md) — keep it that way.
+# tests/test_packaging.py enforces it.
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.6",
+    "build>=1.0",
+    "twine>=6.1",                     # >=6.1 uploads PEP 639 (metadata 2.4)
+]
+examples = [
+    "jupyterlab>=4.0",
+    "ipython>=8.0",
+]
+
+[project.urls]
+Homepage      = "https://github.com/redcastle-resources/geoREST"
+Repository    = "https://github.com/redcastle-resources/geoREST"
+Issues        = "https://github.com/redcastle-resources/geoREST/issues"
+Changelog     = "https://github.com/redcastle-resources/geoREST/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/redcastle-resources/geoREST/blob/main/docs/api.md"
+
+[project.scripts]
+georest-check-themes = "geoREST.RESTesri.cli.check_themes:main"
+
+
+# ---------------------------------------------------------------------------
+# hatchling
+# ---------------------------------------------------------------------------
+[tool.hatch.version]
+path = "src/geoREST/__init__.py"      # read by AST, never imported
+
+[tool.hatch.build.targets.wheel]
+# REQUIRED, not optional: the distribution name (georest) does not match the
+# package directory (geoREST), so hatchling's auto-detection looks for
+# src/georest, fails to find it, and aborts with "Unable to determine which
+# files to ship."
+packages = ["src/geoREST"]
+
+[tool.hatch.build.targets.sdist]
+# Ship enough for a downstream packager to run the full offline suite.
+include = [
+    "/src",
+    "/tests",
+    "/tools",
+    "/docs",
+    "/examples",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/CONTRIBUTING.md",
+    "/LICENSE",
+    "/pyproject.toml",
+]
+exclude = [
+    "/reference",                     # geeViz ancestor source; imports geeViz + ee
+    "**/__pycache__",
+    "**/.ipynb_checkpoints",
+]
+
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+
+
+# ---------------------------------------------------------------------------
+# ruff
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+src = ["src", "tests", "tools"]
+# reference/ is the geeViz ancestor source, kept for provenance only. It is
+# excluded from both distributions and is not maintained, so linting it is noise.
+# The notebooks import in the order their markdown walks through the functions,
+# which is documentation structure, not an import-sorting mistake.
+extend-exclude = ["reference", "*.ipynb"]
+
+[tool.ruff.lint]
+# Deliberately a starter ruleset. This code predates any linting, and the
+# restructure that introduced this config was not the place to also rewrite
+# ~40 unrelated style findings in working modules. These rules are the
+# high-signal ones that the tree passes today; see the "backlog" list below
+# for what to turn on next, one rule per PR so each diff stays reviewable.
+select = ["E", "F", "W", "I", "UP", "B", "C4"]
+ignore = [
+    "E501",     # line length is handled by the formatter
+    "UP006",    # keep typing compatible with the 3.9 floor
+    "UP007",
+    "N802",     # portal/services intentionally mirror Esri's camelCase API names
+
+    # --- backlog: real findings, deferred so the restructure stayed reviewable
+    "E741",     # 13 hits: single-letter loop vars (l) in edw/services
+    "B007",     # 1 hit
+    "B023",     # 1 hit: function-uses-loop-variable — worth a real look
+    "B904",     # 1 hit: raise ... from inside except
+    "B018",     # useless expression
+    "C416",     # 2 hits: unnecessary comprehension
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
+"src/geoREST/__init__.py" = ["F401"]  # TYPE_CHECKING re-exports
+"tests/support.py" = ["F401"]         # back-compat re-exports from edw
+
+
+# ---------------------------------------------------------------------------
+# coverage
+# ---------------------------------------------------------------------------
+[tool.coverage.run]
+source = ["geoREST"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedError"]

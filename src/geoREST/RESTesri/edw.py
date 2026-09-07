@@ -6,7 +6,7 @@ the ArcGIS REST services at https://apps.fs.usda.gov/arcx/rest/services/EDW.
 
 Quick start::
 
-    from RESTesri import edw
+    from geoREST.RESTesri import edw
 
     # Search for fire-related services (EDW catalog only — see search_edw_services)
     services = edw.search_edw_services("fire")
@@ -249,6 +249,56 @@ _KEYWORD_ALIASES: dict[str, list[str]] = {
     "tribal": ["tribal", "ceded"],
 }
 
+#: Themes considered valid for a `_SERVICE_THEMES` entry, and the set
+#: `search_edw_services(theme=...)` accepts.
+VALID_THEMES = frozenset({
+    "biota", "boundaries", "environment", "geoscientific",
+    "inland_waters", "planning_cadastre", "structure", "transportation",
+})
+
+
+def theme_drift(services) -> dict[str, list[str]]:
+    """Compare the live EDW catalog against the hand-maintained theme table.
+
+    _SERVICE_THEMES powers theme filtering and description matching in
+    search_edw_services, and is curated by hand — so it silently rots as EDW
+    publishes and retires services.
+
+    Only MapServer services are expected to carry a theme. The catalog also
+    publishes the odd GPServer (a geoprocessing tool, not a queryable data
+    service — currently RAVG_DataExtract_01), which has no layers and
+    nothing to categorise; those are reported under "non_mapserver" for
+    visibility rather than counted as drift.
+
+    Takes the list of dicts from search_edw_services. Returns:
+
+        untyped  — live MapServer services with no theme entry. They still
+                   appear in search results, but as theme "uncategorized"
+                   and with no description to match keywords against.
+        orphaned — theme entries whose service is gone from the catalog.
+        bad_theme / missing_desc — malformed entries.
+        non_mapserver — informational; not drift.
+    """
+    mapservers = {s["name"] for s in services if s.get("type") == "MapServer"}
+    all_names = {s["name"] for s in services}
+    themed = set(_SERVICE_THEMES)
+    return {
+        "untyped": sorted(mapservers - themed),
+        "orphaned": sorted(themed - all_names),
+        "bad_theme": sorted(
+            name for name, meta in _SERVICE_THEMES.items()
+            if meta.get("theme") not in VALID_THEMES
+        ),
+        "missing_desc": sorted(
+            name for name, meta in _SERVICE_THEMES.items()
+            if not (meta.get("desc") or "").strip()
+        ),
+        "non_mapserver": sorted(
+            f"{s['name']} ({s.get('type')})" for s in services
+            if s.get("type") != "MapServer"
+        ),
+    }
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -262,7 +312,7 @@ def search_edw_services(query: str = "", theme: str = "") -> list[dict[str, str]
     ``EDW_BASE_URL`` (https://apps.fs.usda.gov/arcx/rest/services/EDW). It
     does NOT search IIPP, ArcGIS Online, or any other portal. To search
     IIPP (or another portal) instead, use
-    ``RESTesri.portal.searchPortal(query, portal="iipp")`` — that function
+    ``geoREST.RESTesri.portal.searchPortal(query, portal="iipp")`` — that function
     hits the portal's ``/sharing/rest/search`` endpoint directly and has no
     EDW-specific theme/keyword-alias matching.
 
