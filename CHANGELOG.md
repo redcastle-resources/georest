@@ -6,7 +6,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.1.0] — 2026-09-07
+## [0.1.0] — 2026-09-10
 
 First release as an installable distribution. Previously this was a loose
 `RESTesri/` directory that imported only because the repository root happened to be
