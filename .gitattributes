@@ -1,0 +1,22 @@
+# Line endings are pinned here rather than left to each contributor's
+# core.autocrlf, which is a machine-level setting installed by Git for Windows.
+# CI runs on ubuntu-latest, windows-latest and macos-latest, so checkouts need
+# to be byte-identical regardless of who cloned and how their Git was set up.
+#
+# text=auto  -> detect text vs binary, store LF in the repository
+# eol=lf     -> check out LF on every platform, Windows included
+* text=auto eol=lf
+
+# Binary: never convert, never diff as text.
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.gz  binary
+*.zip binary
+*.whl binary
+
+# Notebooks are JSON, so they are text — but the diffs are unreadable noise
+# and outputs are stripped before committing anyway (see CONTRIBUTING.md).
+*.ipynb text eol=lf

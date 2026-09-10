@@ -8,7 +8,7 @@ data (a tile URL template, a GeoJSON dict) instead of rendering it anywhere.
 
 Quick start::
 
-    import services
+    from georest.restesri import services
 
     # Image/Map Service tile URL template
     tile_url = services.getImageServiceTileUrl("https://.../ImageServer")
@@ -21,7 +21,7 @@ Quick start::
         max_features=2000,
     )
 
-Copyright 2026 Ian Housman
+Copyright 2026 Ryan Rock and Ian Housman
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
