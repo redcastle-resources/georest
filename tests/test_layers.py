@@ -1,7 +1,7 @@
 """get_layer_roles / get_detail_layers: role tagging, grouping, null-safety."""
 import unittest
 
-from geoREST.RESTesri import edw
+from georest.restesri import edw
 
 from .support import fake_layers, layer, load_layer_cache, patched
 

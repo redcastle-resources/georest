@@ -1,7 +1,7 @@
 """search_edw_services matching, and internal consistency of the theme table."""
 import unittest
 
-from geoREST.RESTesri import edw
+from georest.restesri import edw
 
 from .support import VALID_THEMES, patched
 

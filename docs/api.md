@@ -1,4 +1,4 @@
-# geoREST.RESTesri — API reference
+# georest.restesri — API reference
 
 A set of Python tools that streamline interacting with ESRI Map, Feature and Image services.
 
@@ -9,11 +9,11 @@ a quick start are in the [README](../README.md).
 
 Stdlib-only Python clients for ArcGIS REST services (Image/Map/Feature Services, EDW, and Portal search).
 
-All four modules live under `geoREST.RESTesri`:
+All four modules live under `georest.restesri`:
 
 ```python
-from geoREST.RESTesri import edw, portal, services
-from geoREST import edw                      # equivalent top-level re-export
+from georest.restesri import edw, portal, services
+from georest import edw                      # equivalent top-level re-export
 ```
 
 ### `services.py` — generic ArcGIS service queries

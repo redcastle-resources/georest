@@ -1,4 +1,4 @@
-"""Offline tests for `geoREST/RESTesri/services.py` — every public function.
+"""Offline tests for `georest/restesri/services.py` — every public function.
 
 Deterministic and network-free: the HTTP helpers are replaced on the
 `services` module itself (see `support.patched_services`). The canned
@@ -15,7 +15,7 @@ import os
 import tempfile
 import unittest
 
-from geoREST.RESTesri import services as S
+from georest.restesri import services as S
 
 from .support import RecordingFetch, patched_services
 

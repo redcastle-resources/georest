@@ -8,7 +8,7 @@ data (a tile URL template, a GeoJSON dict) instead of rendering it anywhere.
 
 Quick start::
 
-    from geoREST.RESTesri import services
+    from georest.restesri import services
 
     # Image/Map Service tile URL template
     tile_url = services.getImageServiceTileUrl("https://.../ImageServer")

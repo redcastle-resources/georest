@@ -100,7 +100,7 @@ def main() -> int:
 
     if args.emit and drift["untyped"]:
         print("\n" + "=" * 70)
-        print("Paste into _SERVICE_THEMES in src/geoREST/RESTesri/edw.py, under")
+        print("Paste into _SERVICE_THEMES in src/georest/restesri/edw.py, under")
         print("the right theme heading, replacing THEME with the category:")
         print("=" * 70)
         for name in drift["untyped"]:

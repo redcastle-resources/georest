@@ -1,4 +1,4 @@
-"""Shared helpers for the geoREST test suite.
+"""Shared helpers for the georest test suite.
 
 Offline tests are the default and never touch the network. Live tests are
 opt-in via the EDW_LIVE environment variable, because the EDW server is
@@ -14,12 +14,12 @@ import time
 import unittest
 from pathlib import Path
 
-from geoREST.RESTesri import edw, services
+from georest.restesri import edw, services
 
 # VALID_THEMES and theme_drift now live in edw itself, so the shipped
 # `georest-check-themes` CLI can use them without importing the test suite.
 # Re-exported here so the existing tests keep importing them from support.
-from geoREST.RESTesri.edw import VALID_THEMES, theme_drift  # noqa: F401
+from georest.restesri.edw import VALID_THEMES, theme_drift  # noqa: F401
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

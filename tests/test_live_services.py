@@ -1,4 +1,4 @@
-"""Live (network) tests for `geoREST/RESTesri/services.py`.
+"""Live (network) tests for `georest/restesri/services.py`.
 
 Opt in with `SERVICES_LIVE=1` (or `EDW_LIVE=1`, which turns on the whole
 network suite). Skipped by default.
@@ -24,7 +24,7 @@ import os
 import tempfile
 import unittest
 
-from geoREST.RESTesri import services as S
+from georest.restesri import services as S
 
 from .support import requires_live_services, retry
 
@@ -138,7 +138,7 @@ class TileUrlTests(unittest.TestCase):
 
     def test_the_tile_template_resolves_to_a_real_tile(self):
         """Proves the {z}/{y}/{x} ordering against a live cached service."""
-        from geoREST.RESTesri._http import fetch_bytes
+        from georest.restesri._http import fetch_bytes
 
         template = S.getImageServiceTileUrl(TILED)
         # y before x is the whole point: these two are not interchangeable.
@@ -150,7 +150,7 @@ class TileUrlTests(unittest.TestCase):
 
     def test_an_uncached_service_yields_a_template_whose_tiles_404(self):
         """The documented trap: the template is built without validation."""
-        from geoREST.RESTesri._http import fetch_bytes, fetch_json
+        from georest.restesri._http import fetch_bytes, fetch_json
 
         meta = retry(lambda: fetch_json(IMG, {"f": "json"}, timeout=60))
         self.assertNotIn("tileInfo", meta, "LCMS gained a tile cache; revisit this test")

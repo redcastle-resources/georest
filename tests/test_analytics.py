@@ -2,7 +2,7 @@
 import json
 import unittest
 
-from geoREST.RESTesri import edw
+from georest.restesri import edw
 
 
 def build(*analytics):

@@ -6,7 +6,7 @@ the ArcGIS REST services at https://apps.fs.usda.gov/arcx/rest/services/EDW.
 
 Quick start::
 
-    from geoREST.RESTesri import edw
+    from georest.restesri import edw
 
     # Search for fire-related services (EDW catalog only — see search_edw_services)
     services = edw.search_edw_services("fire")
@@ -312,7 +312,7 @@ def search_edw_services(query: str = "", theme: str = "") -> list[dict[str, str]
     ``EDW_BASE_URL`` (https://apps.fs.usda.gov/arcx/rest/services/EDW). It
     does NOT search IIPP, ArcGIS Online, or any other portal. To search
     IIPP (or another portal) instead, use
-    ``geoREST.RESTesri.portal.searchPortal(query, portal="iipp")`` — that function
+    ``georest.restesri.portal.searchPortal(query, portal="iipp")`` — that function
     hits the portal's ``/sharing/rest/search`` endpoint directly and has no
     EDW-specific theme/keyword-alias matching.
 

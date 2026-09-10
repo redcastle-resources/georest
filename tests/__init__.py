@@ -1,1 +1,1 @@
-"""Test suite for geoREST. Requires `pip install -e .` (src/ layout)."""
+"""Test suite for georest. Requires `pip install -e .` (src/ layout)."""

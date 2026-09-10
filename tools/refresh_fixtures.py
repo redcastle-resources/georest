@@ -4,7 +4,7 @@ The fixture holds every service's real MapServer layer tree, letting the
 layer-role tests run offline against genuine data. Refresh it when EDW
 publishes or restructures services.
 
-    pip install -e .          # geoREST must be importable
+    pip install -e .          # georest must be importable
     python tools/refresh_fixtures.py
 
 Services that cannot be fetched keep their existing cached entry, so a flaky
@@ -20,8 +20,8 @@ import sys
 import time
 from pathlib import Path
 
-from geoREST.RESTesri import edw
-from geoREST.RESTesri._http import fetch_json
+from georest.restesri import edw
+from georest.restesri._http import fetch_json
 
 #: Repo root is the parent of tools/; the fixture lives under tests/.
 TARGET = (Path(__file__).resolve().parent.parent

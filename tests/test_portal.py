@@ -1,4 +1,4 @@
-"""Offline tests for `geoREST/RESTesri/portal.py`.
+"""Offline tests for `georest/restesri/portal.py`.
 
 Network-free: `fetch_json` is replaced on the `portal` module itself. The
 canned responses are trimmed copies of real payloads (an ArcGIS Online
@@ -15,7 +15,7 @@ from __future__ import annotations
 import contextlib
 import unittest
 
-from geoREST.RESTesri import portal as P
+from georest.restesri import portal as P
 
 from .support import RecordingFetch
 

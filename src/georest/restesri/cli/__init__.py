@@ -1,4 +1,4 @@
-"""Command-line entry points shipped with geoREST.RESTesri.
+"""Command-line entry points shipped with georest.restesri.
 
 check_themes
     ``georest-check-themes`` — report drift between the live EDW catalog and

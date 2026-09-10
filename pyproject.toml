@@ -83,21 +83,21 @@ Changelog     = "https://github.com/redcastle-resources/georest/blob/main/CHANGE
 Documentation = "https://github.com/redcastle-resources/georest/blob/main/docs/api.md"
 
 [project.scripts]
-georest-check-themes = "geoREST.RESTesri.cli.check_themes:main"
+georest-check-themes = "georest.restesri.cli.check_themes:main"
 
 
 # ---------------------------------------------------------------------------
 # hatchling
 # ---------------------------------------------------------------------------
 [tool.hatch.version]
-path = "src/geoREST/__init__.py"      # read by AST, never imported
+path = "src/georest/__init__.py"      # read by AST, never imported
 
 [tool.hatch.build.targets.wheel]
 # REQUIRED, not optional: the distribution name (georest) does not match the
-# package directory (geoREST), so hatchling's auto-detection looks for
+# package directory (georest), so hatchling's auto-detection looks for
 # src/georest, fails to find it, and aborts with "Unable to determine which
 # files to ship."
-packages = ["src/geoREST"]
+packages = ["src/georest"]
 
 [tool.hatch.build.targets.sdist]
 # Ship enough for a downstream packager to run the full offline suite.
@@ -166,7 +166,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["B011"]
-"src/geoREST/__init__.py" = ["F401"]  # TYPE_CHECKING re-exports
+"src/georest/__init__.py" = ["F401"]  # TYPE_CHECKING re-exports
 "tests/support.py" = ["F401"]         # back-compat re-exports from edw
 
 
@@ -174,7 +174,7 @@ ignore = [
 # coverage
 # ---------------------------------------------------------------------------
 [tool.coverage.run]
-source = ["geoREST"]
+source = ["georest"]
 branch = true
 
 [tool.coverage.report]

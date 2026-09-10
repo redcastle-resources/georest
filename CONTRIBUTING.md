@@ -1,4 +1,4 @@
-# Contributing to geoREST
+# Contributing to georest
 
 ## Setup
 
@@ -10,14 +10,14 @@ pip install -e ".[dev]"
 ```
 
 The editable install is **required**, not a convenience. This is a `src/` layout, so
-`geoREST` is not importable from the repository root without it. That is the point:
+`georest` is not importable from the repository root without it. That is the point:
 the test suite imports the installed artifact, so a packaging mistake — a missing
 `__init__.py`, a wrong `packages =` — fails loudly instead of being masked by the
 working directory.
 
 ## The one rule that matters
 
-**geoREST has zero third-party runtime dependencies, and must keep it that way.**
+**georest has zero third-party runtime dependencies, and must keep it that way.**
 Everything is stdlib `urllib` and `json`. This is what lets the package install into
 an ArcGIS Pro `arcgispro-py3` clone or a locked-down agency environment without a
 resolver fight. `tests/test_packaging.py` enforces it by AST-walking every module in
@@ -72,7 +72,7 @@ services. Check it with:
 georest-check-themes --emit
 ```
 
-Paste the emitted entries into `src/geoREST/RESTesri/edw.py` under the right theme
+Paste the emitted entries into `src/georest/restesri/edw.py` under the right theme
 heading, replacing `THEME` with the correct category from `edw.VALID_THEMES`.
 
 ## Notebooks
@@ -85,7 +85,7 @@ jupyter nbconvert --clear-output --inplace examples/*.ipynb
 
 ## Releasing
 
-1. Bump `__version__` in `src/geoREST/__init__.py` — the single source of truth;
+1. Bump `__version__` in `src/georest/__init__.py` — the single source of truth;
    hatchling reads it by AST and `pyproject.toml` carries no literal version.
 2. Move the `## [Unreleased]` section of `CHANGELOG.md` under a new dated heading.
 3. Commit, then `git tag -a v0.1.0 -m "v0.1.0"` and push both.

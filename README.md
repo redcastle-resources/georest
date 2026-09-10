@@ -1,4 +1,4 @@
-# geoREST
+# georest
 
 Stdlib-only Python clients for geospatial REST APIs — ArcGIS Image, Map and Feature
 Services, the USFS Enterprise Data Warehouse (EDW), and ArcGIS Portal search.
@@ -15,7 +15,7 @@ pip install georest
 ## Quick start
 
 ```python
-from geoREST.RESTesri import edw, portal, services
+from georest.restesri import edw, portal, services
 
 # Search the USFS EDW catalog by keyword or theme
 hits = edw.search_edw_services("fire")
@@ -35,18 +35,18 @@ results = portal.searchPortal("naip 2023", portal="agol")
 tile_url = services.getImageServiceTileUrl("https://.../ImageServer")
 ```
 
-The three modules are also re-exported at the top level, so `from geoREST import edw`
-works too. They load lazily, so `import geoREST` costs almost nothing.
+The three modules are also re-exported at the top level, so `from georest import edw`
+works too. They load lazily, so `import georest` costs almost nothing.
 
 ## Layout
 
 | Import path | What it covers |
 |---|---|
-| `geoREST.RESTesri.edw` | USFS EDW: catalog search, layer-role tagging, FGDC/ISO metadata, feature and analytic queries |
-| `geoREST.RESTesri.portal` | ArcGIS Portal search and service metadata |
-| `geoREST.RESTesri.services` | Generic Image/Map/Feature Service queries and raster operations |
+| `georest.restesri.edw` | USFS EDW: catalog search, layer-role tagging, FGDC/ISO metadata, feature and analytic queries |
+| `georest.restesri.portal` | ArcGIS Portal search and service metadata |
+| `georest.restesri.services` | Generic Image/Map/Feature Service queries and raster operations |
 
-`RESTesri` is the Esri/ArcGIS provider. It sits under `geoREST` as a subpackage so
+`restesri` is the Esri/ArcGIS provider. It sits under `georest` as a subpackage so
 other REST providers can be added alongside it without a namespace collision.
 
 Full per-function reference: **[docs/api.md](docs/api.md)**.
@@ -72,10 +72,10 @@ repository root happened to be on `sys.path`. Update imports:
 
 ```python
 from RESTesri import edw                    # before
-from geoREST.RESTesri import edw            # after
+from georest.restesri import edw            # after
 
 from RESTesri._http import fetch_json       # before
-from geoREST.RESTesri._http import fetch_json   # after
+from georest.restesri._http import fetch_json   # after
 ```
 
 Then delete any `sys.path.insert(...)` bootstrap — `pip install georest` (or

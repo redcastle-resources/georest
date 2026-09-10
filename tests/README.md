@@ -1,10 +1,10 @@
-# geoREST tests
+# georest tests
 
 Standard-library `unittest`, matching the package's own stdlib-only
 dependencies. `pytest` collects these natively and is what CI runs; either
 runner works locally.
 
-Install first — this is a `src/` layout, so `geoREST` is not importable from
+Install first — this is a `src/` layout, so `georest` is not importable from
 the repository root without it. That is deliberate: the suite imports the
 *installed* package, so a packaging mistake fails loudly instead of being
 masked by the working directory.
@@ -81,7 +81,7 @@ costs freshness rather than the fixture.
 
 ## Checking the theme catalog
 
-`src/geoREST/RESTesri/edw.py` carries `_SERVICE_THEMES`, a hand-curated table of every
+`src/georest/restesri/edw.py` carries `_SERVICE_THEMES`, a hand-curated table of every
 MapServer service with a theme and description. It drives theme filtering and
 description matching in `search_edw_services`, and rots silently as EDW
 publishes and retires services: an untyped service still appears in results,
@@ -93,7 +93,7 @@ georest-check-themes           # drift report
 georest-check-themes --emit    # + paste-ready entries
 ```
 
-`VALID_THEMES` and `theme_drift()` live in `geoREST.RESTesri.edw` so this
+`VALID_THEMES` and `theme_drift()` live in `georest.restesri.edw` so this
 shipped CLI does not import the test suite; `tests/support.py` re-exports both,
 so tests can keep importing them from there.
 

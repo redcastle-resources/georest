@@ -4,7 +4,7 @@ name: Publish
 #
 # One-time setup, before the first run:
 #   1. pypi.org      -> Publishing -> "Add a pending publisher"
-#        Project: georest | Owner: redcastle-resources | Repo: geoREST
+#        Project: georest | Owner: redcastle-resources | Repo: georest
 #        Workflow: publish.yml | Environment: pypi
 #      (It must be the *pending* flow: the project does not exist yet.)
 #   2. test.pypi.org -> the same, with Environment: testpypi
@@ -41,7 +41,7 @@ jobs:
         run: |
           python - <<'PY'
           import os, pathlib, re, sys
-          src = pathlib.Path("src/geoREST/__init__.py").read_text(encoding="utf-8")
+          src = pathlib.Path("src/georest/__init__.py").read_text(encoding="utf-8")
           ver = re.search(r'^__version__\s*=\s*"([^"]+)"', src, re.M).group(1)
           tag = os.environ["GITHUB_REF_NAME"].lstrip("v")
           print(f"__version__={ver}  tag={tag}")
@@ -94,10 +94,10 @@ jobs:
       - name: Smoke test
         run: |
           python -c "
-          import geoREST
-          from geoREST.RESTesri import edw, portal, services
-          assert geoREST.edw is edw
-          print(geoREST.__version__, len(edw._SERVICE_THEMES), sorted(portal.PORTALS))
+          import georest
+          from georest.restesri import edw, portal, services
+          assert georest.edw is edw
+          print(georest.__version__, len(edw._SERVICE_THEMES), sorted(portal.PORTALS))
           "
           georest-check-themes --help
 

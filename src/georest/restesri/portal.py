@@ -7,7 +7,7 @@ removed — this module only fetches data, it does not render into any viewer.
 
 Quick start::
 
-    from geoREST.RESTesri import portal
+    from georest.restesri import portal
 
     # Discover data on any ArcGIS Portal
     results = portal.searchPortal("naip 2023")                  # IIPP (default)
@@ -149,7 +149,7 @@ def searchPortal(
     Online, IIPP, and any ArcGIS Enterprise install. This is a raw portal
     search — it has no theme/keyword-alias matching. To search the USFS EDW
     catalog specifically (a separate, non-portal REST endpoint), use
-    ``geoREST.RESTesri.edw.search_edw_services(query, theme=...)`` instead.
+    ``georest.restesri.edw.search_edw_services(query, theme=...)`` instead.
 
     Args:
         query (str): Free-text search query (e.g. ``"naip 2023"``,

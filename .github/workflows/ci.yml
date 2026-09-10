@@ -88,10 +88,10 @@ jobs:
           whl = glob.glob("dist/*.whl")[0]
           names = zipfile.ZipFile(whl).namelist()
           print("\n".join(sorted(names)))
-          assert "geoREST/__init__.py" in names
-          assert "geoREST/RESTesri/edw.py" in names
-          assert "geoREST/py.typed" in names
-          stray = [n for n in names if not n.startswith(("geoREST/", "georest-"))]
+          assert "georest/__init__.py" in names
+          assert "georest/restesri/edw.py" in names
+          assert "georest/py.typed" in names
+          stray = [n for n in names if not n.startswith(("georest/", "georest-"))]
           assert not stray, f"unexpected files in the wheel: {stray}"
           assert not [n for n in names if n.endswith(".ipynb")], "notebooks leaked"
           assert not [n for n in names if "/tests/" in n], "tests leaked"
@@ -106,10 +106,10 @@ jobs:
           # which is the whole point of using one.
           cd /tmp
           /tmp/verify/bin/python -c "
-          import geoREST
-          from geoREST.RESTesri import edw, portal, services
-          assert geoREST.edw is edw
-          print('version', geoREST.__version__)
+          import georest
+          from georest.restesri import edw, portal, services
+          assert georest.edw is edw
+          print('version', georest.__version__)
           print('themes', len(edw._SERVICE_THEMES))
           print('portals', sorted(portal.PORTALS))
           "
