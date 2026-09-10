@@ -25,6 +25,14 @@ EDW layers are lowercase (fire_name, acres, year). The uppercase forms shown in
 ArcGIS clients (FIRE_NAME, ACRES, YEAR) are display *aliases*; passing those in
 out_fields makes the server reject the whole query with "Failed to execute
 query." Use get_layer_info(service, layer)["fields"] to get the real names.
+
+Copyright 2026 Ryan Rock
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations

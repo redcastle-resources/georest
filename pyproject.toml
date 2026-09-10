@@ -26,7 +26,7 @@ license-files = ["LICENSE"]
 # holder of record before the first PyPI upload, and make LICENSE, these
 # fields, and the four module headers agree.
 authors = [
-    { name = "Ian Housman" },
+    { name = "Ryan Rock" },
 ]
 maintainers = [
     { name = "RedCastle Resources", email = "ryan.rock@redcastleresources.com" },
