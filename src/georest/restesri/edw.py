@@ -26,7 +26,7 @@ ArcGIS clients (FIRE_NAME, ACRES, YEAR) are display *aliases*; passing those in
 out_fields makes the server reject the whole query with "Failed to execute
 query." Use get_layer_info(service, layer)["fields"] to get the real names.
 
-Copyright 2026 Ryan Rock
+Copyright 2026 Ryan Rock and Ian Housman
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

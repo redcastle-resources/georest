@@ -11,6 +11,14 @@ theme filters and keyword aliases stop reaching it.
 
 Exit status is 0 when the table is in sync, 1 when it has drifted, and 2 if
 the catalog could not be reached.
+
+Copyright 2026 Ryan Rock and Ian Housman
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
 """
 from __future__ import annotations
 
@@ -57,8 +65,19 @@ def describe(service_name: str) -> str:
     return text
 
 
+#: `--help` text. Split off the license header, which is part of the module
+#: docstring for consistency with the rest of the package but has no business
+#: in a CLI's help output. RawDescriptionHelpFormatter keeps the indented
+#: usage examples intact; the default formatter reflows them into one run-on
+#: paragraph. tests/test_packaging.py guards both.
+_HELP = __doc__.split("\nCopyright ")[0].rstrip()
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=_HELP,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("--emit", action="store_true",
                         help="print paste-ready _SERVICE_THEMES entries for "
                              "services that lack one")

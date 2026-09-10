@@ -21,7 +21,7 @@ Quick start::
         max_features=2000,
     )
 
-Copyright 2026 Ryan Rock
+Copyright 2026 Ryan Rock and Ian Housman
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

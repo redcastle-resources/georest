@@ -16,7 +16,7 @@ portal
 _http
     Internal shared urllib GET/POST/JSON helpers. Not part of the public API.
 
-Copyright 2026 Ian Housman
+Copyright 2026 Ryan Rock and Ian Housman
 Portions ported from geeViz (esriLib.py, edwLib.py).
 
 Licensed under the Apache License, Version 2.0 (the "License");

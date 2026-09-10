@@ -63,6 +63,35 @@ class TestUserAgent(unittest.TestCase):
         self.assertIn(f"georest/{georest.__version__}", _http._USER_AGENT)
 
 
+class TestAttribution(unittest.TestCase):
+    """Every shipped module carries the same copyright and license header."""
+
+    EXPECTED = "Copyright 2026 Ryan Rock and Ian Housman"
+
+    def test_every_module_has_a_consistent_header(self):
+        root = pathlib.Path(georest.__file__).parent
+        for path in sorted(root.rglob("*.py")):
+            with self.subTest(module=path.name):
+                text = path.read_text(encoding="utf-8")
+                self.assertIn(self.EXPECTED, text)
+                self.assertIn("Apache License, Version 2.0", text)
+
+
+class TestCliHelp(unittest.TestCase):
+    def test_help_text_excludes_the_license_header(self):
+        """The license lives in the module docstring, which argparse would
+        otherwise dump into --help. Regressed once; guarded now."""
+        from georest.restesri.cli import check_themes
+        self.assertNotIn("Apache License", check_themes._HELP)
+        self.assertNotIn("Copyright", check_themes._HELP)
+        self.assertIn("_SERVICE_THEMES", check_themes._HELP)
+
+    def test_help_text_keeps_the_usage_examples_indented(self):
+        """The default argparse formatter reflows these into one paragraph."""
+        from georest.restesri.cli import check_themes
+        self.assertIn("    georest-check-themes --emit", check_themes._HELP)
+
+
 class TestNoThirdPartyImports(unittest.TestCase):
     """Turns the stdlib-only design goal into an enforced invariant."""
 

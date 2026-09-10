@@ -21,12 +21,9 @@ requires-python = ">=3.9"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 
-# TODO(attribution): the module headers say "Copyright 2026 Ian Housman" while
-# the repository lives under the redcastle-resources organization. Confirm the
-# holder of record before the first PyPI upload, and make LICENSE, these
-# fields, and the four module headers agree.
 authors = [
     { name = "Ryan Rock" },
+    { name = "Ian Housman" },
 ]
 maintainers = [
     { name = "RedCastle Resources", email = "ryan.rock@redcastleresources.com" },
