@@ -25,7 +25,7 @@ _TIMEOUT = 60  # default seconds for HTTP requests; override per-call via `timeo
 
 #: Sent on every outbound request. Derived from the package version so the
 #: servers we query can attribute traffic to a specific release.
-_USER_AGENT = f"geoREST/{_VERSION} (+https://github.com/redcastle-resources/geoREST)"
+_USER_AGENT = f"geoREST/{_VERSION} (+https://github.com/redcastle-resources/georest)"
 
 
 def fetch_json(url: str, params: dict[str, str] | None = None, timeout: int | None = None) -> dict:

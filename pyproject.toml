@@ -76,11 +76,11 @@ examples = [
 ]
 
 [project.urls]
-Homepage      = "https://github.com/redcastle-resources/geoREST"
-Repository    = "https://github.com/redcastle-resources/geoREST"
-Issues        = "https://github.com/redcastle-resources/geoREST/issues"
-Changelog     = "https://github.com/redcastle-resources/geoREST/blob/main/CHANGELOG.md"
-Documentation = "https://github.com/redcastle-resources/geoREST/blob/main/docs/api.md"
+Homepage      = "https://github.com/redcastle-resources/georest"
+Repository    = "https://github.com/redcastle-resources/georest"
+Issues        = "https://github.com/redcastle-resources/georest/issues"
+Changelog     = "https://github.com/redcastle-resources/georest/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/redcastle-resources/georest/blob/main/docs/api.md"
 
 [project.scripts]
 georest-check-themes = "geoREST.RESTesri.cli.check_themes:main"

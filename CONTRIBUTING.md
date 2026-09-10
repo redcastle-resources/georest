@@ -3,8 +3,8 @@
 ## Setup
 
 ```bash
-git clone https://github.com/redcastle-resources/geoREST
-cd geoREST
+git clone https://github.com/redcastle-resources/georest
+cd georest
 python -m venv .venv && . .venv/Scripts/activate    # Windows; use bin/activate elsewhere
 pip install -e ".[dev]"
 ```

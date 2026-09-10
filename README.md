@@ -84,8 +84,8 @@ Then delete any `sys.path.insert(...)` bootstrap — `pip install georest` (or
 ## Development
 
 ```bash
-git clone https://github.com/redcastle-resources/geoREST
-cd geoREST
+git clone https://github.com/redcastle-resources/georest
+cd georest
 pip install -e ".[dev]"
 
 python -m pytest                              # or: python -m unittest discover -s tests -t .

@@ -59,5 +59,5 @@ on `sys.path`.
 - All five `sys.path.insert(...)` bootstraps (two CLIs, three notebooks), made
   unnecessary by the `src/` layout plus an editable install.
 
-[Unreleased]: https://github.com/redcastle-resources/geoREST/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/redcastle-resources/geoREST/releases/tag/v0.1.0
+[Unreleased]: https://github.com/redcastle-resources/georest/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/redcastle-resources/georest/releases/tag/v0.1.0
