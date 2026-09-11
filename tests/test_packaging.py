@@ -97,7 +97,8 @@ class TestNoThirdPartyImports(unittest.TestCase):
 
     ALLOWED = {
         "__future__", "argparse", "ast", "contextlib", "html", "importlib",
-        "json", "os", "pathlib", "re", "sys", "time", "typing", "unittest",
+        "json", "os", "pathlib", "re", "sys", "threading", "time", "typing",
+        "unittest",
         "urllib", "xml", "georest",
     }
 

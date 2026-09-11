@@ -42,6 +42,10 @@ from __future__ import annotations
 
 from typing import Any
 
+import re
+import threading
+import urllib.parse
+
 from ._http import build_params, fetch_json, format_esri_error
 
 # ---------------------------------------------------------------------------
@@ -134,6 +138,138 @@ def _resolve_portal(portal: str) -> str:
 # Portal search
 # ---------------------------------------------------------------------------
 
+_ORG_ID_CACHE: dict[str, str] = {}
+_ORG_ID_LOCKS: dict[str, threading.Lock] = {}
+_ORG_ID_LOCKS_GUARD = threading.Lock()
+
+# ArcGIS org ids are short alphanumerics. Validated before being interpolated
+# into the search DSL so a malformed portals/self response cannot inject syntax.
+_ORG_ID_RE = re.compile(r"^[A-Za-z0-9]{1,64}$")
+
+
+def _is_agol_org_portal(base_url: str) -> bool:
+    """True for an ArcGIS Online *organization* URL (``<org>.maps.arcgis.com``).
+
+    ``www.arcgis.com`` is the global AGOL endpoint, not an org, so it is
+    excluded - searching it should stay global. Enterprise portals and custom
+    vanity domains are also excluded; those need ``org_scoped=True`` explicitly.
+    """
+    host = (urllib.parse.urlparse(base_url).hostname or "").lower()
+    return host.endswith(".maps.arcgis.com") and not host.startswith("www.")
+
+
+def _org_lock(base_url: str) -> threading.Lock:
+    with _ORG_ID_LOCKS_GUARD:
+        return _ORG_ID_LOCKS.setdefault(base_url, threading.Lock())
+
+
+def _resolve_org_id(base_url: str, token: str | None = None) -> str:
+    """Return the portal's organization id via ``/sharing/rest/portals/self``.
+
+    Single-flight per portal: concurrent first callers make one request, not N.
+    Only *successful* lookups are cached - caching a transient failure would
+    permanently disable scoping, and an unscoped search silently returns other
+    organizations' data.
+
+    Raises:
+        RuntimeError: if the org id cannot be resolved, for any reason
+            (georest's one failure type for anything HTTP, see _http).
+            Callers wanting a global search on failure must pass
+            ``org_scoped=False`` explicitly; this never falls back silently.
+    """
+    cached = _ORG_ID_CACHE.get(base_url)
+    if cached:
+        return cached
+
+    url = f"{base_url}/sharing/rest/portals/self"
+    hint = "Pass org_scoped=False to search all of ArcGIS Online instead."
+
+    with _org_lock(base_url):
+        cached = _ORG_ID_CACHE.get(base_url)   # another thread may have won
+        if cached:
+            return cached
+
+        params = {"f": "json"}
+        if token:
+            params["token"] = token
+        try:
+            data = fetch_json(url, params)
+        except (RuntimeError, OSError, ValueError) as exc:
+            # _http folds every transport/HTTP failure into RuntimeError and
+            # a non-JSON body into ValueError.
+            raise RuntimeError(
+                f"Could not resolve the organization id from {url!r}: {exc}. {hint}"
+            ) from exc
+
+        # Any shape other than a JSON object is unusable. Checked before any
+        # .get() so a list/string body raises RuntimeError, not AttributeError.
+        if not isinstance(data, dict):
+            raise RuntimeError(
+                f"{url!r} returned {type(data).__name__}, expected a JSON object. {hint}"
+            )
+        if data.get("error"):
+            err = data["error"]
+            msg = err.get("message", err) if isinstance(err, dict) else err
+            raise RuntimeError(
+                f"Portal returned an error resolving the organization id from "
+                f"{url!r}: {msg}. {hint}"
+            )
+
+        org_id = data.get("id")
+        if not isinstance(org_id, str) or not _ORG_ID_RE.match(org_id):
+            raise RuntimeError(
+                f"{url!r} did not report a usable organization id "
+                f"(got {org_id!r}). {hint}"
+            )
+
+        _ORG_ID_CACHE[base_url] = org_id
+        return org_id
+
+
+def _assert_balanced_parens(q: str) -> None:
+    """Guard the ``orgid:X AND (<q>)`` wrapper against scope escape.
+
+    Counts only *structural* parentheses - parens inside a quoted DSL phrase are
+    literals and must be ignored. A naive counter is bypassable with balanced
+    literals, e.g. ``title:"(" x) OR orgid:OTHER OR (x ")"`` counts as balanced
+    while structurally closing the wrapper early.
+    """
+    depth = 0
+    in_quote = False
+    escaped = False
+    for ch in q:
+        if escaped:
+            escaped = False
+            continue
+        if ch == "\\":
+            escaped = True
+            continue
+        if ch == '"':
+            in_quote = not in_quote
+            continue
+        if in_quote:
+            continue
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth < 0:
+                raise ValueError(
+                    "Unbalanced parentheses in the portal search query; refusing "
+                    "to build an org-scoped query that could escape its scope."
+                )
+    if in_quote:
+        raise ValueError(
+            "Unterminated quote in the portal search query; refusing to build "
+            "an org-scoped query that could escape its scope."
+        )
+    if depth != 0:
+        raise ValueError(
+            "Unbalanced parentheses in the portal search query; refusing to "
+            "build an org-scoped query that could escape its scope."
+        )
+
+
 def searchPortal(
     query: str,
     portal: str = "iipp",
@@ -141,6 +277,7 @@ def searchPortal(
     data_only: bool = True,
     raw_q: str | None = None,
     token: str | None = None,
+    org_scoped: bool | None = None,
     **filters: Any,
 ) -> list[dict[str, Any]]:
     """Search any ArcGIS Portal for hosted services. Defaults to IIPP.
@@ -169,9 +306,25 @@ def searchPortal(
         token (str, optional): ArcGIS token for secured portals.  Omit for
             public services.  Obtain via
             ``POST <portal>/sharing/rest/generateToken``.
-        **filters: Extra ArcGIS search filters forwarded verbatim as query
-            params (e.g. ``sortField="title"``, ``sortOrder="asc"``,
-            ``bbox="-120,35,-110,42"``).
+        org_scoped (bool | None, optional): Restrict results to the portal's
+            own organization by injecting an ``orgid:`` clause.
+            - ``None`` (default) - auto. Scopes only for a canonical
+              ``<org>.maps.arcgis.com`` URL, and only when ``raw_q`` is not
+              supplied. Global AGOL (``portal="agol"``), Enterprise portals,
+              and custom vanity domains are NOT auto-scoped; pass ``True`` for
+              those.
+            - ``True`` - always scope, wrapping ``raw_q`` if present.
+            - ``False`` - never scope (pre-fix behaviour), and the escape hatch
+              if the organization id cannot be resolved.
+            Scoping costs one extra ``/sharing/rest/portals/self`` request the
+            first time a portal is seen; successful lookups are cached for the
+            process. If the id cannot be resolved this raises ``RuntimeError``
+            rather than silently returning other organizations' data.
+        **filters: Extra ArcGIS search filters forwarded as query params
+            (e.g. ``sortField="title"``, ``sortOrder="asc"``,
+            ``bbox="-120,35,-110,42"``). The reserved params ``q``, ``num``,
+            ``f`` and ``token`` are always set by this function and cannot be
+            overridden through ``filters``.
 
     Returns:
         list of dict: Parsed portal items.  Each dict includes:
@@ -225,6 +378,19 @@ def searchPortal(
     base_url = _resolve_portal(portal)
     search_url = f"{base_url}/sharing/rest/search"
 
+    # ``/sharing/rest/search`` on an ArcGIS Online ORG url still searches all of
+    # ArcGIS Online unless the query carries an ``orgid:`` clause - so
+    # ``searchPortal("evacuation", portal="https://mycity.maps.arcgis.com")``
+    # otherwise returns layers from Oregon, California, TxDOT, etc. (measured
+    # 2026-09-11 against georest 0.1.0). Scope it.
+    #   None  -> auto: scope only for <org>.maps.arcgis.com, and only when the
+    #            caller is not driving the query DSL themselves via raw_q.
+    #   True  -> always scope (AND-ed onto raw_q if present).
+    #   False -> never scope (previous behaviour).
+    if org_scoped is None:
+        org_scoped = _is_agol_org_portal(base_url) and raw_q is None
+    org_id = _resolve_org_id(base_url, token) if org_scoped else None
+
     # Assemble the query string
     if raw_q is not None:
         q = raw_q
@@ -234,12 +400,20 @@ def searchPortal(
             exclusions = " ".join(f'-type:"{t}"' for t in _DATA_ONLY_EXCLUSIONS)
             q = f"{q} {exclusions}".strip()
 
-    params: dict[str, Any] = {
-        "q": q,
-        "num": min(max(1, limit), 100),
-        "f": "json",
-        **filters,
-    }
+    if org_id:
+        if q.strip():
+            _assert_balanced_parens(q)
+            q = f"orgid:{org_id} AND ({q})"
+        else:
+            q = f"orgid:{org_id}"
+
+    # Caller filters merge FIRST so they cannot overwrite the reserved
+    # parameters below. Previously ``**filters`` came last, which meant
+    # ``filters["q"]`` silently replaced the assembled (and org-scoped) query.
+    params: dict[str, Any] = dict(filters)
+    params["q"] = q
+    params["num"] = min(max(1, limit), 100)
+    params["f"] = "json"
     if token:
         params["token"] = token
 
