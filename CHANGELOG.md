@@ -6,6 +6,32 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `portal.searchPortal(..., org_scoped=None)`. An ArcGIS Online organization URL
+  (`https://<org>.maps.arcgis.com`) searches all of ArcGIS Online unless the query
+  names the organization, so searching a city's portal for "evacuation" returned
+  other states' layers first. `org_scoped` restricts results to the portal's own
+  organization: `None` (default) scopes organization URLs automatically when `raw_q`
+  isn't given, `True` always scopes, `False` never does.
+
+### Changed
+
+- **BREAKING:** `searchPortal` on an ArcGIS Online organization URL now returns only
+  that organization's items. This includes the built-in `portal="nasa"`. Pass
+  `org_scoped=False` for the 0.1.0 results.
+- **BREAKING:** passing `q`, `num` or `f` through `searchPortal`'s `**filters` now
+  raises `TypeError`. In 0.1.0, `q` silently replaced the assembled query (dropping
+  `query` and `data_only`), and `f`/`num` overrode the response format and bypassed the
+  100-result cap. Use `raw_q` and `limit` instead.
+- Scoped searches make one extra `/sharing/rest/portals/self` request per portal and
+  token, cached for the life of the process. If the organization id can't be
+  resolved, `searchPortal` raises `RuntimeError` rather than silently searching all
+  of ArcGIS Online.
+- When scoping, parentheses and quotes that would break the `orgid:` clause are
+  removed from a free-text `query`, which is searched as plain words. A `raw_q` that
+  would break it raises `ValueError`.
+
 ## [0.1.0] — 2026-09-10
 
 First release as an installable distribution. Previously this was a loose

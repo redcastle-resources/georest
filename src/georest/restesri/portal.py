@@ -147,6 +147,11 @@ _ORG_ID_LOCKS_GUARD = threading.Lock()
 # into the search DSL so a malformed portals/self response cannot inject syntax.
 _ORG_ID_RE = re.compile(r"^[A-Za-z0-9]{1,64}$")
 
+# Search params searchPortal always sets itself; see the check in searchPortal.
+# token is not listed because it is a named parameter and can never reach
+# **filters.
+_RESERVED_SEARCH_PARAMS = frozenset({"q", "num", "f"})
+
 
 def _is_agol_org_portal(base_url: str) -> bool:
     """True for an ArcGIS Online *organization* URL (``<org>.maps.arcgis.com``).
@@ -342,9 +347,12 @@ def searchPortal(
             own organization by injecting an ``orgid:`` clause.
             - ``None`` (default) - auto. Scopes only for a canonical
               ``<org>.maps.arcgis.com`` URL, and only when ``raw_q`` is not
-              supplied. Global AGOL (``portal="agol"``), Enterprise portals,
-              and custom vanity domains are NOT auto-scoped; pass ``True`` for
-              those.
+              supplied. That includes the built-in ``portal="nasa"``
+              (``nasa.maps.arcgis.com``), which searches only NASA's own
+              items; pass ``False`` to search all of ArcGIS Online, as
+              ``portal="nasa"`` did in 0.1.0.
+              Global AGOL (``portal="agol"``), Enterprise portals, and custom
+              vanity domains are NOT auto-scoped; pass ``True`` for those.
             - ``True`` - always scope, wrapping ``raw_q`` if present.
             - ``False`` - never scope (pre-fix behaviour), and the escape hatch
               if the organization id cannot be resolved.
@@ -358,9 +366,9 @@ def searchPortal(
             ``ValueError``.
         **filters: Extra ArcGIS search filters forwarded as query params
             (e.g. ``sortField="title"``, ``sortOrder="asc"``,
-            ``bbox="-120,35,-110,42"``). The reserved params ``q``, ``num``,
-            ``f`` and ``token`` are always set by this function and cannot be
-            overridden through ``filters``.
+            ``bbox="-120,35,-110,42"``). ``q``, ``num`` and ``f`` are set by
+            this function and raise ``TypeError`` if passed here; use
+            ``raw_q`` and ``limit`` instead.
 
     Returns:
         list of dict: Parsed portal items.  Each dict includes:
@@ -382,15 +390,20 @@ def searchPortal(
         rejected search raises rather than returning ``[]`` (see below).
 
     Raises:
+        TypeError: If ``filters`` contains ``q``, ``num`` or ``f``. Raised
+            before any request is made.
         ValueError: If the portal answers 200 with an error object — most
             commonly code 498, an invalid or expired *token* — or with a
             body that isn't JSON. This case used to be swallowed into an
-            empty result list, which read as "no matches".
+            empty result list, which read as "no matches". Also raised when
+            scoping and ``raw_q`` has unbalanced parentheses or quotes, or a
+            trailing backslash.
         RuntimeError: If the portal is unreachable or answers with an HTTP
             error status. ``_http`` converts both
             :class:`urllib.error.HTTPError` and
             :class:`urllib.error.URLError` into :class:`RuntimeError`, so a
-            dead host and a 500 surface the same way.
+            dead host and a 500 surface the same way. Also raised when
+            scoping and the organization id cannot be resolved.
 
     Example::
 
@@ -423,6 +436,17 @@ def searchPortal(
     #            caller is not driving the query DSL themselves via raw_q.
     #   True  -> always scope (AND-ed onto raw_q if present).
     #   False -> never scope (previous behaviour).
+    # q, num and f are always set below. Accepting them through **filters and
+    # then ignoring them would run a different search than the caller asked for
+    # with no sign anything was dropped, so refuse before any request goes out.
+    reserved = sorted(_RESERVED_SEARCH_PARAMS.intersection(filters))
+    if reserved:
+        raise TypeError(
+            f"searchPortal() does not accept {', '.join(reserved)} as a filter: "
+            f"these params are set by searchPortal itself. Use raw_q for a "
+            f"custom query string and limit for the result count."
+        )
+
     if org_scoped is None:
         org_scoped = _is_agol_org_portal(base_url) and raw_q is None
     org_id = _resolve_org_id(base_url, token) if org_scoped else None
@@ -437,20 +461,24 @@ def searchPortal(
         if org_id:
             _assert_balanced_parens(q)
     else:
-        q = _neutralize_free_text(query) if org_id else query
+        terms = _neutralize_free_text(query) if org_id else query
+        q = terms
         if data_only:
             exclusions = " ".join(f'-type:"{t}"' for t in _DATA_ONLY_EXCLUSIONS)
             q = f"{q} {exclusions}".strip()
 
     if org_id:
-        if q.strip():
+        if raw_q is None and not terms.strip():
+            # No search terms, so q is at most the data_only exclusions. Don't
+            # group them: orgid:X AND (-type:"A" ...) is an all-negative group,
+            # which Lucene matches against nothing. The exclusions are library
+            # constants, so they sit safely beside the orgid clause.
+            q = f"orgid:{org_id} {q}".strip()
+        elif q.strip():
             q = f"orgid:{org_id} AND ({q})"
         else:
             q = f"orgid:{org_id}"
 
-    # Caller filters merge FIRST so they cannot overwrite the reserved
-    # parameters below. Previously ``**filters`` came last, which meant
-    # ``filters["q"]`` silently replaced the assembled (and org-scoped) query.
     params: dict[str, Any] = dict(filters)
     params["q"] = q
     params["num"] = min(max(1, limit), 100)

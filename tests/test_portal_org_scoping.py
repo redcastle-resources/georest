@@ -14,7 +14,9 @@ Covers:
 - org_scoped=False disables scoping entirely                 (regression)
 - unresolvable org id FAILS CLOSED (never silently global)
 - _resolve_org_id caches per (portal, token), not per portal (wrong org)
-- **filters cannot override q / f / num                      (bypass)
+- **filters naming q / f / num raise TypeError, not ignored  (bypass)
+- empty query + data_only is not an all-negative group        (empty results)
+- built-in portal="nasa" auto-scopes
 - unbalanced raw_q rejected when scoping                     (scope escape)
 - unbalanced free-text query cleaned, not rejected           (regression)
 """
@@ -193,20 +195,33 @@ class TestSearchPortalOrgScoping(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 el.searchPortal("evacuation", portal=HOU)
 
-    def test_filters_cannot_override_scoped_query(self):
+    def test_reserved_filters_raise_before_any_request(self):
         """`**filters` used to merge last, so filters['q'] silently replaced
-        the org-scoped query and searched globally."""
-        with patch.object(el, "fetch_json", side_effect=self._search_side_effect()) as m:
-            el.searchPortal("evacuation", portal=HOU, org_scoped=True,
-                            q="something else")
-        self.assertIn(f"orgid:{HOU_ORG}", self._q(m))
+        the org-scoped query and searched globally. Silently ignoring it
+        instead would run a search the caller didn't ask for, so it raises -
+        before portals/self or the search goes out."""
+        for kwargs in ({"q": "something else"}, {"f": "html"}, {"num": 9999},
+                       {"q": "x", "num": 5}):
+            for portal in (HOU, "agol"):
+                with self.subTest(kwargs=kwargs, portal=portal):
+                    with patch.object(el, "fetch_json",
+                                      side_effect=self._search_side_effect()) as m:
+                        with self.assertRaises(TypeError):
+                            el.searchPortal("evacuation", portal=portal, **kwargs)
+                    m.assert_not_called()
 
-    def test_filters_cannot_override_f_or_num(self):
+    def test_reserved_filter_error_names_the_params(self):
+        with patch.object(el, "fetch_json", side_effect=self._search_side_effect()):
+            with self.assertRaisesRegex(TypeError, r"num, q"):
+                el.searchPortal("evacuation", portal=HOU, q="x", num=5)
+
+    def test_ordinary_filters_still_forwarded_when_scoping(self):
         with patch.object(el, "fetch_json", side_effect=self._search_side_effect()) as m:
-            el.searchPortal("evacuation", portal=HOU, f="html", num=9999)
+            el.searchPortal("evacuation", portal=HOU, sortField="title",
+                            bbox="-120,35,-110,42")
         params = m.call_args[0][1]
-        self.assertEqual(params["f"], "json")
-        self.assertLessEqual(params["num"], 100)
+        self.assertEqual(params["sortField"], "title")
+        self.assertEqual(params["bbox"], "-120,35,-110,42")
 
     def _assert_scope_intact(self, q):
         """The wrapper must survive whole: prefix, final ')', and an inner
@@ -282,6 +297,42 @@ class TestSearchPortalOrgScoping(unittest.TestCase):
         with patch.object(el, "fetch_json", side_effect=self._search_side_effect()) as m:
             el.searchPortal("", portal=HOU, data_only=False)
         self.assertEqual(self._q(m), f"orgid:{HOU_ORG}")
+
+    def test_empty_query_with_exclusions_is_not_an_all_negative_group(self):
+        """`orgid:X AND (-type:"A" ...)` groups nothing but prohibitions, which
+        Lucene matches against nothing - so "list the org's data" came back
+        empty. The exclusions belong beside the orgid clause, ungrouped."""
+        for typed in ("", "   ", '("'):          # '("' neutralizes to nothing
+            with self.subTest(typed=typed):
+                with patch.object(el, "fetch_json",
+                                  side_effect=self._search_side_effect()) as m:
+                    el.searchPortal(typed, portal=HOU, data_only=True)
+                q = self._q(m)
+                self.assertTrue(q.startswith(f'orgid:{HOU_ORG} -type:"'), q)
+                self.assertNotIn("(", q)
+                self.assertIn('-type:"Dashboard"', q)
+
+    def test_query_with_terms_still_grouped(self):
+        with patch.object(el, "fetch_json", side_effect=self._search_side_effect()) as m:
+            el.searchPortal("evacuation", portal=HOU, data_only=True)
+        q = self._q(m)
+        self.assertTrue(q.startswith(f"orgid:{HOU_ORG} AND (evacuation -type:"), q)
+        self.assertTrue(q.endswith(")"), q)
+
+    def test_empty_raw_q_scopes_cleanly(self):
+        with patch.object(el, "fetch_json", side_effect=self._search_side_effect()) as m:
+            el.searchPortal("ignored", portal=HOU, raw_q="", org_scoped=True)
+        self.assertEqual(self._q(m), f"orgid:{HOU_ORG}")
+
+    def test_builtin_nasa_portal_is_auto_scoped(self):
+        """PORTALS["nasa"] is an AGOL org URL, so it scopes by default. Pinned
+        so the docstring's claim can't drift from the behaviour."""
+        with patch.object(el, "fetch_json", side_effect=self._search_side_effect()) as m:
+            el.searchPortal("mars", portal="nasa")
+        self.assertIn(f"orgid:{HOU_ORG}", self._q(m))
+        with patch.object(el, "fetch_json", side_effect=self._search_side_effect()) as m:
+            el.searchPortal("mars", portal="nasa", org_scoped=False)
+        self.assertNotIn("orgid:", self._q(m))
 
 
 class TestParenLexer(unittest.TestCase):
