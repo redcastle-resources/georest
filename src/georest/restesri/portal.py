@@ -138,8 +138,10 @@ def _resolve_portal(portal: str) -> str:
 # Portal search
 # ---------------------------------------------------------------------------
 
-_ORG_ID_CACHE: dict[str, str] = {}
-_ORG_ID_LOCKS: dict[str, threading.Lock] = {}
+# Keyed on (base_url, token), not base_url alone: portals/self answers with the
+# org of whoever the token belongs to, so one base URL can map to many orgs.
+_ORG_ID_CACHE: dict[tuple[str, str | None], str] = {}
+_ORG_ID_LOCKS: dict[tuple[str, str | None], threading.Lock] = {}
 _ORG_ID_LOCKS_GUARD = threading.Lock()
 
 # ArcGIS org ids are short alphanumerics. Validated before being interpolated
@@ -158,18 +160,20 @@ def _is_agol_org_portal(base_url: str) -> bool:
     return host.endswith(".maps.arcgis.com") and not host.startswith("www.")
 
 
-def _org_lock(base_url: str) -> threading.Lock:
+def _org_lock(key: tuple[str, str | None]) -> threading.Lock:
     with _ORG_ID_LOCKS_GUARD:
-        return _ORG_ID_LOCKS.setdefault(base_url, threading.Lock())
+        return _ORG_ID_LOCKS.setdefault(key, threading.Lock())
 
 
 def _resolve_org_id(base_url: str, token: str | None = None) -> str:
     """Return the portal's organization id via ``/sharing/rest/portals/self``.
 
-    Single-flight per portal: concurrent first callers make one request, not N.
-    Only *successful* lookups are cached - caching a transient failure would
-    permanently disable scoping, and an unscoped search silently returns other
-    organizations' data.
+    Single-flight per (portal, token): concurrent first callers make one
+    request, not N. The token is part of the key because portals/self reports
+    the token owner's org - keying on the URL alone would hand one caller's
+    org id to every other token on that portal. Only *successful* lookups are
+    cached - caching a transient failure would permanently disable scoping,
+    and an unscoped search silently returns other organizations' data.
 
     Raises:
         RuntimeError: if the org id cannot be resolved, for any reason
@@ -177,15 +181,16 @@ def _resolve_org_id(base_url: str, token: str | None = None) -> str:
             Callers wanting a global search on failure must pass
             ``org_scoped=False`` explicitly; this never falls back silently.
     """
-    cached = _ORG_ID_CACHE.get(base_url)
+    key = (base_url, token or None)
+    cached = _ORG_ID_CACHE.get(key)
     if cached:
         return cached
 
     url = f"{base_url}/sharing/rest/portals/self"
     hint = "Pass org_scoped=False to search all of ArcGIS Online instead."
 
-    with _org_lock(base_url):
-        cached = _ORG_ID_CACHE.get(base_url)   # another thread may have won
+    with _org_lock(key):
+        cached = _ORG_ID_CACHE.get(key)   # another thread may have won
         if cached:
             return cached
 
@@ -222,7 +227,7 @@ def _resolve_org_id(base_url: str, token: str | None = None) -> str:
                 f"(got {org_id!r}). {hint}"
             )
 
-        _ORG_ID_CACHE[base_url] = org_id
+        _ORG_ID_CACHE[key] = org_id
         return org_id
 
 
@@ -258,6 +263,13 @@ def _assert_balanced_parens(q: str) -> None:
                     "Unbalanced parentheses in the portal search query; refusing "
                     "to build an org-scoped query that could escape its scope."
                 )
+    if escaped:
+        # Balanced so far, but the dangling backslash would escape the
+        # wrapper's own closing paren: ``orgid:X AND (foo\)``.
+        raise ValueError(
+            "Trailing backslash in the portal search query; refusing to build "
+            "an org-scoped query that could escape its scope."
+        )
     if in_quote:
         raise ValueError(
             "Unterminated quote in the portal search query; refusing to build "
@@ -268,6 +280,27 @@ def _assert_balanced_parens(q: str) -> None:
             "Unbalanced parentheses in the portal search query; refusing to "
             "build an org-scoped query that could escape its scope."
         )
+
+
+def _neutralize_free_text(text: str) -> str:
+    """Make a free-text ``query`` safe to wrap in ``orgid:X AND (<q>)``.
+
+    ``query`` is a search phrase, not DSL (that is ``raw_q``), so a stray paren
+    or quote a user typed - ``evacuation (2023``, ``12" pipeline`` - must not
+    fail the search. Well-formed text passes through unchanged, keeping phrases
+    and grouping. Text that could break the wrapper has its parentheses and
+    quotes replaced with spaces instead, leaving plain search terms.
+
+    Backslashes are always removed. A user typing ``C:\\data`` means no DSL
+    escape, and a trailing one would escape the wrapper's own closing paren.
+    """
+    if "\\" in text:
+        text = " ".join(text.replace("\\", " ").split())
+    try:
+        _assert_balanced_parens(text)
+        return text
+    except ValueError:
+        return " ".join(re.sub(r'[()"]', " ", text).split())
 
 
 def searchPortal(
@@ -320,6 +353,10 @@ def searchPortal(
             first time a portal is seen; successful lookups are cached for the
             process. If the id cannot be resolved this raises ``RuntimeError``
             rather than silently returning other organizations' data.
+            When scoping, a ``query`` with unbalanced parentheses or quotes
+            has those characters dropped (it is searched as plain terms),
+            while a ``raw_q`` that could escape the ``orgid:`` wrapper raises
+            ``ValueError``.
         **filters: Extra ArcGIS search filters forwarded as query params
             (e.g. ``sortField="title"``, ``sortOrder="asc"``,
             ``bbox="-120,35,-110,42"``). The reserved params ``q``, ``num``,
@@ -391,18 +428,23 @@ def searchPortal(
         org_scoped = _is_agol_org_portal(base_url) and raw_q is None
     org_id = _resolve_org_id(base_url, token) if org_scoped else None
 
-    # Assemble the query string
+    # Assemble the query string. The two inputs get different treatment when
+    # scoping, because only raw_q is DSL: an unbalanced raw_q is the caller's
+    # mistake (refuse), an unbalanced query is just what a user typed (clean).
+    # Both are checked BEFORE the data_only exclusions are appended, so the
+    # 33 library-generated -type:"..." clauses can't flip the quote parity.
     if raw_q is not None:
         q = raw_q
+        if org_id:
+            _assert_balanced_parens(q)
     else:
-        q = query
+        q = _neutralize_free_text(query) if org_id else query
         if data_only:
             exclusions = " ".join(f'-type:"{t}"' for t in _DATA_ONLY_EXCLUSIONS)
             q = f"{q} {exclusions}".strip()
 
     if org_id:
         if q.strip():
-            _assert_balanced_parens(q)
             q = f"orgid:{org_id} AND ({q})"
         else:
             q = f"orgid:{org_id}"

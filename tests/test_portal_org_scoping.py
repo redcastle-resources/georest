@@ -13,8 +13,10 @@ Covers:
 - org_scoped=True forces scoping even with raw_q
 - org_scoped=False disables scoping entirely                 (regression)
 - unresolvable org id FAILS CLOSED (never silently global)
+- _resolve_org_id caches per (portal, token), not per portal (wrong org)
 - **filters cannot override q / f / num                      (bypass)
-- unbalanced parens rejected when scoping                    (scope escape)
+- unbalanced raw_q rejected when scoping                     (scope escape)
+- unbalanced free-text query cleaned, not rejected           (regression)
 """
 
 import threading
@@ -99,6 +101,27 @@ class TestResolveOrgId(unittest.TestCase):
                 with patch.object(el, "fetch_json", return_value={"id": bad}):
                     with self.assertRaises(RuntimeError):
                         el._resolve_org_id(HOU)
+
+    def test_cache_is_per_token(self):
+        """portals/self reports the token owner's org, so one base URL can map
+        to several orgs. A URL-only cache key handed the first caller's org id
+        to every later token - silently scoping them to the wrong org."""
+        orgs = {"TOKALICE": "ORGalice", "TOKBOB": "ORGbob", None: "ORGpublic"}
+        def side(url, params=None):
+            return {"id": orgs[(params or {}).get("token")]}
+        with patch.object(el, "fetch_json", side_effect=side) as m:
+            self.assertEqual(el._resolve_org_id(HOU, token="TOKALICE"), "ORGalice")
+            self.assertEqual(el._resolve_org_id(HOU, token="TOKBOB"), "ORGbob")
+            self.assertEqual(el._resolve_org_id(HOU), "ORGpublic")
+            self.assertEqual(el._resolve_org_id(HOU, token="TOKALICE"), "ORGalice")
+        self.assertEqual(m.call_count, 3)          # repeat Alice still cached
+
+    def test_empty_token_shares_anonymous_cache_entry(self):
+        """'' sends no token, exactly like None, so they are the same lookup."""
+        with patch.object(el, "fetch_json", return_value={"id": HOU_ORG}) as m:
+            el._resolve_org_id(HOU, token=None)
+            el._resolve_org_id(HOU, token="")
+        self.assertEqual(m.call_count, 1)
 
     def test_token_forwarded(self):
         with patch.object(el, "fetch_json", return_value={"id": HOU_ORG}) as m:
@@ -185,12 +208,59 @@ class TestSearchPortalOrgScoping(unittest.TestCase):
         self.assertEqual(params["f"], "json")
         self.assertLessEqual(params["num"], 100)
 
-    def test_unbalanced_parens_rejected_when_scoping(self):
-        """A crafted ')' could close the orgid wrapper and escape the scope."""
+    def _assert_scope_intact(self, q):
+        """The wrapper must survive whole: prefix, final ')', and an inner
+        query that cannot close it early."""
+        prefix = f"orgid:{HOU_ORG} AND ("
+        self.assertTrue(q.startswith(prefix), q)
+        self.assertTrue(q.endswith(")"), q)
+        self.assertNotIn("\\", q)
+        el._assert_balanced_parens(q[len(prefix):-1])
+
+    def test_unbalanced_raw_q_rejected_when_scoping(self):
+        """A crafted ')' in caller-authored DSL could close the orgid wrapper
+        and escape the scope."""
         with patch.object(el, "fetch_json", side_effect=self._search_side_effect()):
             with self.assertRaises(ValueError):
-                el.searchPortal('evac) OR (orgid:OTHER', portal=HOU,
-                                data_only=False)
+                el.searchPortal("", portal=HOU, org_scoped=True,
+                                raw_q="evac) OR (orgid:OTHER")
+
+    def test_unbalanced_free_text_is_neutralized_not_rejected(self):
+        """The same crafted ')' in free text is cleaned, not raised - and still
+        cannot escape the scope."""
+        with patch.object(el, "fetch_json", side_effect=self._search_side_effect()) as m:
+            el.searchPortal("evac) OR (orgid:OTHER", portal=HOU, data_only=False)
+        self._assert_scope_intact(self._q(m))
+
+    def test_ordinary_typed_punctuation_does_not_raise(self):
+        """Regression: a stray paren or quote a user typed used to raise
+        ValueError on org portals while the identical call worked on agol."""
+        for typed in ["evacuation (2023", '12" pipeline', "flood)", 'say "hi']:
+            for data_only in (True, False):
+                with self.subTest(typed=typed, data_only=data_only):
+                    with patch.object(el, "fetch_json",
+                                      side_effect=self._search_side_effect()) as m:
+                        el.searchPortal(typed, portal=HOU, data_only=data_only)
+                    self._assert_scope_intact(self._q(m))
+
+    def test_trailing_backslash_cannot_escape_wrapper(self):
+        """'foo\\' passes the balance check but would escape the closing ')'."""
+        with patch.object(el, "fetch_json", side_effect=self._search_side_effect()) as m:
+            el.searchPortal("foo\\", portal=HOU, data_only=False)
+        self.assertEqual(self._q(m), f"orgid:{HOU_ORG} AND (foo)")
+
+    def test_well_formed_free_text_passes_through_unchanged(self):
+        """Neutralizing only kicks in for text that could break the wrapper;
+        phrases and grouping in a well-formed query keep their meaning."""
+        typed = '"fire perimeter" (flood OR fire)'
+        with patch.object(el, "fetch_json", side_effect=self._search_side_effect()) as m:
+            el.searchPortal(typed, portal=HOU, data_only=False)
+        self.assertEqual(self._q(m), f"orgid:{HOU_ORG} AND ({typed})")
+
+    def test_free_text_untouched_when_not_scoping(self):
+        with patch.object(el, "fetch_json", return_value=_EMPTY_SEARCH) as m:
+            el.searchPortal('12" pipeline', portal="agol", data_only=False)
+        self.assertEqual(self._q(m), '12" pipeline')
 
     def test_balanced_parens_allowed(self):
         with patch.object(el, "fetch_json", side_effect=self._search_side_effect()) as m:
@@ -240,6 +310,26 @@ class TestParenLexer(unittest.TestCase):
         with self.assertRaises(ValueError):
             el._assert_balanced_parens('x) OR orgid:OTHER')
 
+    def test_trailing_backslash_rejected(self):
+        """Balanced, but the backslash would escape the wrapper's closing
+        paren: ``orgid:X AND (foo\\)``."""
+        for q in ["foo\\", "(flood OR fire) \\", "a\\\\\\"]:
+            with self.subTest(q=q):
+                with self.assertRaises(ValueError):
+                    el._assert_balanced_parens(q)
+
+    def test_escaped_backslash_at_end_ok(self):
+        # An even run of backslashes is a literal backslash, not an escape.
+        el._assert_balanced_parens("foo\\\\")
+
+    def test_trailing_backslash_raw_q_rejected_end_to_end(self):
+        with patch.object(el, "fetch_json",
+                          side_effect=lambda u, p=None: {"id": HOU_ORG}
+                          if u.endswith("/portals/self") else _EMPTY_SEARCH):
+            with self.assertRaises(ValueError):
+                el.searchPortal("", portal=HOU, org_scoped=True,
+                                raw_q='type:"Feature Service" foo\\')
+
     def test_plain_balanced_ok(self):
         el._assert_balanced_parens("(flood OR fire) AND storm")
 
@@ -248,8 +338,21 @@ class TestParenLexer(unittest.TestCase):
                           side_effect=lambda u, p=None: {"id": HOU_ORG}
                           if u.endswith("/portals/self") else _EMPTY_SEARCH):
             with self.assertRaises(ValueError):
-                el.searchPortal('title:"(" x) OR orgid:OTHER OR (x ")"',
-                                portal=HOU, data_only=False)
+                el.searchPortal("", portal=HOU, org_scoped=True,
+                                raw_q='title:"(" x) OR orgid:OTHER OR (x ")"')
+
+    def test_bypass_neutralized_in_free_text(self):
+        """The same bypass string typed as free text is cleaned, and the
+        orgid clause still binds every result."""
+        with patch.object(el, "fetch_json",
+                          side_effect=lambda u, p=None: {"id": HOU_ORG}
+                          if u.endswith("/portals/self") else _EMPTY_SEARCH) as m:
+            el.searchPortal('title:"(" x) OR orgid:OTHER OR (x ")"',
+                            portal=HOU, data_only=False)
+        q = m.call_args[0][1]["q"]
+        prefix = f"orgid:{HOU_ORG} AND ("
+        self.assertTrue(q.startswith(prefix) and q.endswith(")"), q)
+        el._assert_balanced_parens(q[len(prefix):-1])
 
 
 class TestResolveOrgIdRobustness(unittest.TestCase):
