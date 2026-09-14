@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-14
+
 ### Added
 
 - `portal.searchPortal(..., org_scoped=None)`. An ArcGIS Online organization URL
@@ -32,7 +34,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   removed from a free-text `query`, which is searched as plain words. A `raw_q` that
   would break it raises `ValueError`.
 
-## [0.1.0] — 2026-09-10
+## [0.1.0] - 2026-09-10
 
 First release as an installable distribution. Previously this was a loose
 `RESTesri/` directory that imported only because the repository root happened to be
@@ -86,5 +88,6 @@ on `sys.path`.
 - All five `sys.path.insert(...)` bootstraps (two CLIs, three notebooks), made
   unnecessary by the `src/` layout plus an editable install.
 
-[Unreleased]: https://github.com/redcastle-resources/georest/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/redcastle-resources/georest/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/redcastle-resources/georest/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/redcastle-resources/georest/releases/tag/v0.1.0
