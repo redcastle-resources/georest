@@ -40,11 +40,10 @@ You may obtain a copy of the License at
 
 from __future__ import annotations
 
-from typing import Any
-
 import re
 import threading
 import urllib.parse
+from typing import Any
 
 from ._http import build_params, fetch_json, format_esri_error
 
