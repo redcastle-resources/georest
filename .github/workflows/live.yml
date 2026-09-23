@@ -28,6 +28,10 @@ jobs:
         env:
           EDW_LIVE: "1"
           SERVICES_LIVE: "1"
+          USGS_LIVE: "1"
+          # Optional: an API key keeps the USGS tests off the anonymous
+          # rate limit ("a few queries per hour"). Add it as a repo secret.
+          USGS_API_KEY: ${{ secrets.USGS_API_KEY }}
         run: python -m pytest -ra || true
 
       - name: Theme-table drift report

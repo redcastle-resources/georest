@@ -31,7 +31,7 @@ lazy import at the call site — never at module scope.
 ```bash
 python -m pytest                              # offline, deterministic
 python -m unittest discover -s tests -t .     # the same suite, stdlib runner
-EDW_LIVE=1 SERVICES_LIVE=1 python -m pytest   # include network tests
+EDW_LIVE=1 SERVICES_LIVE=1 USGS_LIVE=1 python -m pytest   # include network tests
 ruff check .
 ```
 

@@ -5,21 +5,27 @@ Subpackages
 restesri
     ArcGIS / Esri REST services: Image, Map and Feature Services, the USFS
     Enterprise Data Warehouse (EDW), and ArcGIS Portal search.
+restusgs
+    USGS APIs: the Water Data OGC API (monitoring locations, daily and
+    continuous values, field measurements, peaks).
 
 Quick start::
 
     from georest.restesri import edw, portal, services
+    from georest.restusgs import waterdata
 
     hits = edw.search_edw_services("fire")
     meta = portal.getServiceMetadata("https://.../ImageServer")
     tiles = services.getImageServiceTileUrl("https://.../ImageServer")
+    flow = waterdata.get_daily_values("USGS-09380000", "00060", start="2024-01-01")
 
-The three public restesri modules are also re-exported here for convenience.
-They are imported lazily (PEP 562), so ``import georest`` itself costs almost
+The public provider modules are also re-exported here for convenience. They
+are imported lazily (PEP 562), so ``import georest`` itself costs almost
 nothing::
 
     from georest import edw          # the same module object as
                                      # georest.restesri.edw
+    from georest import waterdata    # georest.restusgs.waterdata
 
 No third-party dependencies — everything is stdlib ``urllib``.
 
@@ -37,23 +43,32 @@ from __future__ import annotations
 import importlib
 from typing import TYPE_CHECKING
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
-__all__ = ["restesri", "edw", "portal", "services", "__version__"]
+__all__ = ["restesri", "edw", "portal", "services", "restusgs", "waterdata", "__version__"]
 
 if TYPE_CHECKING:  # so IDEs, mypy and pyright resolve the re-exports statically
-    from . import restesri
+    from . import restesri, restusgs
     from .restesri import edw, portal, services
+    from .restusgs import waterdata
 
-#: Names resolved on first access by :func:`__getattr__`. ``_http`` is
-#: deliberately absent — it is private, and callers who genuinely need it
-#: should reach it through the explicit ``georest.restesri._http`` path so
+#: Names resolved on first access by :func:`__getattr__`, mapped to the
+#: module they alias. The private transports (``restesri._http``,
+#: ``restusgs._http``, ``restusgs._ogc``) are deliberately absent — callers
+#: who genuinely need one should reach it through the explicit dotted path so
 #: its private status stays visible at the call site.
-_LAZY = frozenset({"restesri", "edw", "portal", "services"})
+_LAZY = {
+    "restesri": ".restesri",
+    "edw": ".restesri.edw",
+    "portal": ".restesri.portal",
+    "services": ".restesri.services",
+    "restusgs": ".restusgs",
+    "waterdata": ".restusgs.waterdata",
+}
 
 
 def __getattr__(name: str):
-    """PEP 562 lazy attribute access for the re-exported restesri modules.
+    """PEP 562 lazy attribute access for the re-exported provider modules.
 
     ``importlib.import_module`` returns the object already registered in
     ``sys.modules``, so ``georest.edw is georest.restesri.edw``. That identity
@@ -61,12 +76,12 @@ def __getattr__(name: str):
     ``setattr(edw, ...)``, which would silently stop working against one
     import path if these were distinct module objects.
     """
-    if name in _LAZY:
-        target = ".restesri" if name == "restesri" else f".restesri.{name}"
-        module = importlib.import_module(target, __name__)
-        globals()[name] = module  # cache; __getattr__ won't fire again
-        return module
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    target = _LAZY.get(name)
+    if target is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module = importlib.import_module(target, __name__)
+    globals()[name] = module  # cache; __getattr__ won't fire again
+    return module
 
 
 def __dir__() -> list[str]:

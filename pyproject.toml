@@ -12,7 +12,7 @@ build-backend = "hatchling.build"
 [project]
 name = "georest"
 dynamic = ["version"]
-description = "Stdlib-only Python clients for geospatial REST APIs: ArcGIS Image, Map and Feature Services, the USFS Enterprise Data Warehouse, and ArcGIS Portal search."
+description = "Stdlib-only Python clients for geospatial REST APIs: ArcGIS Image, Map and Feature Services, the USFS Enterprise Data Warehouse, ArcGIS Portal search, and the USGS Water Data OGC API."
 readme = "README.md"
 requires-python = ">=3.9"
 
@@ -33,6 +33,7 @@ keywords = [
     "arcgis", "esri", "rest", "gis", "geospatial", "geojson",
     "feature-service", "image-service", "map-service",
     "edw", "usfs", "forest-service", "portal", "agol",
+    "usgs", "nwis", "water-data", "ogc-api", "ogc-api-features", "hydrology", "streamflow",
 ]
 
 classifiers = [

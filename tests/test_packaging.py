@@ -51,6 +51,21 @@ class TestReExports(unittest.TestCase):
         with self.assertRaises(AttributeError):
             georest._http  # noqa: B018 - the attribute access IS the test
 
+    def test_private_modules_are_not_lazily_exported(self):
+        for name in ("_http", "_ogc", "_core"):
+            with self.subTest(name=name):
+                self.assertNotIn(name, georest._LAZY)
+                self.assertNotIn(name, georest.__all__)
+
+    def test_restusgs_reexports_are_the_same_objects(self):
+        """Same identity rule as restesri: tests patch `_ogc` by setattr, and
+        `georest.waterdata` must be the module that actually calls it."""
+        from georest.restusgs import waterdata
+        self.assertIs(georest.waterdata, waterdata)
+        from georest import restusgs
+        self.assertIs(restusgs, georest.restusgs)
+        self.assertIs(restusgs.waterdata, waterdata)
+
     def test_version_is_pep440ish(self):
         self.assertRegex(georest.__version__, r"^\d+\.\d+\.\d+")
 
@@ -60,7 +75,9 @@ class TestUserAgent(unittest.TestCase):
         """It read "hostedServiceTools/1.0" for a while — a dead project name
         sent on every outbound request. Keep it pinned to the real version."""
         from georest.restesri import _http
+        from georest.restusgs import _http as usgs_http
         self.assertIn(f"georest/{georest.__version__}", _http._USER_AGENT)
+        self.assertEqual(usgs_http._USER_AGENT, _http._USER_AGENT)
 
 
 class TestAttribution(unittest.TestCase):
@@ -96,7 +113,8 @@ class TestNoThirdPartyImports(unittest.TestCase):
     """Turns the stdlib-only design goal into an enforced invariant."""
 
     ALLOWED = {
-        "__future__", "argparse", "ast", "contextlib", "html", "importlib",
+        "__future__", "argparse", "ast", "collections", "contextlib", "datetime",
+        "html", "importlib",
         "json", "os", "pathlib", "re", "sys", "threading", "time", "typing",
         "unittest",
         "urllib", "xml", "georest",
@@ -165,8 +183,10 @@ class TestVersionSingleSource(unittest.TestCase):
         self.assertNotRegex(text, r'^\s*version\s*=\s*"', )
 
     def test_no_duplicate_version_in_subpackage(self):
-        from georest import restesri
-        self.assertFalse(hasattr(restesri, "__version__"))
+        from georest import restesri, restusgs
+        for package in (restesri, restusgs):
+            with self.subTest(package=package.__name__):
+                self.assertFalse(hasattr(package, "__version__"))
 
 
 if __name__ == "__main__":

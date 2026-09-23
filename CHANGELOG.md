@@ -6,6 +6,38 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `georest.restusgs`, a second provider subpackage, with `restusgs.waterdata`: a client
+  for the USGS Water Data OGC API (`https://api.waterdata.usgs.gov/ogcapi/v1`), the
+  modern replacement for the legacy NWIS Water Services. `list_collections`,
+  `get_queryables`, `get_items` (any collection), `search_monitoring_locations`,
+  `get_monitoring_location`, `get_time_series_metadata`, `get_daily_values`,
+  `get_continuous_values`, `get_latest_values`, `get_field_measurements`, `get_peaks`,
+  and `to_rows` to flatten a FeatureCollection into plain dicts. Results are GeoJSON
+  `FeatureCollection` dicts like the rest of georest; the time-series functions sort by
+  `(time_series_id, time)` client-side because the API does not sort.
+- Every fetch is bounded by `max_items` (default 10 000; `None` for unlimited) and the
+  result carries `truncated: True` when the server had more. Results also carry
+  `rate_limit: {"limit", "remaining"}` when the API reports the caller's budget.
+- API-key support: `USGS_API_KEY` (or `USGS_WATERDATA_API_KEY`) in the environment,
+  `waterdata.set_api_key(...)`, or a per-call `api_key=`. The key is sent only as the
+  `X-Api-Key` header. Anonymous use still works. A 429 the client won't wait out raises
+  `waterdata.RateLimitError` (a `RuntimeError` subclass) with `.retry_after`.
+- `restusgs` has its own private transport, `restusgs._http`, which adds to the restesri
+  one: `headers=` on every fetcher, `fetch_json_with_headers`, `post_json_body`, the first
+  400 characters of an HTTP error body in `RuntimeError` messages, and a short retry on
+  502/503/504 (1 s, 2 s) and on 429 when `Retry-After` is at most 5 s.
+- Top-level lazy re-exports `georest.restusgs` and `georest.waterdata`.
+- `USGS_LIVE=1` gates the new live tests; `tests/support.py` gains `patched_module`,
+  `patched_ogc`, `FakeOgcServer` and `observation`.
+
+### Changed
+
+- `docs/api.md` is now the reference for the whole package rather than `restesri` alone,
+  and gains a "Using georest from an MCP server" section.
+- `tests.support.RecordingFetch` accepts and records a `headers=` keyword.
+
 ## [0.2.0] - 2026-09-14
 
 ### Added
@@ -89,5 +121,6 @@ on `sys.path`.
   unnecessary by the `src/` layout plus an editable install.
 
 [Unreleased]: https://github.com/redcastle-resources/georest/compare/v0.2.0...HEAD
+[0.3.0]: https://github.com/redcastle-resources/georest/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/redcastle-resources/georest/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/redcastle-resources/georest/releases/tag/v0.1.0

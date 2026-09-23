@@ -32,14 +32,17 @@ later — so network tests are opt-in:
 ```bash
 EDW_LIVE=1 python -m unittest discover -s tests -t .        # everything live
 SERVICES_LIVE=1 python -m unittest tests.test_live_services # services.py only
+USGS_LIVE=1 python -m unittest tests.test_live_waterdata    # restusgs only
 ```
 
-Two flags, because the two live suites hit different servers: `EDW_LIVE`
-covers EDW, while `SERVICES_LIVE` covers the public ArcGIS hosts
+Three flags, because the live suites hit different servers: `EDW_LIVE`
+covers EDW, `SERVICES_LIVE` covers the public ArcGIS hosts
 (`imagery.geoplatform.gov`, `sampleserver6.arcgisonline.com`,
-`services.arcgisonline.com`) that `services.py` is exercised against.
-`EDW_LIVE` also enables the services tests, so one flag still turns on the
-whole network suite.
+`services.arcgisonline.com`) that `services.py` is exercised against, and
+`USGS_LIVE` covers `api.waterdata.usgs.gov`. `EDW_LIVE` also enables the
+other two, so one flag still turns on the whole network suite. The USGS API
+rate-limits anonymous callers to a few queries per hour; set `USGS_API_KEY`
+to keep repeated live runs off the limit.
 
 Live tests retry through transient failures and **skip** rather than fail when
 the server stays down, so a red result means a real problem. Note `_http`
@@ -62,6 +65,10 @@ page served with status 200 looks like).
 | `test_live_catalog.py` | **Live**: catalog↔theme drift, end-to-end smoke |
 | `test_live_examples.py` | **Live**: executes `edw.py`'s own docstring examples |
 | `test_live_services.py` | **Live**: `services.py` against real Image/Feature Services |
+| `test_restusgs_http.py` | `restusgs/_http.py`: retry/backoff policy, `RateLimitError`, error-body surfacing, headers — against a fake `urlopen` and clock |
+| `test_restusgs_ogc.py` | `restusgs/_ogc.py`: cursor paging, `max_items`/`truncated`, `rate_limit`, parameter builders |
+| `test_waterdata.py` | `restusgs/waterdata.py`: parameter mapping, client-side sorting, `to_rows`, API-key resolution |
+| `test_live_waterdata.py` | **Live**: `waterdata` against api.waterdata.usgs.gov (`USGS_LIVE=1`) |
 
 ## Fixtures
 
@@ -122,6 +129,17 @@ binds the HTTP helpers into its own namespace at import time
 `(url, params)` pair and replays canned responses in order, raising any
 entry that is an exception so the transport-failure and format-fallback
 paths can be driven offline.
+
+For `restusgs`, use `support.patched_ogc(...)` (a `patched_module` over
+`georest.restusgs._ogc`, the one place the provider touches the network;
+`waterdata` delegates every request to it). `support.FakeOgcServer(features,
+page_cap=..., rate_limit=(limit, remaining))` stands in for
+`_ogc.fetch_json_with_headers`: it serves the given Features with cursor-style
+`next` links that echo every query parameter, caps each page like the real
+server, answers the `collections`/`queryables`/single-item endpoints, and
+records every URL and header set. `support.observation(i, ...)` builds one
+USGS observation Feature. `restusgs/_http.py` is tested one level lower, by
+binding a fake `urlopen` and a fake `sleep` onto the module.
 
 ## What the services tests pin down
 

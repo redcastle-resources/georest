@@ -1,7 +1,8 @@
 # georest
 
 Stdlib-only Python clients for geospatial REST APIs — ArcGIS Image, Map and Feature
-Services, the USFS Enterprise Data Warehouse (EDW), and ArcGIS Portal search.
+Services, the USFS Enterprise Data Warehouse (EDW), ArcGIS Portal search, and the USGS
+Water Data OGC API.
 
 **Zero dependencies.** Everything is `urllib` and `json` from the standard library.
 Nothing to resolve, nothing to pin, nothing to break — it installs cleanly into an
@@ -33,10 +34,20 @@ results = portal.searchPortal("naip 2023", portal="agol")
 
 # Generic ArcGIS service operations
 tile_url = services.getImageServiceTileUrl("https://.../ImageServer")
+
+# USGS Water Data: find gages in a box, pull a month of daily discharge
+from georest.restusgs import waterdata
+
+gages = waterdata.search_monitoring_locations(bbox=(-111.7, 36.8, -111.5, 37.0),
+                                              site_type_code="ST")
+fc = waterdata.get_daily_values("USGS-09380000", "00060",
+                                start="2024-01-01", end="2024-01-31")
+rows = waterdata.to_rows(fc)   # [{"time": "2024-01-01", "value": 9870.0, ...}, ...]
 ```
 
-The three modules are also re-exported at the top level, so `from georest import edw`
-works too. They load lazily, so `import georest` costs almost nothing.
+The provider modules are also re-exported at the top level, so `from georest import edw`
+and `from georest import waterdata` work too. They load lazily, so `import georest` costs
+almost nothing.
 
 ## Layout
 
@@ -45,12 +56,25 @@ works too. They load lazily, so `import georest` costs almost nothing.
 | `georest.restesri.edw` | USFS EDW: catalog search, layer-role tagging, FGDC/ISO metadata, feature and analytic queries |
 | `georest.restesri.portal` | ArcGIS Portal search and service metadata |
 | `georest.restesri.services` | Generic Image/Map/Feature Service queries and raster operations |
+| `georest.restusgs.waterdata` | USGS Water Data OGC API: monitoring locations, daily/continuous values, field measurements, peaks, time-series metadata |
 
-`restesri` is the Esri/ArcGIS provider. It sits under `georest` as a subpackage so
-other REST providers can be added alongside it without a namespace collision.
+`restesri` is the Esri/ArcGIS provider and `restusgs` the USGS provider. Each sits under
+`georest` as a subpackage so providers can be added alongside one another without a
+namespace collision, and each is self-contained — its private `_http` (and, for
+restusgs, `_ogc`) module is its own.
 
 Full per-function reference: **[docs/api.md](docs/api.md)**.
 Runnable notebooks: **[examples/](examples/)**.
+
+## USGS API key
+
+The Water Data API works anonymously, rate-limited to "a few queries per hour". For more,
+[get a free key](https://api.waterdata.usgs.gov/signup/) and set `USGS_API_KEY` in the
+environment (or call `waterdata.set_api_key(...)` once at startup). The key is sent only as
+the `X-Api-Key` header — never in a URL, so it cannot leak through an error message or a
+log line. Every result carries the remaining budget when the server reports it
+(`fc["rate_limit"]`), and a 429 the server won't let the client wait out raises
+`waterdata.RateLimitError` with a `.retry_after` rather than blocking.
 
 ## Maintenance tool
 
@@ -89,7 +113,7 @@ cd georest
 pip install -e ".[dev]"
 
 python -m pytest                              # or: python -m unittest discover -s tests -t .
-EDW_LIVE=1 SERVICES_LIVE=1 python -m pytest   # include the network tests
+EDW_LIVE=1 SERVICES_LIVE=1 USGS_LIVE=1 python -m pytest   # include the network tests
 ```
 
 This is a `src/` layout, so `pip install -e .` is required before the tests can
@@ -99,8 +123,8 @@ instead of being masked by the working directory.
 
 Live tests skip rather than fail when the servers are unreachable; EDW
 intermittently answers 404, 500, `Layer not found`, or 200-with-no-layers for
-services that work moments later. See [tests/README.md](tests/README.md) and
-[CONTRIBUTING.md](CONTRIBUTING.md).
+services that work moments later, and the USGS API rate-limits anonymous callers.
+See [tests/README.md](tests/README.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Requirements
 
