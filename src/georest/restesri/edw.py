@@ -147,6 +147,7 @@ _SERVICE_THEMES: dict[str, dict[str, str]] = {
     "EDW_EPANonAttainmentAreaOzone_01": {"theme": "environment", "desc": "A map service on the www that shows areas in the U.S."},
     "EDW_EPANonAttainmentAreaPM25_01": {"theme": "environment", "desc": "A map service on the www showing areas in the U.S."},
     "EDW_Ecomap2025_01": {"theme": "environment", "desc": "The Ecomap 2025 contains a feature class for five different levels of the National Hierarchical Framework of Ecological Units (the Hierarchy."},
+    "EDW_FireOccurrenceCurrentEdition_01": {"theme": "environment", "desc": "EDW_FireOccurrenceCurrentEdition_01 provides the current edition of Karen C. Short’s Spatial wildfire occurrence data for the United States (FPA FOD).…"},
     "EDW_FireOccurrence6thEdition_01": {"theme": "environment", "desc": "This data publication contains a spatial database of wildfires that occurred in the United States from 1992 to 2020."},
     # NOTE: FS's datasets.php files this under "structure" -- inconsistent
     # with every other fire dataset (MTBS, FireOccurrence6thEdition,
