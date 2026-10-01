@@ -6,6 +6,24 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `restesri.services.queryFeatureService`: on its `f=json` fallback (taken
+  whenever the `f=geojson` request fails, including a transient network
+  error) polygons are now split by ring winding, so a multipart polygon comes
+  back as a `MultiPolygon` and holes stay holes. It used to hand Esri's flat
+  ring list to one GeoJSON Polygon, turning every part after the first into a
+  hole in the first. Feature ids on that path now come from the object-id
+  attribute (`OBJECTID`, `FID` ...) instead of the feature's position, and a
+  server-supplied id is never overwritten - the same rules `edw` already
+  followed.
+
+### Changed
+
+- The Esri JSON -> GeoJSON converters live in one private module,
+  `restesri/_geojson.py`, shared by `services` and `edw` (which re-exports
+  them under the same names). Two copies is how the fallback drifted.
+
 ## [0.3.0] - 2026-09-23
 
 ### Added

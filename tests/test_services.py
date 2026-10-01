@@ -127,13 +127,29 @@ class EsriToGeoJsonTests(unittest.TestCase):
             {"type": "MultiLineString", "coordinates": paths},
         )
 
-    def test_rings_are_a_flat_polygon(self):
-        """Documented limitation: no hole/multipart detection."""
-        rings = [[[0, 0], [9, 0], [9, 9], [0, 0]], [[1, 1], [2, 1], [2, 2], [1, 1]]]
-        self.assertEqual(
-            S._esri_geometry_to_geojson({"rings": rings}),
-            {"type": "Polygon", "coordinates": rings},
-        )
+    # Esri winding: exterior rings clockwise, holes counter-clockwise.
+    CW_A = [[0, 0], [0, 9], [9, 9], [9, 0], [0, 0]]
+    CCW_HOLE_A = [[1, 1], [2, 1], [2, 2], [1, 2], [1, 1]]
+    CW_B = [[20, 0], [20, 9], [29, 9], [29, 0], [20, 0]]
+
+    def test_a_second_exterior_ring_is_a_second_polygon_not_a_hole(self):
+        """The f=json fallback used to hand the flat ring list to one
+        Polygon, so this came back as one square with a square hole cut
+        out of it somewhere it does not even overlap."""
+        got = S._esri_geometry_to_geojson({"rings": [self.CW_A, self.CW_B]})
+        self.assertEqual(got["type"], "MultiPolygon")
+        self.assertEqual(len(got["coordinates"]), 2)
+
+    def test_a_hole_stays_a_hole(self):
+        got = S._esri_geometry_to_geojson({"rings": [self.CW_A, self.CCW_HOLE_A]})
+        self.assertEqual(got["type"], "Polygon")
+        self.assertEqual(len(got["coordinates"]), 2)
+
+    def test_services_and_edw_share_one_converter(self):
+        """Two copies is how the fallback drifted; there is one now."""
+        from georest.restesri import edw
+        self.assertIs(S._esri_geometry_to_geojson, edw._esri_geometry_to_geojson)
+        self.assertIs(S._sanitize_geojson, edw._sanitize_geojson)
 
     def test_empty_and_unrecognised_geometry_are_none(self):
         self.assertIsNone(S._esri_geometry_to_geojson(None))
@@ -157,6 +173,14 @@ class SanitizeGeoJsonTests(unittest.TestCase):
     def test_dotted_property_names_are_dropped(self):
         got = S._sanitize_geojson({"features": [{"properties": {"SHAPE.LEN": 1, "OK": 2}}]})
         self.assertEqual(got["features"][0]["properties"], {"OK": 2})
+
+    def test_an_object_id_becomes_the_id(self):
+        got = S._sanitize_geojson({"features": [{"properties": {"OBJECTID": 42}}]})
+        self.assertEqual(got["features"][0]["id"], "42")
+
+    def test_a_server_id_is_never_overwritten(self):
+        got = S._sanitize_geojson({"features": [{"id": 7, "properties": {"OBJECTID": 42}}]})
+        self.assertEqual(got["features"][0]["id"], "7")
 
     def test_ids_are_assigned_as_positional_strings(self):
         got = S._sanitize_geojson({"features": [{"properties": {}}, {"properties": {}}]})
@@ -317,15 +341,16 @@ class QueryFeatureServiceTests(unittest.TestCase):
         self.assertEqual(fake.calls[2][1]["f"], "json", "fallback must re-ask as f=json")
         self.assertEqual(got["features"][0]["geometry"]["type"], "Polygon")
 
-    def test_fallback_path_sanitises_and_renumbers_ids(self):
-        """The two response paths differ here — the docstring documents it."""
+    def test_fallback_path_sanitises_and_keeps_object_ids(self):
+        """Dotted keys are dropped on this path; the id comes from the
+        object-id attribute rather than the feature's position."""
         esri = {"features": [{"attributes": {"objectid": 76, "SHAPE.LEN": 1}, "geometry": None}]}
         fake = RecordingFetch({"count": 1}, RuntimeError("400"), esri)
         with patched_services(fetch_json=fake):
             got = S.queryFeatureService(IMG)
         feature = got["features"][0]
         self.assertNotIn("SHAPE.LEN", feature["properties"], "dotted keys are dropped")
-        self.assertEqual(feature["id"], "0", "ids are positional strings on this path")
+        self.assertEqual(feature["id"], "76", "the object id, not the position")
 
     def test_fallback_that_also_fails_raises_runtimeerror_naming_the_url(self):
         fake = RecordingFetch({"count": 1}, RuntimeError("boom"), RuntimeError("boom again"))
@@ -816,7 +841,13 @@ class QueryBoundaryTests(unittest.TestCase):
         with patched_services(fetch_json=RecordingFetch(self.RESPONSE)):
             got = S.queryBoundary(IMG)
         self.assertEqual(got["type"], "Polygon")
-        self.assertEqual(got["coordinates"], self.RESPONSE["shape"]["rings"])
+        # Rings now go through the shared winding-aware converter, which
+        # writes RFC 7946 orientation - so compare the shape, not the order.
+        ring = got["coordinates"][0]
+        self.assertEqual(len(got["coordinates"]), 1)
+        self.assertEqual(ring[0], ring[-1])
+        self.assertEqual({tuple(p) for p in ring},
+                         {tuple(p) for p in self.RESPONSE["shape"]["rings"][0]})
         self.assertEqual(got["area"], 13499501822921.756)
 
     def test_out_sr_is_sent_as_a_plain_param(self):

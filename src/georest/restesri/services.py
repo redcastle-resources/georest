@@ -38,6 +38,11 @@ import re
 import urllib.parse
 from typing import Any
 
+from ._geojson import (  # shared with edw.py so the f=json paths cannot drift
+    _esri_geometry_to_geojson,  # noqa: F401 - reached as services.<name>
+    _esri_json_to_geojson,
+    _sanitize_geojson,
+)
 from ._http import build_params, fetch_bytes, fetch_json, fetch_text, format_esri_error
 from .portal import _resolve_url
 
@@ -220,12 +225,14 @@ def queryFeatureService(
             services. On the normal ``f=geojson`` path the ids are whatever
             the server emitted (typically the layer's integer OBJECTIDs,
             e.g. ``20``), and property names are passed through untouched.
-            On the ``f=json`` fallback path (see below) ids are assigned
-            client-side as positional strings ``"0"``, ``"1"``, … and
-            properties whose names contain a dot (e.g. ``SHAPE.LEN``) are
-            dropped, since many consumers reject dotted keys. Don't rely on
-            ``id`` as a stable feature identifier — read the OBJECTID out of
-            ``properties`` instead.
+            On the ``f=json`` fallback path (see below) ids are filled in
+            client-side from the feature's object-id attribute (``OBJECTID``,
+            ``FID`` …), falling back to its position only when it has none,
+            and properties whose names contain a dot (e.g. ``SHAPE.LEN``) are
+            dropped, since many consumers reject dotted keys. Polygons on
+            that path are split by ring winding, as on ``f=geojson``: a
+            multipart polygon comes back as a ``MultiPolygon`` and holes stay
+            holes.
 
     Raises:
         ValueError: If the feature count exceeds *max_features*, or the
@@ -344,58 +351,6 @@ def _convert_geometry(geometry: dict | str, geometry_type: str) -> str:
         return json.dumps(geometry)
 
     return json.dumps(geometry)
-
-
-def _esri_geometry_to_geojson(geometry: dict | None) -> dict | None:
-    """Convert an Esri JSON geometry (x/y, points, paths, or rings) to GeoJSON.
-
-    Polygons are converted as a flat list of rings without hole/multipart
-    detection — fine for simple polygons, but a ring-orientation pass would
-    be needed to correctly split true multipart polygons or interior holes.
-    """
-    if not geometry:
-        return None
-    if "x" in geometry and "y" in geometry:
-        return {"type": "Point", "coordinates": [geometry["x"], geometry["y"]]}
-    if "points" in geometry:
-        return {"type": "MultiPoint", "coordinates": geometry["points"]}
-    if "paths" in geometry:
-        paths = geometry["paths"]
-        if len(paths) == 1:
-            return {"type": "LineString", "coordinates": paths[0]}
-        return {"type": "MultiLineString", "coordinates": paths}
-    if "rings" in geometry:
-        return {"type": "Polygon", "coordinates": geometry["rings"]}
-    return None
-
-
-def _esri_json_to_geojson(data: dict) -> dict:
-    """Convert an Esri JSON (f=json) query response into a GeoJSON FeatureCollection."""
-    features = [
-        {
-            "type": "Feature",
-            "properties": feat.get("attributes", {}),
-            "geometry": _esri_geometry_to_geojson(feat.get("geometry")),
-        }
-        for feat in data.get("features", [])
-    ]
-    return {"type": "FeatureCollection", "features": features}
-
-
-def _sanitize_geojson(geojson: dict) -> dict:
-    """Sanitize a GeoJSON FeatureCollection for downstream compatibility.
-
-    - Removes properties with dots in the name (e.g. 'SHAPE.LEN') — many
-      consumers (e.g. Earth Engine) reject dotted property keys
-    - Ensures each feature has a string 'id'
-    """
-    for i, feat in enumerate(geojson.get("features", [])):
-        props = feat.get("properties", {})
-        bad_keys = [k for k in props if "." in k]
-        for k in bad_keys:
-            del props[k]
-        feat["id"] = str(i)
-    return geojson
 
 
 def getLayerInfo(url_or_result: str | dict, token: str | None = None, timeout: int | None = None) -> dict[str, Any]:
