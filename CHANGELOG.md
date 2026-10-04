@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-04
+
 ### Added
 
 - `georest.restesri.auth`: sign in to ArcGIS Online or an Enterprise portal as a user.
@@ -158,7 +160,8 @@ on `sys.path`.
 - All five `sys.path.insert(...)` bootstraps (two CLIs, three notebooks), made
   unnecessary by the `src/` layout plus an editable install.
 
-[Unreleased]: https://github.com/redcastle-resources/georest/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/redcastle-resources/georest/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/redcastle-resources/georest/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/redcastle-resources/georest/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/redcastle-resources/georest/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/redcastle-resources/georest/releases/tag/v0.1.0
