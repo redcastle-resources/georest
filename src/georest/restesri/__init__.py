@@ -13,6 +13,10 @@ edw
 portal
     ArcGIS Portal search (IIPP, AGOL, USGS, NOAA, USFS, NASA, or any
     Enterprise portal) and service metadata.
+auth
+    Sign in as a user (OAuth 2.0 + PKCE, or a token handed in from the
+    arcgis API). Calls without ``token=`` then use the session on the
+    hosts it covers.
 _http
     Internal shared urllib GET/POST/JSON helpers. Not part of the public API.
 
@@ -28,6 +32,6 @@ You may obtain a copy of the License at
 
 from __future__ import annotations
 
-from . import edw, portal, services
+from . import auth, edw, portal, services
 
-__all__ = ["edw", "portal", "services"]
+__all__ = ["auth", "edw", "portal", "services"]

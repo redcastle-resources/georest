@@ -82,6 +82,7 @@ Documentation = "https://github.com/redcastle-resources/georest/blob/main/docs/a
 
 [project.scripts]
 georest-check-themes = "georest.restesri.cli.check_themes:main"
+georest-login = "georest.restesri.cli.login:main"
 
 
 # ---------------------------------------------------------------------------

@@ -154,7 +154,7 @@ def queryFeatureServiceCount(
         params["geometryType"] = geometry_type
         params["spatialRel"] = spatial_rel
         params["inSR"] = str(in_sr)
-    if token:
+    if token is not None:
         params["token"] = token
 
     count_url = f"{url}{_FEATURE_QUERY_SUFFIX}"
@@ -274,7 +274,7 @@ def queryFeatureService(
         query_params["geometryType"] = geometry_type
         query_params["spatialRel"] = spatial_rel
         query_params["inSR"] = str(out_sr)
-    if token:
+    if token is not None:
         query_params["token"] = token
 
     query_url = f"{url}{_FEATURE_QUERY_SUFFIX}"
@@ -542,7 +542,7 @@ def exportImage(
         params["pixelType"] = pixel_type
     if no_data is not None:
         params["noData"] = ",".join(str(v) for v in no_data) if isinstance(no_data, (list, tuple)) else str(no_data)
-    if token:
+    if token is not None:
         params["token"] = token
 
     export_url = f"{url}/exportImage"
@@ -738,7 +738,7 @@ def computeStatisticsHistograms(
         params["renderingRule"] = json.dumps(rendering_rule)
     if pixel_size is not None:
         params["pixelSize"] = json.dumps(pixel_size)
-    if token:
+    if token is not None:
         params["token"] = token
 
     stats_url = f"{url}/computeStatisticsHistograms"
@@ -868,7 +868,7 @@ def identifyPixelValue(
         params["mosaicRule"] = json.dumps(mosaic_rule)
     if rendering_rule is not None:
         params["renderingRule"] = json.dumps(rendering_rule)
-    if token:
+    if token is not None:
         params["token"] = token
 
     identify_url = f"{url}/identify"
@@ -970,7 +970,7 @@ def getSamples(
         params["mosaicRule"] = json.dumps(mosaic_rule)
     if pixel_size is not None:
         params["pixelSize"] = json.dumps(pixel_size)
-    if token:
+    if token is not None:
         params["token"] = token
 
     # The batch call doesn't reliably behave all-or-nothing: it can also
@@ -1083,7 +1083,7 @@ def queryBoundary(
     }
     if mosaic_rule is not None:
         params["mosaicRule"] = json.dumps(mosaic_rule)
-    if token:
+    if token is not None:
         params["token"] = token
 
     boundary_url = f"{url}/queryBoundary"

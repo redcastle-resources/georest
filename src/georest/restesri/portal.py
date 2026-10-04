@@ -21,13 +21,16 @@ Quick start::
     # Inspect any service
     meta = portal.getServiceMetadata("https://.../ImageServer")
 
-Token-gated portals::
+Secured portals::
 
-    # Obtain a token first:
-    #   POST <portal>/sharing/rest/generateToken
-    #     username=...&password=...&client=requestip&expiration=60&f=json
-    token = "..."
-    portal.searchPortal("classified data", token=token)
+    # Sign in once (OAuth, works with enterprise SSO); calls without token=
+    # then use the session wherever it applies. See georest.restesri.auth.
+    from georest.restesri import auth
+    auth.login("https://myorg.maps.arcgis.com", client_id="...")
+    portal.searchPortal("classified data", portal="https://myorg.maps.arcgis.com")
+
+    # An explicit token= still wins; token="" forces an anonymous request.
+    portal.searchPortal("classified data", token="...")
 
 Copyright 2026 Ryan Rock and Ian Housman
 
@@ -45,6 +48,7 @@ import threading
 import urllib.parse
 from typing import Any
 
+from . import auth
 from ._http import build_params, fetch_json, format_esri_error
 
 # ---------------------------------------------------------------------------
@@ -185,12 +189,14 @@ def _resolve_org_id(base_url: str, token: str | None = None) -> str:
             Callers wanting a global search on failure must pass
             ``org_scoped=False`` explicitly; this never falls back silently.
     """
-    key = (base_url, token or None)
+    url = f"{base_url}/sharing/rest/portals/self"
+    # None defers to the signed-in auth session, whose identity then keys the
+    # cache in the token's place; "" is anonymous, the same entry as no session.
+    key = (base_url, token or (None if token == "" else auth._session_key(url)))
     cached = _ORG_ID_CACHE.get(key)
     if cached:
         return cached
 
-    url = f"{base_url}/sharing/rest/portals/self"
     hint = "Pass org_scoped=False to search all of ArcGIS Online instead."
 
     with _org_lock(key):
@@ -199,7 +205,7 @@ def _resolve_org_id(base_url: str, token: str | None = None) -> str:
             return cached
 
         params = {"f": "json"}
-        if token:
+        if token is not None:
             params["token"] = token
         try:
             data = fetch_json(url, params)
@@ -483,7 +489,7 @@ def searchPortal(
     params["q"] = q
     params["num"] = min(max(1, limit), 100)
     params["f"] = "json"
-    if token:
+    if token is not None:
         params["token"] = token
 
     try:

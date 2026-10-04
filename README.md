@@ -66,6 +66,45 @@ restusgs, `_ogc`) module is its own.
 Full per-function reference: **[docs/api.md](docs/api.md)**.
 Runnable notebooks: **[examples/](examples/)**.
 
+## Signing in to ArcGIS Online / Portal
+
+Public services need no sign-in. For secured content, sign in once and every `portal` and
+`services` call without an explicit `token=` uses your session, sent only to the portal's
+own hosts (never to, say, a public NOAA service).
+
+One-time setup, per AGOL org or Enterprise portal:
+
+1. Content > New item > Developer credentials > **OAuth 2.0 credentials**.
+2. Add the redirect URL `http://127.0.0.1:8765/callback`.
+3. Note the **client id**. No client secret is needed.
+
+Then pick whichever fits:
+
+```python
+from georest.restesri import auth
+
+# Notebook or script: browser sign-in; enterprise SSO (SAML/eAuth) works.
+auth.login("https://myorg.maps.arcgis.com", client_id="abc123")
+
+# ArcGIS Pro: reuse Pro's session via the arcgis API (run in Pro's Python).
+from arcgis.gis import GIS
+gis = GIS("Pro")
+auth.set_token(gis._con.token, portal=gis.url, refresh=lambda: gis._con.token)
+
+auth.status()   # who you are and until when; never the token
+```
+
+For an MCP server or any long-running process, sign in from a terminal once:
+
+```bash
+georest-login --portal https://myorg.maps.arcgis.com --client-id abc123
+```
+
+That saves a refresh token to `~/.georest/esri_credentials.json`; later processes pick it
+up automatically until the refresh token expires (two weeks by default, set by your org),
+then run the command again. `georest-login --logout` removes it. `GEOREST_ESRI_PORTAL` and
+`GEOREST_ESRI_CLIENT_ID` can stand in for the flags.
+
 ## USGS API key
 
 The Water Data API works anonymously, rate-limited to "a few queries per hour". For more,

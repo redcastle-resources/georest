@@ -113,11 +113,11 @@ class TestNoThirdPartyImports(unittest.TestCase):
     """Turns the stdlib-only design goal into an enforced invariant."""
 
     ALLOWED = {
-        "__future__", "argparse", "ast", "collections", "contextlib", "datetime",
-        "html", "importlib",
-        "json", "os", "pathlib", "re", "sys", "threading", "time", "typing",
+        "__future__", "argparse", "ast", "base64", "collections", "contextlib",
+        "dataclasses", "datetime", "hashlib", "html", "http", "importlib",
+        "json", "os", "pathlib", "re", "secrets", "sys", "threading", "time", "typing",
         "unittest",
-        "urllib", "xml", "georest",
+        "urllib", "uuid", "warnings", "webbrowser", "xml", "georest",
     }
 
     def test_package_imports_only_stdlib(self):

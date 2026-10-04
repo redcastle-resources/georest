@@ -66,6 +66,24 @@ Search any ArcGIS Portal (IIPP, ArcGIS Online, USGS, NOAA, USFS, NASA, or a cust
 - `getServiceMetadata(url, token=None)` — fetch `?f=json` metadata for any ArcGIS service or sub-layer URL. Raises `ValueError` if the service answers with an Esri error object — which is how ArcGIS reports a missing service, rather than with an HTTP 404.
 - `PORTALS` — module-level dict of short portal names to base URLs (extend at runtime by adding keys).
 
+### `auth.py` — signing in as a user
+
+Makes secured AGOL and Portal content reachable as the signed-in user. Once a session exists, any `portal` or `services` call made **without** `token=` sends the session token, but only to hosts the session covers: the portal host, `*.arcgis.com` for ArcGIS Online, the portal's federated servers (read from `/sharing/rest/portals/self/servers` at sign-in), and hosts added with `trust_host`. Tokens are only ever sent over https unless the portal itself is plain http. An explicit `token=` always wins, and `token=""` forces an anonymous request. `edw.py` is public and unaffected.
+
+- `login(portal=None, client_id=None, *, port=8765, open_browser=True, persist=False, timeout=300)`: OAuth 2.0 authorization code + PKCE. Opens the portal's sign-in page (enterprise SSO such as SAML/eAuth works because the login happens in the browser), receives the redirect on `http://127.0.0.1:<port>/callback`, and exchanges the code for an access token plus a refresh token. `persist=True` saves the refresh token (never the access token) to `~/.georest/esri_credentials.json` with owner-only permissions.
+- `set_token(token, portal=None, *, expires=None, referer=None, refresh=None)`: use a token obtained elsewhere, for example `GIS("Pro")._con.token` from the arcgis API. `expires` takes epoch seconds, epoch milliseconds or a `datetime`. `referer` is sent as a `Referer` header for tokens bound to one. `refresh` is a zero-argument callable returning a fresh token (or `(token, expires)`).
+- `restore(path=None)`: load a persisted session. Runs automatically on the first request when no session exists.
+- `status()`: portal, username, source, expiry, sign-in expiry and covered hosts. Never the token. `None` when signed out.
+- `logout()`: drop the session and delete the saved file.
+- `trust_host(host)`: also send the token to `host` (a leading dot covers subdomains).
+- `credentials_for(url)`: the `(token, headers)` a request to `url` would carry. This is the hook `_http` calls.
+
+Renewal: an access token is refreshed when less than two minutes remain. A request whose session token is rejected (Esri code 498, in the body or as an HTTP status) is refreshed and retried once. If renewal fails, a `UserWarning` is issued and requests continue anonymously; an expired token is never sent, because an expired token makes even public services answer 498.
+
+Environment: `GEOREST_ESRI_PORTAL` and `GEOREST_ESRI_CLIENT_ID` are the defaults for `login`. `GEOREST_ESRI_TOKEN` (with `GEOREST_ESRI_PORTAL`) supplies a raw token when no session exists.
+
+`georest-login` wraps this for the terminal: `--portal`, `--client-id`, `--port`, `--no-browser`, `--no-save`, `--status`, `--logout`.
+
 ### `_http.py` — shared HTTP helpers
 
 Stdlib-only (`urllib`) GET/POST/JSON helpers used by all the modules above.
@@ -74,8 +92,10 @@ Stdlib-only (`urllib`) GET/POST/JSON helpers used by all the modules above.
 - `fetch_text(url, params=None, timeout=None)` — GET and return raw text (for XML/HTML endpoints like EDW's `/metadata` or an ArcGIS Server HTML browse page).
 - `fetch_bytes(url, params=None, timeout=None)` — **added 2026-08-19.** GET and return `(raw bytes, content-type)`, for binary endpoints like `exportImage` where a UTF-8 decode would corrupt the response.
 - `post_json(url, params, timeout=None)` — POST form-encoded params and parse JSON (used for large query payloads).
-- `build_params(base, token)` — merge an optional token into a params dict.
+- `build_params(base, token)` — merge an optional token into a params dict. `None` leaves the choice to the `auth` session; `""` forces anonymous.
 - `format_esri_error(err)` — render an Esri error object (`code`, `message`, `details`) into one diagnostic string. Lives here so `services.py` and `portal.py` can share it without a circular import; `services._format_esri_error` remains as an alias.
+
+Every fetch function resolves credentials the same way (see `auth.py` above), retries once after a rejected session token, and redacts any `token` value from the URLs in its error messages.
 
 Default request timeout is 60 seconds (`_TIMEOUT`) — every fetch function above accepts an optional `timeout` override for services that legitimately need longer.
 
@@ -157,6 +177,14 @@ for `restesri`; it lives in its own repository). The library side of that contra
   surface `.retry_after`; the library never sleeps more than a few seconds inside a call.
 - **Error messages are safe to return to the model.** A `RuntimeError` carries the request
   URL and the API's own `description` — never the key, which travels only as a header.
+  restesri tokens do travel in the query string, so `_http` replaces them with `REDACTED`
+  in every error message.
+- **Sign users in out-of-band, never through a tool.** Run `georest-login` once in a
+  terminal (a browser SSO sign-in that saves a refresh token); the server picks the session
+  up on its first request, or call `auth.restore()` at startup. Keep `token` out of every
+  tool schema and never trigger `auth.login()` from inside a tool call. An error mentioning
+  code 498/499 tells the user to run `georest-login` again. `auth.status()` is safe to
+  expose; it never contains the token.
 
 ## Tests
 

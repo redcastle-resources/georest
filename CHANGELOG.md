@@ -6,6 +6,30 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `georest.restesri.auth`: sign in to ArcGIS Online or an Enterprise portal as a user.
+  `auth.login(...)` runs an OAuth 2.0 authorization code + PKCE flow in the browser, so
+  enterprise SSO (SAML/eAuth) works; `auth.set_token(...)` accepts a token from elsewhere,
+  such as `GIS("Pro")` in the arcgis API, with optional `referer=` and `refresh=`. Calls
+  in `portal` and `services` made without `token=` use the session, but only on hosts it
+  covers (the portal, `*.arcgis.com` for AGOL, federated servers, `auth.trust_host`).
+  Tokens are refreshed before expiry and once after a 498. `persist=True` saves the
+  refresh token to `~/.georest/esri_credentials.json`, restored automatically on the first
+  request.
+- `georest-login` command for signing in from a terminal (`--status`, `--logout`), the
+  intended route for MCP servers.
+
+### Changed
+
+- `token=""` on restesri calls now forces an anonymous request; `token=None` (the
+  default) defers to the signed-in session. Previously both meant anonymous.
+- restesri `_http` error messages replace any `token` query value with `REDACTED`.
+- Esri errors with code 498 or 499 now include a hint to sign in with `georest-login`.
+- The Esri JSON -> GeoJSON converters live in one private module,
+  `restesri/_geojson.py`, shared by `services` and `edw` (which re-exports
+  them under the same names). Two copies is how the fallback drifted.
+
 ### Fixed
 
 - `restesri.services.queryFeatureService`: on its `f=json` fallback (taken
@@ -17,12 +41,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   attribute (`OBJECTID`, `FID` ...) instead of the feature's position, and a
   server-supplied id is never overwritten - the same rules `edw` already
   followed.
-
-### Changed
-
-- The Esri JSON -> GeoJSON converters live in one private module,
-  `restesri/_geojson.py`, shared by `services` and `edw` (which re-exports
-  them under the same names). Two copies is how the fallback drifted.
 
 ## [0.3.0] - 2026-09-23
 
