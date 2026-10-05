@@ -331,6 +331,32 @@ class QueryFeatureServiceTests(unittest.TestCase):
             S.queryFeatureService(FEAT, out_fields="name,magnitude")
         self.assertEqual(fake.calls[1][1]["outFields"], "name,magnitude")
 
+    def test_generalization_is_left_to_the_server_when_asked(self):
+        fake = RecordingFetch({"count": 1}, self.GEOJSON)
+        with patched_services(fetch_json=fake):
+            S.queryFeatureService(FEAT, max_allowable_offset=0.0001,
+                                  geometry_precision=6)
+        self.assertEqual(fake.calls[1][1]["maxAllowableOffset"], "0.0001")
+        self.assertEqual(fake.calls[1][1]["geometryPrecision"], "6")
+        self.assertNotIn("maxAllowableOffset", fake.calls[0][1],
+                         "a count needs no geometry, generalized or not")
+
+    def test_geometry_is_exact_unless_generalization_is_asked_for(self):
+        fake = RecordingFetch({"count": 1}, self.GEOJSON)
+        with patched_services(fetch_json=fake):
+            S.queryFeatureService(FEAT)
+        self.assertNotIn("maxAllowableOffset", fake.calls[1][1])
+        self.assertNotIn("geometryPrecision", fake.calls[1][1])
+
+    def test_the_fallback_keeps_the_generalization(self):
+        """The f=json retry is built from the same params; losing the
+        offset there would silently fetch full resolution."""
+        esri = {"features": [{"attributes": {"objectid": 1}, "geometry": None}]}
+        fake = RecordingFetch({"count": 1}, RuntimeError("400"), esri)
+        with patched_services(fetch_json=fake):
+            S.queryFeatureService(IMG, max_allowable_offset=0.001)
+        self.assertEqual(fake.calls[2][1]["maxAllowableOffset"], "0.001")
+
     def test_geojson_rejection_falls_back_to_esri_json(self):
         """An ImageServer's raster-catalog /query rejects f=geojson outright."""
         esri = {"features": [{"attributes": {"objectid": 76, "SHAPE.LEN": 1},

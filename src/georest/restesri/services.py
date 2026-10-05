@@ -180,6 +180,8 @@ def queryFeatureService(
     out_sr: int = 4326,
     token: str | None = None,
     timeout: int | None = None,
+    max_allowable_offset: float | None = None,
+    geometry_precision: int | None = None,
 ) -> dict[str, Any]:
     """Fetch features from an ArcGIS Feature Service, Map Service, or mosaic
     layer as GeoJSON, optionally filtered by spatial intersection.
@@ -215,6 +217,16 @@ def queryFeatureService(
             60 — some services with large mosaic catalogs can genuinely
             take longer than that to respond; pass a larger value rather
             than assuming a hang.
+        max_allowable_offset (float, optional): Have the SERVER generalize
+            each geometry so no vertex strays more than this from the
+            original, in the units of *out_sr* (degrees for the default
+            4326). For display this is the difference between minutes and
+            seconds: 37 full-resolution NIFC fire perimeters are 34 MB and
+            31 s; at ``0.0001`` (~10 m) they are 4 MB and 6 s. Leave
+            ``None`` for analysis -- the geometry comes back exact.
+        geometry_precision (int, optional): Decimal places the server
+            writes coordinates with. ``6`` is ~10 cm in degrees; services
+            otherwise often emit 15.
 
     Returns:
         dict: GeoJSON ``FeatureCollection``.
@@ -274,6 +286,10 @@ def queryFeatureService(
         query_params["geometryType"] = geometry_type
         query_params["spatialRel"] = spatial_rel
         query_params["inSR"] = str(out_sr)
+    if max_allowable_offset is not None:
+        query_params["maxAllowableOffset"] = str(max_allowable_offset)
+    if geometry_precision is not None:
+        query_params["geometryPrecision"] = str(int(geometry_precision))
     if token is not None:
         query_params["token"] = token
 
