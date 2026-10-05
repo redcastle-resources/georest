@@ -45,6 +45,7 @@ from ._geojson import (  # shared with edw.py so the f=json paths cannot drift
 )
 from ._http import build_params, fetch_bytes, fetch_json, fetch_text, format_esri_error
 from .portal import _resolve_url
+from ._geojson import _convert_query_geometry, _geometry_type_for
 
 _FEATURE_QUERY_SUFFIX = "/query"
 _MAX_RECORD_COUNT = 2000  # ArcGIS server default max
@@ -151,7 +152,7 @@ def queryFeatureServiceCount(
     params: dict[str, Any] = {"where": where, "returnCountOnly": "true", "f": "json"}
     if geometry is not None:
         params["geometry"] = _convert_geometry(geometry, geometry_type)
-        params["geometryType"] = geometry_type
+        params["geometryType"] = _geometry_type_for(params["geometry"], geometry_type)
         params["spatialRel"] = spatial_rel
         params["inSR"] = str(in_sr)
     if token is not None:
@@ -271,7 +272,7 @@ def queryFeatureService(
     }
     if geometry is not None:
         query_params["geometry"] = _convert_geometry(geometry, geometry_type)
-        query_params["geometryType"] = geometry_type
+        query_params["geometryType"] = _geometry_type_for(query_params["geometry"], geometry_type)
         query_params["spatialRel"] = spatial_rel
         query_params["inSR"] = str(out_sr)
     if token is not None:
@@ -311,46 +312,15 @@ def queryFeatureService(
 
 
 def _convert_geometry(geometry: dict | str, geometry_type: str) -> str:
-    """Convert geometry input to an Esri-compatible JSON string for query params.
+    """Convert query geometry to the Esri JSON string the REST API takes.
 
-    Handles:
-    - Bbox string "xmin,ymin,xmax,ymax" → Esri envelope JSON
-    - GeoJSON geometry dict → Esri JSON
-    - Already-Esri JSON dict → pass through
-    - String → pass through
+    Kept under this name for callers and tests; the conversion (GeoJSON
+    -> Esri, with rings wound the way Esri reads them) lives in
+    ``_geojson._convert_query_geometry``, shared with edw.
+    ``geometry_type`` is unused here -- pair the result with
+    ``_geometry_type_for`` to label it.
     """
-    if isinstance(geometry, str):
-        parts = geometry.split(",")
-        if len(parts) == 4:
-            try:
-                xmin, ymin, xmax, ymax = [float(p.strip()) for p in parts]
-                return json.dumps({"xmin": xmin, "ymin": ymin, "xmax": xmax, "ymax": ymax})
-            except ValueError:
-                pass
-        return geometry
-
-    if isinstance(geometry, dict):
-        if "xmin" in geometry:
-            return json.dumps(geometry)
-        if "rings" in geometry or "x" in geometry or "points" in geometry:
-            return json.dumps(geometry)
-
-        geom_type = geometry.get("type", "")
-        coords = geometry.get("coordinates")
-
-        if geom_type == "Point" and coords:
-            return json.dumps({"x": coords[0], "y": coords[1]})
-        if geom_type == "Polygon" and coords:
-            return json.dumps({"rings": coords})
-        if geom_type == "MultiPolygon" and coords:
-            rings = []
-            for polygon in coords:
-                rings.extend(polygon)
-            return json.dumps({"rings": rings})
-
-        return json.dumps(geometry)
-
-    return json.dumps(geometry)
+    return _convert_query_geometry(geometry)
 
 
 def getLayerInfo(url_or_result: str | dict, token: str | None = None, timeout: int | None = None) -> dict[str, Any]:
@@ -729,7 +699,7 @@ def computeStatisticsHistograms(
 
     params: dict[str, str] = {
         "geometry": json.dumps(geom_json),
-        "geometryType": geometry_type,
+        "geometryType": _geometry_type_for(converted, geometry_type),
         "f": "json",
     }
     if mosaic_rule is not None:

@@ -6,6 +6,22 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Spatial filters given a GeoJSON geometry were rejected or wrong. `geometryType` stayed
+  `esriGeometryEnvelope` whatever the geometry, so a GeoJSON polygon (converted to Esri
+  `rings`) was sent labelled an envelope and ArcGIS answered HTTP 400. The type now follows
+  the converted geometry in `services` (`queryFeatureServiceCount`, `queryFeatureService`,
+  `computeStatisticsHistograms`) and `edw` (`query_features`, `query_features_analytic`,
+  `query_features_with_pagination`, `_query_object_ids`); an explicit non-default type is
+  kept.
+- GeoJSON polygons are now wound the way Esri reads them: exterior rings clockwise, holes
+  counter-clockwise (RFC 7946 is the reverse). Copied as-is, a polygon with a hole sent the
+  hole as a second exterior, so the filter covered the area meant to be excluded.
+  `LineString`/`MultiLineString` and `MultiPoint` now convert to `paths`/`points`. The
+  two copies of `_convert_geometry` (`services`, `edw`) share one implementation in
+  `_geojson`.
+
 ## [0.4.0] - 2026-10-04
 
 ### Added
