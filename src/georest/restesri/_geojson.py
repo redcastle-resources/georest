@@ -17,6 +17,8 @@ You may obtain a copy of the License at
 
 from __future__ import annotations
 
+import json
+
 
 def _ring_signed_area(ring: list) -> float:
     """Shoelace signed area of a ring. Positive = counter-clockwise."""
@@ -130,3 +132,97 @@ def _sanitize_geojson(geojson: dict) -> dict:
             )
         feat["id"] = str(feature_id) if feature_id is not None else str(i)
     return geojson
+
+
+# ── GeoJSON -> Esri, for query geometry ────────────────────────────────
+
+
+def _orient(ring: list, clockwise: bool) -> list:
+    """``ring`` wound the requested way (reversed copy if it is not)."""
+    is_cw = _ring_signed_area(ring) < 0
+    return list(ring) if is_cw == clockwise else list(reversed(ring))
+
+
+def _polygon_rings(polygon: list) -> list:
+    """One GeoJSON polygon's rings, wound the way Esri reads them.
+
+    RFC 7946 winds an exterior counter-clockwise and holes clockwise; Esri
+    is the reverse -- clockwise rings are exteriors, counter-clockwise ones
+    holes. Copied as-is, a GeoJSON polygon reached the server as a hole
+    with no exterior, and a polygon WITH a hole sent the hole as a second
+    exterior, so a spatial filter searched exactly the area meant to be
+    excluded. Winding is set explicitly, so either input winding works.
+    """
+    return [_orient(r, clockwise=(i == 0)) for i, r in enumerate(polygon) if r]
+
+
+def _geojson_to_esri_geometry(geometry: dict) -> dict | None:
+    """A GeoJSON geometry as Esri JSON, or None if it is not one we convert."""
+    t, c = geometry.get("type"), geometry.get("coordinates")
+    if not c:
+        return None
+    if t == "Point":
+        return {"x": c[0], "y": c[1]}
+    if t == "MultiPoint":
+        return {"points": [list(p) for p in c]}
+    if t == "LineString":
+        return {"paths": [c]}
+    if t == "MultiLineString":
+        return {"paths": list(c)}
+    if t == "Polygon":
+        return {"rings": _polygon_rings(c)}
+    if t == "MultiPolygon":
+        return {"rings": [r for poly in c for r in _polygon_rings(poly)]}
+    return None
+
+
+def _convert_query_geometry(geometry: dict | str) -> str:
+    """Query ``geometry`` -> the Esri JSON string the REST API takes.
+
+    A ``"xmin,ymin,xmax,ymax"`` string becomes an envelope; a GeoJSON
+    geometry is converted (``_geojson_to_esri_geometry``); Esri JSON and
+    any other string pass through.
+    """
+    if isinstance(geometry, str):
+        parts = geometry.split(",")
+        if len(parts) == 4:
+            try:
+                xmin, ymin, xmax, ymax = [float(p.strip()) for p in parts]
+                return json.dumps({"xmin": xmin, "ymin": ymin,
+                                   "xmax": xmax, "ymax": ymax})
+            except ValueError:
+                pass
+        return geometry
+    if isinstance(geometry, dict):
+        if any(k in geometry for k in ("xmin", "rings", "paths", "points", "x")):
+            return json.dumps(geometry)
+        converted = _geojson_to_esri_geometry(geometry)
+        return json.dumps(converted if converted is not None else geometry)
+    return json.dumps(geometry)
+
+
+def _geometry_type_for(geometry_json: str, requested: str) -> str:
+    """The Esri ``geometryType`` that matches converted query geometry.
+
+    Every query defaulted ``geometryType`` to ``esriGeometryEnvelope``
+    whatever geometry it carried, so a GeoJSON polygon -- converted to
+    Esri ``rings`` -- went out labelled an envelope and the server
+    answered HTTP 400. The type now follows the geometry; an explicit
+    non-default type from the caller is kept as given.
+    """
+    if requested and requested != "esriGeometryEnvelope":
+        return requested
+    try:
+        g = json.loads(geometry_json)
+    except (TypeError, ValueError):
+        return requested
+    if isinstance(g, dict):
+        if "rings" in g:
+            return "esriGeometryPolygon"
+        if "paths" in g:
+            return "esriGeometryPolyline"
+        if "points" in g:
+            return "esriGeometryMultipoint"
+        if "x" in g and "y" in g:
+            return "esriGeometryPoint"
+    return requested

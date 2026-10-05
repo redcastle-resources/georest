@@ -82,16 +82,19 @@ class ConvertGeometryTests(unittest.TestCase):
         self.assertEqual(got, {"x": -118.5, "y": 36.1})
 
     def test_geojson_polygon_becomes_esri_rings(self):
-        ring = [[[0, 0], [1, 0], [1, 1], [0, 0]]]
-        got = json.loads(S._convert_geometry({"type": "Polygon", "coordinates": ring}, "esriGeometryPolygon"))
-        self.assertEqual(got, {"rings": ring})
+        # RFC 7946 exterior (counter-clockwise) comes out clockwise: the
+        # way Esri reads an exterior. Copied as-is it read as a hole.
+        ccw = [[0, 0], [1, 0], [1, 1], [0, 0]]
+        got = json.loads(S._convert_geometry({"type": "Polygon", "coordinates": [ccw]}, "esriGeometryPolygon"))
+        self.assertEqual(got, {"rings": [list(reversed(ccw))]})
 
     def test_geojson_multipolygon_flattens_every_part_into_rings(self):
         a = [[0, 0], [1, 0], [1, 1], [0, 0]]
         b = [[5, 5], [6, 5], [6, 6], [5, 5]]
         got = json.loads(S._convert_geometry(
             {"type": "MultiPolygon", "coordinates": [[a], [b]]}, "esriGeometryPolygon"))
-        self.assertEqual(got, {"rings": [a, b]})
+        # Each part's exterior, wound clockwise for Esri.
+        self.assertEqual(got, {"rings": [list(reversed(a)), list(reversed(b))]})
 
     def test_esri_json_dicts_pass_through_untouched(self):
         for geom in ({"xmin": 0, "ymin": 0, "xmax": 1, "ymax": 1},

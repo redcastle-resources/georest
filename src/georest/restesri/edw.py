@@ -43,6 +43,7 @@ import re
 import xml.etree.ElementTree as ET
 from typing import Any
 
+from ._geojson import _convert_query_geometry, _geometry_type_for
 from ._http import fetch_json, fetch_text, post_json
 
 # ---------------------------------------------------------------------------
@@ -862,7 +863,7 @@ def query_features(
     if geometry is not None:
         geom_str = _convert_geometry(geometry, geometry_type)
         params["geometry"] = geom_str
-        params["geometryType"] = geometry_type
+        params["geometryType"] = _geometry_type_for(geom_str, geometry_type)
         params["spatialRel"] = spatial_rel
         params["inSR"] = str(4326 if in_sr is None else in_sr)
 
@@ -906,12 +907,13 @@ def _query_object_ids(
     correct 40 object IDs via returnIdsOnly).
     """
     url = f"{EDW_BASE_URL}/{service_name}/MapServer/{layer_id}/query"
+    geom_str = _convert_geometry(geometry, geometry_type)
     params: dict[str, str] = {
         "where": where,
         "f": "json",
         "returnIdsOnly": "true",
-        "geometry": _convert_geometry(geometry, geometry_type),
-        "geometryType": geometry_type,
+        "geometry": geom_str,
+        "geometryType": _geometry_type_for(geom_str, geometry_type),
         "spatialRel": spatial_rel,
         "inSR": str(in_sr),
     }
@@ -1125,7 +1127,7 @@ def query_features_analytic(
     if geometry is not None:
         geom_str = _convert_geometry(geometry, geometry_type)
         params["geometry"] = geom_str
-        params["geometryType"] = geometry_type
+        params["geometryType"] = _geometry_type_for(geom_str, geometry_type)
         params["spatialRel"] = spatial_rel
         params["inSR"] = str(4326 if in_sr is None else in_sr)
 
@@ -1219,59 +1221,15 @@ def top_n_per_group(
 
 
 def _convert_geometry(geometry: dict | str, geometry_type: str) -> str:
-    """Convert geometry input to Esri-compatible JSON string for query params.
+    """Convert query geometry to the Esri JSON string the REST API takes.
 
-    Handles:
-    - Bbox string "xmin,ymin,xmax,ymax" → Esri envelope JSON
-    - GeoJSON geometry dict → Esri JSON
-    - Already-Esri JSON dict → pass through
-    - String → pass through
+    Kept under this name for callers and tests; the conversion (GeoJSON
+    -> Esri, with rings wound the way Esri reads them) lives in
+    ``_geojson._convert_query_geometry``, shared with services.
+    ``geometry_type`` is unused here -- pair the result with
+    ``_geometry_type_for`` to label it.
     """
-    # Simple bbox string
-    if isinstance(geometry, str):
-        # Check if it's a simple bbox: "xmin,ymin,xmax,ymax"
-        parts = geometry.split(",")
-        if len(parts) == 4:
-            try:
-                xmin, ymin, xmax, ymax = [float(p.strip()) for p in parts]
-                return json.dumps(
-                    {"xmin": xmin, "ymin": ymin, "xmax": xmax, "ymax": ymax}
-                )
-            except ValueError:
-                pass
-        return geometry  # pass through as-is
-
-    if isinstance(geometry, dict):
-        # Already Esri-style envelope
-        if "xmin" in geometry:
-            return json.dumps(geometry)
-
-        # Already Esri-style rings/points
-        if "rings" in geometry or "x" in geometry or "points" in geometry:
-            return json.dumps(geometry)
-
-        # GeoJSON → Esri JSON conversion
-        geom_type = geometry.get("type", "")
-        coords = geometry.get("coordinates")
-
-        if geom_type == "Point" and coords:
-            return json.dumps({"x": coords[0], "y": coords[1]})
-
-        if geom_type == "Polygon" and coords:
-            # GeoJSON polygon rings → Esri rings
-            return json.dumps({"rings": coords})
-
-        if geom_type == "MultiPolygon" and coords:
-            # Flatten all rings
-            rings = []
-            for polygon in coords:
-                rings.extend(polygon)
-            return json.dumps({"rings": rings})
-
-        # Fallback: serialize as-is
-        return json.dumps(geometry)
-
-    return json.dumps(geometry)
+    return _convert_query_geometry(geometry)
 
 
 # Moved to _geojson.py so services.py shares them; re-exported because
@@ -1332,7 +1290,7 @@ def query_features_with_pagination(
         if geometry is not None:
             geom_str = _convert_geometry(geometry, geometry_type)
             params["geometry"] = geom_str
-            params["geometryType"] = geometry_type
+            params["geometryType"] = _geometry_type_for(geom_str, geometry_type)
             params["spatialRel"] = spatial_rel
             params["inSR"] = str(4326 if in_sr is None else in_sr)
 
