@@ -6,6 +6,34 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `georest.restusfs`, the USDA Forest Service provider, moved here from geeViz's
+  `fsInsights`:
+  - `fia`: FIA estimates from FIADB-API (EVALIDator) with `se_pct` and `plots` on every
+    cell and thin cells flagged `unreliable`, plus local validation of attribute,
+    evaluation and grouping before the request is sent.
+  - `vocab`: searchable FIA attributes, evaluations and groupings, cached under
+    `~/.georest/restusfs` (`GEOREST_RESTUSFS_CACHE` to move it) with a bundled snapshot.
+  - `lcms`: LCMS land cover, land use and change summaries for precomputed areas, with
+    visualization parameters taken from the API.
+  - `lcms_ee`: LCMS over any geometry through Earth Engine (optional, `georest[ee]`).
+  - `align`: LCMS treed area beside FIA forest-land area, with the reasons they differ.
+- `estimate()` accepts several evaluations (`wc=[102025, 242025]`) and estimates across
+  them in one request, the only way to get a correct combined standard error.
+- Warnings FIADB-API attaches to an estimate are returned in `df.attrs["warnings"]` and
+  logged.
+- An `ee` extra, `pip install "georest[ee]"`.
+
+### Changed
+
+- pandas is now a dependency, for `restusfs`, which returns DataFrames. `restesri` and
+  `restusgs` still use only the standard library, and the packaging tests hold them to it.
+- Compared with geeViz's `fsInsights`: the transport uses `urllib` instead of `requests`;
+  `find_attributes`, `find_groupings` and `find_evaluations` return every match, best
+  first, instead of the first 25 (`limit=` is still accepted); long `strFilter` values are
+  sent by POST; and the error base class is `USFSError`.
+
 ## [0.4.0] - 2026-10-04
 
 ### Added

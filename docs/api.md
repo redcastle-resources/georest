@@ -1,14 +1,17 @@
 # georest — API reference
 
-Stdlib-only Python clients for geospatial REST APIs, one provider subpackage per API
-family: `georest.restesri` (ArcGIS Image/Map/Feature Services, the USFS EDW, Portal search)
-and `georest.restusgs` (the USGS Water Data OGC API).
+Python clients for geospatial REST APIs, one provider subpackage per API family:
+`georest.restesri` (ArcGIS Image/Map/Feature Services, the USFS EDW, Portal search),
+`georest.restusgs` (the USGS Water Data OGC API), and `georest.restusfs` (Forest Service
+FIA estimates and LCMS summaries). The full generated reference is at
+[georest.io](https://georest.io).
 
 Contribution guidelines live in [CONTRIBUTING.md](../CONTRIBUTING.md); installation and
 a quick start are in the [README](../README.md).
 
 - [georest.restesri](#georestrestesri) — `services`, `edw`, `portal`, `_http`
 - [georest.restusgs](#georestrestusgs) — `waterdata`, `_ogc`, `_http`
+- [georest.restusfs](#georestrestusfs) — `fia`, `vocab`, `lcms`, `lcms_ee`, `align`
 - [Using georest from an MCP server](#using-georest-from-an-mcp-server)
 - [Tests](#tests)
 
@@ -160,6 +163,29 @@ Nothing in it knows about USGS; `waterdata` is a thin layer over it, and another
 ### `_http.py` — restusgs transport (private)
 
 A copy of the restesri transport (`fetch_json`, `fetch_text`, `post_json`, the `georest/<version>` User-Agent, the same RuntimeError/ValueError contract) with what the USGS API needs: a keyword-only `headers=` on every fetcher; `fetch_json_with_headers` returning `(json, response_headers)`; `post_json_body` for a JSON-bodied POST (CQL2-JSON); the error-body excerpt in `RuntimeError` messages; and a retry policy tuned for a tool call inside an agent rather than a batch job — `502/503/504` are retried with a 1 s then 2 s backoff (3 attempts total; `retries=1` disables it), a `429` is retried only when the server's integer `Retry-After` is ≤ 5 s and otherwise raises `RateLimitError` immediately, and every other status (including 500, which from these APIs means "your query failed") raises at once. Worst-case added latency is 3 s. The duplication with `restesri._http` is deliberate for now; the two are candidates for a future shared core.
+
+## georest.restusfs
+
+USDA Forest Service data. Everything is importable from the package
+(`from georest import restusfs as fs`) and returns pandas DataFrames.
+
+| Function | What it does |
+|---|---|
+| `find_attributes(query)` | Search the 752 FIA estimate attributes (`snum`) |
+| `find_evaluations(state)` | FIA evaluations (`wc`); `growth_only=True` for growth, removals and mortality |
+| `find_groupings(query)`, `describe_grouping(label)` | Row/column/page groupings, matched character for character |
+| `estimate(wc, snum, ...)` | An FIA estimate with `se_pct`, `plots` and `unreliable` on every cell; `wc` may be a list for one combined estimate; API warnings in `df.attrs["warnings"]` |
+| `validate(wc, snum)`, `reliable(df)` | Pre-flight check; drop flagged cells |
+| `lcms_summary(product, state=, county=, ...)` | LCMS class areas for a precomputed area, or for `geometry=` through Earth Engine |
+| `lcms_releases()`, `latest_release(product)`, `lcms_classes(product)`, `lcms_vis_params(product)` | Releases, class tables and palettes from the API |
+| `lcms_ee_collection(product)` | The LCMS product as an `ee.ImageCollection` (needs `georest[ee]`) |
+| `compare_area(...)`, `summarize_comparison(result)` | LCMS treed area beside FIA forest-land area, with `COMPARISON_CAVEATS` |
+| `refresh_all()`, `cache_dir()` | Refresh the cached FIA vocabularies (`~/.georest/restusfs`) |
+
+Errors derive from `USFSError`: `UpstreamError` when an API refused the request (including
+LCMS's in-body `ParameterError` and FIADB-API's HTML error pages under HTTP 200),
+`UpstreamUnavailable` when it could not be reached, and `FIAValidationError` for a request
+caught locally before it was sent.
 
 ## Using georest from an MCP server
 

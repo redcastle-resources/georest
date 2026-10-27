@@ -1,17 +1,19 @@
 # georest
 
-Stdlib-only Python clients for geospatial REST APIs — ArcGIS Image, Map and Feature
-Services, the USFS Enterprise Data Warehouse (EDW), ArcGIS Portal search, and the USGS
-Water Data OGC API.
+Python clients for geospatial REST APIs: ArcGIS Image, Map and Feature Services, ArcGIS
+Portal search, the USFS Enterprise Data Warehouse (EDW), Forest Service FIA estimates and
+LCMS summaries, and the USGS Water Data OGC API.
 
-**Zero dependencies.** Everything is `urllib` and `json` from the standard library.
-Nothing to resolve, nothing to pin, nothing to break — it installs cleanly into an
-ArcGIS Pro `arcgispro-py3` clone, a locked-down agency environment, or a bare
-`python:slim` container.
+**One dependency: pandas**, used by the Forest Service clients, which return DataFrames.
+The Esri and USGS clients use only the standard library. Earth Engine is optional, for
+summarizing LCMS over your own polygon.
 
 ```bash
 pip install georest
+pip install "georest[ee]"      # adds Earth Engine for restusfs.lcms_ee
 ```
+
+Documentation: **[georest.io](https://georest.io)**.
 
 ## Quick start
 
@@ -43,6 +45,14 @@ gages = waterdata.search_monitoring_locations(bbox=(-111.7, 36.8, -111.5, 37.0),
 fc = waterdata.get_daily_values("USGS-09380000", "00060",
                                 start="2024-01-01", end="2024-01-31")
 rows = waterdata.to_rows(fc)   # [{"time": "2024-01-01", "value": 9870.0, ...}, ...]
+
+# Forest Service: FIA estimates always come with their sampling error
+from georest import restusfs as fs
+
+fs.find_attributes("carbon")                      # what can be estimated
+wc = fs.find_evaluations("Oregon")["wc"].iloc[0]  # which inventory
+df = fs.estimate(wc, 2, rselected="County code and name")   # se_pct, plots, unreliable
+fs.lcms_summary("Land_Cover", state="Oregon", county="Crook")
 ```
 
 The provider modules are also re-exported at the top level, so `from georest import edw`
@@ -57,8 +67,10 @@ almost nothing.
 | `georest.restesri.portal` | ArcGIS Portal search and service metadata |
 | `georest.restesri.services` | Generic Image/Map/Feature Service queries and raster operations |
 | `georest.restusgs.waterdata` | USGS Water Data OGC API: monitoring locations, daily/continuous values, field measurements, peaks, time-series metadata |
+| `georest.restusfs` | Forest Service FIA estimates (EVALIDator) with sampling errors, LCMS land cover/use/change summaries, and the two side by side |
 
-`restesri` is the Esri/ArcGIS provider and `restusgs` the USGS provider. Each sits under
+`restesri` is the Esri/ArcGIS provider, `restusgs` the USGS provider, and `restusfs` the
+USDA Forest Service provider. Each sits under
 `georest` as a subpackage so providers can be added alongside one another without a
 namespace collision, and each is self-contained — its private `_http` (and, for
 restusgs, `_ogc`) module is its own.
@@ -167,8 +179,8 @@ See [tests/README.md](tests/README.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Requirements
 
-Python 3.9 or newer. The 3.9 floor is deliberate: ArcGIS Pro 3.0–3.2 ships Python
-3.9, and that is squarely this library's audience.
+Python 3.9 or newer, and pandas 1.5 or newer. The 3.9 floor is deliberate: ArcGIS Pro
+3.0–3.2 ships Python 3.9 (with pandas), and that is squarely this library's audience.
 
 ## License
 

@@ -1,4 +1,4 @@
-"""georest — stdlib-only Python clients for geospatial REST APIs.
+"""georest — Python clients for geospatial REST APIs.
 
 Subpackages
 -----------
@@ -8,6 +8,9 @@ restesri
 restusgs
     USGS APIs: the Water Data OGC API (monitoring locations, daily and
     continuous values, field measurements, peaks).
+restusfs
+    USDA Forest Service APIs: FIA estimates with their sampling errors
+    (EVALIDator) and LCMS land cover, land use and change summaries.
 
 Quick start::
 
@@ -27,7 +30,9 @@ nothing::
                                      # georest.restesri.edw
     from georest import waterdata    # georest.restusgs.waterdata
 
-No third-party dependencies — everything is stdlib ``urllib``.
+``restesri`` and ``restusgs`` use only the standard library. ``restusfs``
+returns pandas DataFrames, and its Earth Engine path needs the optional
+``georest[ee]`` extra.
 
 Copyright 2026 Ryan Rock and Ian Housman
 
@@ -43,12 +48,13 @@ from __future__ import annotations
 import importlib
 from typing import TYPE_CHECKING
 
-__version__ = "0.4.0"
+__version__ = "0.5.0.dev0"
 
-__all__ = ["restesri", "edw", "portal", "services", "restusgs", "waterdata", "__version__"]
+__all__ = ["restesri", "edw", "portal", "services", "restusgs", "waterdata", "restusfs",
+           "__version__"]
 
 if TYPE_CHECKING:  # so IDEs, mypy and pyright resolve the re-exports statically
-    from . import restesri, restusgs
+    from . import restesri, restusfs, restusgs
     from .restesri import edw, portal, services
     from .restusgs import waterdata
 
@@ -64,6 +70,7 @@ _LAZY = {
     "services": ".restesri.services",
     "restusgs": ".restusgs",
     "waterdata": ".restusgs.waterdata",
+    "restusfs": ".restusfs",
 }
 
 

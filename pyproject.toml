@@ -12,7 +12,7 @@ build-backend = "hatchling.build"
 [project]
 name = "georest"
 dynamic = ["version"]
-description = "Stdlib-only Python clients for geospatial REST APIs: ArcGIS Image, Map and Feature Services, the USFS Enterprise Data Warehouse, ArcGIS Portal search, and the USGS Water Data OGC API."
+description = "Python clients for geospatial REST APIs: ArcGIS Image, Map and Feature Services, ArcGIS Portal search, the USFS Enterprise Data Warehouse, FIA estimates and LCMS summaries, and the USGS Water Data OGC API."
 readme = "README.md"
 requires-python = ">=3.9"
 
@@ -33,6 +33,7 @@ keywords = [
     "arcgis", "esri", "rest", "gis", "geospatial", "geojson",
     "feature-service", "image-service", "map-service",
     "edw", "usfs", "forest-service", "portal", "agol",
+    "fia", "evalidator", "forest-inventory", "lcms", "land-cover",
     "usgs", "nwis", "water-data", "ogc-api", "ogc-api-features", "hydrology", "streamflow",
 ]
 
@@ -55,10 +56,13 @@ classifiers = [
     "Typing :: Typed",
 ]
 
-# Deliberately empty. Stdlib-only is a stated design goal of this library
-# (see the _http module docstring and tests/README.md) — keep it that way.
-# tests/test_packaging.py enforces it.
-dependencies = []
+# pandas only, for georest.restusfs, which returns DataFrames. restesri and
+# restusgs still use only the standard library, and
+# tests/test_packaging.py holds them to it. Earth Engine is never a core
+# dependency: it is the optional "ee" extra below.
+dependencies = [
+    "pandas>=1.5",
+]
 
 [project.optional-dependencies]
 dev = [
@@ -67,6 +71,9 @@ dev = [
     "ruff>=0.6",
     "build>=1.0",
     "twine>=6.1",                     # >=6.1 uploads PEP 639 (metadata 2.4)
+]
+ee = [
+    "earthengine-api>=1.0",           # restusfs.lcms_ee: LCMS over any geometry
 ]
 examples = [
     "jupyterlab>=4.0",
@@ -78,7 +85,7 @@ Homepage      = "https://github.com/redcastle-resources/georest"
 Repository    = "https://github.com/redcastle-resources/georest"
 Issues        = "https://github.com/redcastle-resources/georest/issues"
 Changelog     = "https://github.com/redcastle-resources/georest/blob/main/CHANGELOG.md"
-Documentation = "https://github.com/redcastle-resources/georest/blob/main/docs/api.md"
+Documentation = "https://georest.io"
 
 [project.scripts]
 georest-check-themes = "georest.restesri.cli.check_themes:main"

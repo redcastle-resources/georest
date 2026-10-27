@@ -110,15 +110,24 @@ class TestCliHelp(unittest.TestCase):
 
 
 class TestNoThirdPartyImports(unittest.TestCase):
-    """Turns the stdlib-only design goal into an enforced invariant."""
+    """restesri and restusgs use only the standard library; restusfs may
+    add pandas, and Earth Engine only inside functions."""
 
     ALLOWED = {
         "__future__", "argparse", "ast", "base64", "collections", "contextlib",
-        "dataclasses", "datetime", "hashlib", "html", "http", "importlib",
-        "json", "os", "pathlib", "re", "secrets", "sys", "threading", "time", "typing",
-        "unittest",
+        "dataclasses", "datetime", "difflib", "hashlib", "html", "http", "importlib",
+        "json", "logging", "math", "os", "pathlib", "re", "secrets", "sys", "threading",
+        "time", "typing", "unittest",
         "urllib", "uuid", "warnings", "webbrowser", "xml", "georest",
     }
+    #: restusfs returns DataFrames, and its LCMS-over-a-geometry path uses
+    #: Earth Engine, the optional "ee" extra.
+    RESTUSFS_EXTRA = {"pandas", "ee"}
+
+    def _allowed_for(self, path):
+        if "restusfs" in path.parts:
+            return self.ALLOWED | self.RESTUSFS_EXTRA
+        return self.ALLOWED
 
     def test_package_imports_only_stdlib(self):
         root = pathlib.Path(georest.__file__).parent
@@ -131,22 +140,39 @@ class TestNoThirdPartyImports(unittest.TestCase):
                     for alias in node.names:
                         top = alias.name.split(".")[0]
                         with self.subTest(file=path.name, module=top):
-                            self.assertIn(top, self.ALLOWED)
+                            self.assertIn(top, self._allowed_for(path))
                 elif isinstance(node, ast.ImportFrom) and node.level == 0:
                     top = (node.module or "").split(".")[0]
                     if top:
                         with self.subTest(file=path.name, module=top):
-                            self.assertIn(top, self.ALLOWED)
+                            self.assertIn(top, self._allowed_for(path))
         self.assertGreaterEqual(checked, 6, "expected to scan the whole package")
 
-    def test_declared_runtime_dependencies_are_empty(self):
+    def test_earth_engine_is_never_imported_at_module_level(self):
+        """ee is optional: importing georest must work without it. So it
+        may only be imported inside a function, never at a module's top."""
+        root = pathlib.Path(georest.__file__).parent
+        for path in sorted(root.rglob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in tree.body:
+                names = []
+                if isinstance(node, ast.Import):
+                    names = [a.name.split(".")[0] for a in node.names]
+                elif isinstance(node, ast.ImportFrom) and node.level == 0:
+                    names = [(node.module or "").split(".")[0]]
+                with self.subTest(file=path.name):
+                    self.assertNotIn("ee", names)
+
+    def test_declared_runtime_dependencies_are_only_pandas(self):
         import importlib.metadata as md
+        import re as _re
         try:
             reqs = md.requires("georest") or []
         except md.PackageNotFoundError:
             self.skipTest("georest is not installed as a distribution")
         runtime = [r for r in reqs if "extra ==" not in r]
-        self.assertEqual(runtime, [], f"unexpected runtime dependencies: {runtime}")
+        names = sorted(_re.split(r"[<>=!~;\s\[]", r, maxsplit=1)[0].lower() for r in runtime)
+        self.assertEqual(names, ["pandas"], f"unexpected runtime dependencies: {runtime}")
 
 
 class TestThemeHelpersMoved(unittest.TestCase):

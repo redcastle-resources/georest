@@ -1,8 +1,9 @@
 # georest tests
 
-Standard-library `unittest`, matching the package's own stdlib-only
-dependencies. `pytest` collects these natively and is what CI runs; either
-runner works locally.
+Mostly standard-library `unittest`; `pytest` collects these natively and is
+what CI runs. The `restusfs` tests ported from geeViz (`test_restusfs.py`,
+`test_restusfs_njson_shape.py`, `test_restusfs_grouping_labels.py`) are pytest
+functions, so run those with pytest; `python -m unittest` does not collect them.
 
 Install first — this is a `src/` layout, so `georest` is not importable from
 the repository root without it. That is deliberate: the suite imports the
