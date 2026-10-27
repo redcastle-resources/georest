@@ -103,7 +103,9 @@ jobs:
       - name: Install the wheel in a clean env and smoke test it
         run: |
           python -m venv /tmp/verify
-          /tmp/verify/bin/python -m pip install --no-index dist/*.whl
+          # The wheel is named by path, so this installs the one just built,
+          # never PyPI's georest; its dependency (pandas) comes from PyPI.
+          /tmp/verify/bin/python -m pip install dist/*.whl
           # cd out of the repo: with a src/ layout nothing can shadow the install,
           # which is the whole point of using one.
           cd /tmp
@@ -117,6 +119,13 @@ jobs:
           print('themes', len(edw._SERVICE_THEMES))
           print('portals', sorted(portal.PORTALS))
           print('collections', len(waterdata.COLLECTIONS))
+          # restusfs ships its FIA catalogs as package data; a wheel missing
+          # them would only fail when a user first searched.
+          from georest import restusfs as fs
+          assert georest.restusfs is fs
+          n = len(fs.find_attributes(''))
+          assert n > 700, n
+          print('fia attributes', n)
           "
           /tmp/verify/bin/georest-check-themes --help
 
