@@ -191,12 +191,15 @@ caught locally before it was sent (`fia.FIAValidationError`).
 
 ## georest.fema
 
-FEMA data, standard library only. Import the module, `from georest.fema import nfhl`,
-and call through it. Points are `lon, lat` in decimal degrees.
+FEMA data. `nfhl` uses only the standard library; `openfema` returns pandas
+DataFrames. Import the module, `from georest.fema import nfhl`, and call through it.
+Points are `lon, lat` in decimal degrees.
 
 | Function | What it does |
 |---|---|
 | `nfhl.flood_zone(lon, lat)` | The flood zone at a point from the effective map: `zone`, `subtype`, `sfha` (in the 1%-annual-chance floodplain), `static_bfe`, `depth`, `units`, `datum`, `dfirm_id`; `mapped=False` where FEMA has no digital map (not "no hazard"); `zones` lists every zone when the point sits on a boundary |
+| `openfema.declarations(state=, fips=, incident_type=, declaration_type=, since=, until=, number=)` | Disaster declarations, one row per declared county (or tribal area) - FEMA's own rows, so a disaster covering 53 counties is 53 rows; complete (pages past OpenFEMA's 10,000-row limit) |
+| `openfema.disasters(...)` | The same, one row per disaster, with `areas`: the distinct declared areas that matched |
 | `nfhl.map_dates(lon, lat)` | When that map took effect: `panel`, `effective`, `revised` (the latest Letter of Map Revision after the panel), `pending_effective` (adopted new maps), `preliminary_issued` (proposed maps); `unchecked` names any lookup that failed, so a `None` there means "could not check", not "none" |
 
 A flood zone is a regulatory designation, not a forecast, and an effective map is not

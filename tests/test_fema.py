@@ -190,6 +190,15 @@ class TransportTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self._run([http_error(500)])
 
+    def test_openfemas_error_list_is_kept_in_the_message(self):
+        body = (b'{"error": [{"code": "OF_OQP_002", "message": '
+                b'"Field \\"bogusField\\" not found"}]}')
+        err = urllib.error.HTTPError("u", 400, "x", {}, io.BytesIO(body))
+        with self.assertRaises(RuntimeError) as ctx:
+            self._run([err])
+        self.assertIn("OF_OQP_002", str(ctx.exception))
+        self.assertIn("bogusField", str(ctx.exception))
+
     def test_a_body_that_is_not_json_is_a_value_error(self):
         with self.assertRaises(ValueError):
             self._run([b"<html>maintenance</html>"])

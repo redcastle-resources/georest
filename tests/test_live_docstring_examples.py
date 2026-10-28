@@ -46,6 +46,7 @@ MODULES = {
     "georest.usfs.align": LIVE_FIA and LIVE_LCMS,
     "georest.usfs.lcms_ee": LIVE_EE,
     "georest.fema.nfhl": LIVE_FEMA,
+    "georest.fema.openfema": LIVE_FEMA,
     "georest.esri.auth": False,   # signs in through a browser
 }
 
