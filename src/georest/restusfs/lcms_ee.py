@@ -107,7 +107,15 @@ PRODUCTS = ("Change", "Land_Cover", "Land_Use")
 
 
 def lcms_asset_id(release: str = "") -> str:
-    """Asset id for a release. Defaults to the current one."""
+    """Asset id for a release. Defaults to the current one.
+
+    Example::
+
+        from georest.restusfs import lcms_ee
+
+        lcms_ee.lcms_asset_id()           # the current release's Earth Engine asset
+        lcms_ee.lcms_asset_id("2024-10")  # an earlier release, to reproduce an old analysis
+    """
     if not release or release == "latest":
         return _CURRENT
     try:
@@ -134,6 +142,15 @@ def lcms_ee_collection(product: str, release: str = "",
     Returns:
         ``ee.ImageCollection`` where each image has a single band named
         after the product and a ``year`` property.
+
+    Example::
+
+        import ee
+        from georest.restusfs import lcms_ee
+
+        ee.Initialize()
+        land_cover = lcms_ee.lcms_ee_collection("Land_Cover")
+        land_cover_2025 = land_cover.filter(ee.Filter.eq("year", 2025)).mosaic()
     """
     ee = _ee()
 
@@ -161,6 +178,15 @@ def lcms_class_properties(product: str, release: str = "") -> dict:
     as a cross-check that the two backends agree about what the pixel
     values mean — if they ever disagree, that is worth knowing loudly
     rather than discovering through a mislabeled map.
+
+    Example::
+
+        import ee
+        from georest.restusfs import lcms_ee
+
+        ee.Initialize()
+        props = lcms_ee.lcms_class_properties("Land_Cover")
+        props["values"], props["palette"], props["names_unreliable"]
     """
     ee = _ee()
 

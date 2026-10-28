@@ -20,10 +20,14 @@ def _cells(kind):
 
 
 class ExampleNotebookTest(unittest.TestCase):
-    def test_it_imports_the_package_not_a_submodule(self):
+    def test_calls_name_their_module_like_the_other_providers(self):
+        """fia.estimate and lcms.lcms_summary carry their module, as
+        edw.search_edw_services and waterdata.get_daily_values do. The flat
+        fs.estimate spelling came from geeViz's fsInsights."""
         code = "\n".join(_cells("code"))
-        self.assertIn("from georest import restusfs as fs", code)
-        self.assertNotRegex(code, r"from georest\.restusfs import \w+")
+        self.assertIn("from georest.restusfs import", code)
+        self.assertRegex(code, r"\bfia\.estimate\(")
+        self.assertNotRegex(code, r"\bfs\.\w+")
 
     def test_nothing_points_back_at_geeviz_fsinsights(self):
         everything = "\n".join(_cells("code") + _cells("markdown"))
@@ -32,7 +36,7 @@ class ExampleNotebookTest(unittest.TestCase):
 
     def test_it_shows_a_combined_estimate_across_states(self):
         code = "\n".join(_cells("code"))
-        self.assertRegex(code, r"fs\.estimate\(\[[^\]]+\]")
+        self.assertRegex(code, r"fia\.estimate\(\[[^\]]+\]")
 
     def test_no_output_is_cut_short(self):
         code = "\n".join(_cells("code"))

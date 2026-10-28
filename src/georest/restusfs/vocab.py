@@ -86,6 +86,12 @@ def cache_dir() -> Path:
     in ``~/.georest``. Overridable with ``GEOREST_RESTUSFS_CACHE`` for
     tests and for locked-down machines where the home directory is not
     writable.
+
+    Example::
+
+        from georest.restusfs import vocab
+
+        vocab.cache_dir()   # Path to ~/.georest/restusfs in your home directory
     """
     override = os.environ.get("GEOREST_RESTUSFS_CACHE", "").strip()
     return Path(override) if override else Path.home() / ".georest" / "restusfs"
@@ -165,6 +171,13 @@ def load_catalog(name: str, *, refresh: bool = False) -> list[dict]:
     Returns:
         List of records. Empty only when every source failed, which
         means discovery degrades rather than breaking.
+
+    Example::
+
+        from georest.restusfs import vocab
+
+        rows = vocab.load_catalog("wc")          # every FIA evaluation, as dicts
+        len(rows), sorted(rows[0])[:4]
     """
     name = FIA_CATALOG_ALIASES.get(name, name)
     if name not in FIA_CATALOGS:
@@ -224,6 +237,12 @@ def refresh_all(*, quiet: bool = False) -> dict[str, int]:
 
     The escape hatch for "a new evaluation just dropped and I do not want
     to wait out the TTL". Normal use should never need it.
+
+    Example::
+
+        from georest.restusfs import vocab
+
+        vocab.refresh_all()   # prints each catalog's record count; returns {name: count}
     """
     out: dict[str, int] = {}
     for name in FIA_CATALOGS:
@@ -250,6 +269,12 @@ def _score(text: str, terms: list[str]) -> int:
             score += 1
             if f" {term} " in f" {t} " or t.startswith(term):
                 score += 2
+    # The whole query as a phrase outranks the same words scattered.
+    # Without this, "area of forest land" ranked four "Area change of
+    # forest land ..." attributes above "Area of forest land, in acres",
+    # because every word matches all five.
+    if score and len(terms) > 1 and " ".join(terms) in t:
+        score += 3 * len(terms)
     return score
 
 
@@ -282,6 +307,16 @@ def find_attributes(query: str = "", *, land_basis: str = "",
         attribute numbers upstream and collapsing them would hide a real
         property of the catalog. Where descriptions match on every
         field, either number should produce the same estimate.
+
+    Example::
+
+        from georest.restusfs import fia
+
+        # Every carbon attribute measured on forest land, best match first
+        fia.find_attributes("carbon", land_basis="Forest land")
+
+        # Attributes that need growth accounting (growth, removals, mortality)
+        fia.find_attributes("mortality", eval_typ="EXPMORT")
     """
     rows = load_catalog("snum")
     terms = [t for t in query.lower().split() if t]
@@ -312,7 +347,14 @@ def find_attributes(query: str = "", *, land_basis: str = "",
 
 
 def get_attribute(snum: int) -> dict | None:
-    """Full record for one attribute number, or None."""
+    """Full record for one attribute number, or None.
+
+    Example::
+
+        from georest.restusfs import fia
+
+        fia.get_attribute(2)["ATTRIBUTE_DESCR"]   # 'Area of forest land, in acres'
+    """
     return _lookup("snum", snum)
 
 
@@ -327,6 +369,12 @@ def find_groupings(query: str = "", *, limit: int | None = None) -> Any:
         query: Free text matched against the label and database column.
         limit: Return at most this many rows. By default every match is
             returned, best first.
+
+    Example::
+
+        from georest.restusfs import fia
+
+        fia.find_groupings("owner")   # labels to pass as rselected= / cselected=
     """
     rows = load_catalog("rselected")
     terms = [t for t in query.lower().split() if t]
@@ -349,7 +397,14 @@ def find_groupings(query: str = "", *, limit: int | None = None) -> Any:
 
 
 def grouping_labels() -> list[str]:
-    """Every grouping label, exactly as ``rselected`` and friends need it."""
+    """Every grouping label, exactly as ``rselected`` and friends need it.
+
+    Example::
+
+        from georest.restusfs import vocab
+
+        "Forest type group" in vocab.grouping_labels()   # True
+    """
     return [str(r.get("LABEL_VAR") or "") for r in load_catalog("rselected")]
 
 
@@ -360,6 +415,13 @@ def describe_grouping(label: str) -> str:
     enumerates what each code value means. It is the difference between
     a column of integers and a column you can interpret, so it is worth
     surfacing rather than leaving buried in the catalog.
+
+    Example::
+
+        from georest.restusfs import fia
+
+        # What each code of a grouping means, as plain text
+        fia.describe_grouping("Ownership group - Major")
     """
     for r in load_catalog("rselected"):
         if str(r.get("LABEL_VAR", "")).lower() == label.lower():
@@ -383,6 +445,14 @@ def find_evaluations(state: str = "", *, most_recent: bool = True,
             growth, removals, and mortality attribute.
         limit: Return at most this many rows. By default every match is
             returned.
+
+    Example::
+
+        from georest.restusfs import fia
+
+        fia.find_evaluations("Oregon")                     # the current inventory
+        fia.find_evaluations("Oregon", most_recent=False)  # and every earlier one
+        fia.find_evaluations("Oregon", growth_only=True)   # usable for growth and mortality
     """
     rows = load_catalog("wc")
     hits = []
@@ -409,7 +479,14 @@ def find_evaluations(state: str = "", *, most_recent: bool = True,
 
 
 def get_evaluation(wc: int) -> dict | None:
-    """Full record for one evaluation group, or None."""
+    """Full record for one evaluation group, or None.
+
+    Example::
+
+        from georest.restusfs import fia
+
+        fia.get_evaluation(412024)["REPORT_YEAR_NM"]   # '2015;2016;...;2024'
+    """
     return _lookup("wc", wc)
 
 

@@ -15,8 +15,7 @@ import sys
 
 import pytest
 
-from georest import restusfs as fs  # noqa: E402
-from georest.restusfs import fia, lcms, vocab  # noqa: E402
+from georest.restusfs import align, fia, lcms, vocab  # noqa: E402
 
 # ── Bundled vocabularies ─────────────────────────────────────────────────
 
@@ -47,45 +46,45 @@ def test_unknown_catalog_rejected():
 # ── Search ───────────────────────────────────────────────────────────────
 
 def test_find_attributes_matches_and_filters():
-    df = fs.find_attributes("carbon", limit=100)
+    df = fia.find_attributes("carbon", limit=100)
     assert len(df) > 0
     assert df["description"].str.contains("arbon").any()
 
-    forest_only = fs.find_attributes("carbon", land_basis="Forest land", limit=100)
+    forest_only = fia.find_attributes("carbon", land_basis="Forest land", limit=100)
     assert set(forest_only["land_basis"]) <= {"Forest land"}
 
 
 def test_find_attributes_surfaces_units_and_eval_type():
     """The two fields that decide whether a query is even valid."""
-    df = fs.find_attributes("area of forest land", limit=5)
+    df = fia.find_attributes("area of forest land", limit=5)
     assert "units" in df.columns and "eval_typ" in df.columns
     assert df["eval_typ"].notna().all()
 
 
 def test_find_evaluations_growth_filter():
     """growth_only must actually restrict to growth-accounting evaluations."""
-    df = fs.find_evaluations(growth_only=True, limit=200)
+    df = fia.find_evaluations(growth_only=True, limit=200)
     assert len(df) > 0
     assert set(df["growth_acct"].str.upper()) == {"Y"}
 
 
 def test_describe_grouping_returns_prose_not_html():
-    text = fs.describe_grouping("Aspect")
+    text = fia.describe_grouping("Aspect")
     assert "aspect" in text.lower()
     assert "<" not in text, "PRC_METADATA HTML should be stripped"
 
 
 def test_describe_grouping_unknown_is_helpful():
-    assert "find_groupings" in fs.describe_grouping("no such grouping")
+    assert "find_groupings" in fia.describe_grouping("no such grouping")
 
 
 # ── Local validation ─────────────────────────────────────────────────────
 
 def test_validate_rejects_unknown_ids():
-    with pytest.raises(fs.FIAValidationError):
-        fs.validate(wc=999999, snum=2)
-    with pytest.raises(fs.FIAValidationError):
-        fs.validate(wc=12025, snum=999999)
+    with pytest.raises(fia.FIAValidationError):
+        fia.validate(wc=999999, snum=2)
+    with pytest.raises(fia.FIAValidationError):
+        fia.validate(wc=12025, snum=999999)
 
 
 def test_validate_catches_growth_attribute_on_nongrowth_evaluation():
@@ -101,14 +100,14 @@ def test_validate_catches_growth_attribute_on_nongrowth_evaluation():
     if not growth or not nongrowth:
         pytest.skip("no such pairing in the bundled catalogs")
 
-    with pytest.raises(fs.FIAValidationError) as exc:
-        fs.validate(wc=nongrowth[0]["EVAL_GRP"], snum=growth[0]["ATTRIBUTE_NBR"])
+    with pytest.raises(fia.FIAValidationError) as exc:
+        fia.validate(wc=nongrowth[0]["EVAL_GRP"], snum=growth[0]["ATTRIBUTE_NBR"])
     assert "growth" in str(exc.value).lower()
 
 
 def test_bad_forest_definition_rejected_before_network():
-    with pytest.raises(fs.FIAValidationError):
-        fs.estimate(wc=12025, snum=2, forest_definition="whatever")
+    with pytest.raises(fia.FIAValidationError):
+        fia.estimate(wc=12025, snum=2, forest_definition="whatever")
 
 
 # ── Reliability flagging ─────────────────────────────────────────────────
@@ -185,7 +184,7 @@ def test_parsed_frame_carries_provenance():
 
 def test_reliable_filters_without_mutating():
     df = fia._to_frame(_SAMPLE, max_se_pct=30.0, min_plots=30)
-    kept = fs.reliable(df)
+    kept = fia.reliable(df)
     assert len(kept) == 1 and len(df) == 2
 
 
@@ -216,11 +215,11 @@ def test_lcms_requires_a_parent_for_child_areas(stub_releases):
     """county needs state, district needs forest — caught locally, with no
     network: the release list is stubbed, since the product check runs first."""
     with pytest.raises(ValueError):
-        fs.lcms_summary(county="Crook")
+        align.lcms_summary(county="Crook")
     with pytest.raises(ValueError):
-        fs.lcms_summary(district="Some District")
+        align.lcms_summary(district="Some District")
     with pytest.raises(ValueError):
-        fs.lcms_summary()
+        align.lcms_summary()
 
 
 # ── Error dialects ───────────────────────────────────────────────────────
@@ -579,11 +578,11 @@ def test_duplicate_attribute_descriptions_are_both_returned():
     snum 209 and 956 are identical across every field. Collapsing them
     would conceal a real property of the upstream catalog.
     """
-    a209, a956 = fs.get_attribute(209), fs.get_attribute(956)
+    a209, a956 = fia.get_attribute(209), fia.get_attribute(956)
     assert a209 and a956
     assert a209["ATTRIBUTE_DESCR"] == a956["ATTRIBUTE_DESCR"]
     assert a209["EVAL_TYP"] == a956["EVAL_TYP"]
 
-    hits = fs.find_attributes("net growth sawlog", limit=200)
+    hits = fia.find_attributes("net growth sawlog", limit=200)
     nums = set(hits["snum"])
     assert {209, 956} <= nums, "both duplicates should be searchable"

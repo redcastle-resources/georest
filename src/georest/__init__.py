@@ -50,12 +50,13 @@ from typing import TYPE_CHECKING
 
 __version__ = "0.5.0.dev0"
 
-__all__ = ["restesri", "edw", "portal", "services", "restusgs", "waterdata", "restusfs",
-           "__version__"]
+__all__ = ["restesri", "edw", "portal", "services", "restusgs", "waterdata",
+           "restusfs", "fia", "lcms", "__version__"]
 
 if TYPE_CHECKING:  # so IDEs, mypy and pyright resolve the re-exports statically
     from . import restesri, restusfs, restusgs
     from .restesri import edw, portal, services
+    from .restusfs import fia, lcms
     from .restusgs import waterdata
 
 #: Names resolved on first access by :func:`__getattr__`, mapped to the
@@ -71,6 +72,8 @@ _LAZY = {
     "restusgs": ".restusgs",
     "waterdata": ".restusgs.waterdata",
     "restusfs": ".restusfs",
+    "fia": ".restusfs.fia",
+    "lcms": ".restusfs.lcms",
 }
 
 

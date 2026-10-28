@@ -166,26 +166,28 @@ A copy of the restesri transport (`fetch_json`, `fetch_text`, `post_json`, the `
 
 ## georest.restusfs
 
-USDA Forest Service data. Everything is importable from the package
-(`from georest import restusfs as fs`) and returns pandas DataFrames.
+USDA Forest Service data, in five modules: `fia` (estimates, and the searches that find
+what to estimate), `lcms`, `lcms_ee` (needs `georest[ee]`), `align` and `vocab` (the
+cached FIA catalogs). Import the module you need, `from georest.restusfs import fia`, and
+call through it, `fia.estimate(...)`. Tabular results are pandas DataFrames.
 
 | Function | What it does |
 |---|---|
-| `find_attributes(query)` | Search the 752 FIA estimate attributes (`snum`) |
-| `find_evaluations(state)` | FIA evaluations (`wc`); `growth_only=True` for growth, removals and mortality |
-| `find_groupings(query)`, `describe_grouping(label)` | Row/column/page groupings, matched character for character |
-| `estimate(wc, snum, ...)` | An FIA estimate with `se_pct`, `plots` and `unreliable` on every cell; `wc` may be a list for one combined estimate; API warnings in `df.attrs["warnings"]` |
-| `validate(wc, snum)`, `reliable(df)` | Pre-flight check; drop flagged cells |
-| `lcms_summary(product, state=, county=, ...)` | LCMS class areas for a precomputed area, or for `geometry=` through Earth Engine |
-| `lcms_releases()`, `latest_release(product)`, `lcms_classes(product)`, `lcms_vis_params(product)` | Releases, class tables and palettes from the API |
-| `lcms_ee_collection(product)` | The LCMS product as an `ee.ImageCollection` (needs `georest[ee]`) |
-| `compare_area(...)`, `summarize_comparison(result)` | LCMS treed area beside FIA forest-land area, with `COMPARISON_CAVEATS` |
-| `refresh_all()`, `cache_dir()` | Refresh the cached FIA vocabularies (`~/.georest/restusfs`) |
+| `fia.find_attributes(query)` | Search the 752 FIA estimate attributes (`snum`) |
+| `fia.find_evaluations(state)` | FIA evaluations (`wc`); `growth_only=True` for growth, removals and mortality |
+| `fia.find_groupings(query)`, `fia.describe_grouping(label)` | Row/column/page groupings, matched character for character |
+| `fia.estimate(wc, snum, ...)` | An FIA estimate with `se_pct`, `plots` and `unreliable` on every cell; `wc` may be a list for one combined estimate; API warnings in `df.attrs["warnings"]` |
+| `fia.validate(wc, snum)`, `fia.reliable(df)` | Pre-flight check; drop flagged cells |
+| `lcms.lcms_summary(product, state=, county=, ...)` | LCMS class areas for a precomputed area, or for `geometry=` through Earth Engine |
+| `lcms.lcms_releases()`, `lcms.latest_release(product)`, `lcms.lcms_classes(product)`, `lcms.lcms_vis_params(product)` | Releases, class tables and palettes from the API |
+| `lcms_ee.lcms_ee_collection(product)` | The LCMS product as an `ee.ImageCollection` (needs `georest[ee]`) |
+| `align.compare_area(...)`, `align.summarize_comparison(result)` | LCMS treed area beside FIA forest-land area, with `align.COMPARISON_CAVEATS` |
+| `vocab.refresh_all()`, `vocab.cache_dir()` | Refresh the cached FIA vocabularies (`~/.georest/restusfs`) |
 
 Errors derive from `USFSError`: `UpstreamError` when an API refused the request (including
 LCMS's in-body `ParameterError` and FIADB-API's HTML error pages under HTTP 200),
 `UpstreamUnavailable` when it could not be reached, and `FIAValidationError` for a request
-caught locally before it was sent.
+caught locally before it was sent (`fia.FIAValidationError`).
 
 ## Using georest from an MCP server
 

@@ -12,9 +12,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `fsInsights`:
   - `fia`: FIA estimates from FIADB-API (EVALIDator) with `se_pct` and `plots` on every
     cell and thin cells flagged `unreliable`, plus local validation of attribute,
-    evaluation and grouping before the request is sent.
-  - `vocab`: searchable FIA attributes, evaluations and groupings, cached under
-    `~/.georest/restusfs` (`GEOREST_RESTUSFS_CACHE` to move it) with a bundled snapshot.
+    evaluation and grouping before the request is sent; and the searches that find what
+    to estimate (`fia.find_attributes`, `fia.find_evaluations`, `fia.find_groupings`).
+  - `vocab`: the FIA catalogs behind those searches, cached under `~/.georest/restusfs`
+    (`GEOREST_RESTUSFS_CACHE` to move it) with a bundled snapshot.
+  Use it like the other providers, through the module: `from georest.restusfs import fia`,
+  then `fia.estimate(...)`. The package itself exports only its modules and the shared
+  error classes; `georest.fia` and `georest.lcms` are top-level aliases.
   - `lcms`: LCMS land cover, land use and change summaries for precomputed areas, with
     visualization parameters taken from the API.
   - `lcms_ee`: LCMS over any geometry through Earth Engine (optional, `georest[ee]`).
@@ -24,6 +28,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Warnings FIADB-API attaches to an estimate are returned in `df.attrs["warnings"]` and
   logged.
 - An `ee` extra, `pip install "georest[ee]"`.
+- An `Example::` section in the docstring of every public function, and
+  `tests/test_live_docstring_examples.py`, which runs every one of them against the live
+  services (behind the usual switches, plus new `FIA_LIVE`, `LCMS_LIVE` and `EE_LIVE`) and
+  checks offline that each one compiles.
+- Guide notebooks that each answer one question with interactive charts and maps, run before
+  they are saved so their results show without running them: `guide_forest_inventory`
+  (FIA estimates and their uncertainty), `guide_fire_history` (EDW and MTBS),
+  `guide_imagery_services` (LCMS change from an ArcGIS image service) and
+  `guide_streamflow` (USGS Water Data). `pip install "georest[examples]"` adds Plotly and
+  Folium. `tests/test_example_guides.py` checks they are saved clean.
 
 ### Changed
 
@@ -33,6 +47,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `find_attributes`, `find_groupings` and `find_evaluations` return every match, best
   first, instead of the first 25 (`limit=` is still accepted); long `strFilter` values are
   sent by POST; and the error base class is `USFSError`.
+- FIA search ranks an attribute whose description contains the whole query above ones that
+  only share its words: `fia.find_attributes("area of forest land")` now leads with
+  attribute 2, "Area of forest land, in acres".
+
+### Fixed
+
+- `portal.searchPortal` and `portal.getServiceMetadata` docstring examples began with
+  `import portal`, which cannot work after `pip install georest`, and used a made-up portal
+  and placeholder service URLs. They now run as written.
 
 ## [0.4.0] - 2026-10-04
 

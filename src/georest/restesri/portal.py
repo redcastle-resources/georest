@@ -413,7 +413,7 @@ def searchPortal(
 
     Example::
 
-        import portal
+        from georest.restesri import portal
 
         # Search IIPP for NAIP imagery (default portal)
         results = portal.searchPortal("naip 2023", limit=10)
@@ -423,9 +423,9 @@ def searchPortal(
         # ArcGIS Online
         results = portal.searchPortal("wildfire perimeter", portal="agol")
 
-        # Custom Enterprise portal
-        results = portal.searchPortal("hydrology",
-                                      portal="https://gis.mystate.gov/portal")
+        # Any ArcGIS Online organization or Enterprise portal, by its URL
+        results = portal.searchPortal("active fire",
+                                      portal="https://nasa.maps.arcgis.com")
 
         # Raw portal query DSL (bypasses data_only and filters)
         results = portal.searchPortal("", raw_q='type:"Feature Service" owner:USGS')
@@ -574,14 +574,18 @@ def getServiceMetadata(url: str, token: str | None = None) -> dict[str, Any]:
 
     Example::
 
-        import portal
+        from georest.restesri import portal
 
-        meta = portal.getServiceMetadata("https://.../ImageServer")
+        meta = portal.getServiceMetadata(
+            "https://imagery.geoplatform.gov/iipp/rest/services/Vegetation/"
+            "USFS_EDW_LCMS_AnnualChange_CONUS/ImageServer")
         print(meta["name"])
         print(meta["extent"])
 
         # FeatureServer layer 0
-        meta = portal.getServiceMetadata("https://.../FeatureServer/0")
+        meta = portal.getServiceMetadata(
+            "https://sampleserver6.arcgisonline.com/arcgis/rest/services/"
+            "Earthquakes_Since1970/FeatureServer/0")
         print([f["name"] for f in meta.get("fields", [])])
     """
     clean_url = url.rstrip("/")

@@ -59,6 +59,15 @@ requires_live_usgs = unittest.skipUnless(
     "network test; set USGS_LIVE=1 (or EDW_LIVE=1) to enable",
 )
 
+#: `restusfs` talks to two more servers: FIADB-API (apps.fs.usda.gov) and the
+#: LCMS API (lcms-dashboard.fs2c.usda.gov), each with its own uptime.
+LIVE_FIA = os.environ.get("FIA_LIVE", "").lower() in _TRUTHY or LIVE
+LIVE_LCMS = os.environ.get("LCMS_LIVE", "").lower() in _TRUTHY or LIVE
+
+#: Earth Engine examples need credentials and `pip install "georest[ee]"`,
+#: so EDW_LIVE does not turn them on.
+LIVE_EE = os.environ.get("EE_LIVE", "").lower() in _TRUTHY
+
 def load_layer_cache() -> dict[str, list[dict]]:
     """Real MapServer layer trees captured from the live catalog.
 

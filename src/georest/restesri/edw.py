@@ -287,6 +287,14 @@ def theme_drift(services) -> dict[str, list[str]]:
         orphaned — theme entries whose service is gone from the catalog.
         bad_theme / missing_desc — malformed entries.
         non_mapserver — informational; not drift.
+
+    Example::
+
+        from georest.restesri import edw
+
+        # Compare the live catalog with georest's theme table (what
+        # georest-check-themes reports)
+        edw.theme_drift(edw.search_edw_services())
     """
     mapservers = {s["name"] for s in services if s.get("type") == "MapServer"}
     all_names = {s["name"] for s in services}
@@ -339,6 +347,15 @@ def search_edw_services(query: str = "", theme: str = "") -> list[dict[str, str]
 
     Returns a list of dicts with keys: name, type, url, theme, description.
     If both query and theme are empty, returns all services.
+
+    Example::
+
+        from georest.restesri import edw
+
+        for s in edw.search_edw_services("fire"):          # by keyword
+            print(s["name"], "-", s["description"])
+
+        edw.search_edw_services(theme="recreation")         # or by theme
     """
     data = fetch_json(EDW_BASE_URL, {"f": "pjson"})
     services = data.get("services", [])
@@ -427,6 +444,13 @@ def get_service_info(service_name: str) -> dict[str, Any]:
         Note there is no geometryType here: the MapServer catalog's `layers`
         array doesn't carry it. Use get_layer_info(service_name, layer_id)
         for a layer's geometryType and fields.
+
+    Example::
+
+        from georest.restesri import edw
+
+        info = edw.get_service_info("EDW_MTBS_01")
+        [(layer["id"], layer["name"]) for layer in info["layers"]]
     """
     url = f"{EDW_BASE_URL}/{service_name}/MapServer"
     data = fetch_json(url, {"f": "pjson"})
@@ -526,6 +550,13 @@ def get_layer_roles(service_name: str) -> list[dict[str, Any]]:
 
     Raises:
         RuntimeError: if the service errors, or returns no layers at all.
+
+    Example::
+
+        from georest.restesri import edw
+
+        for layer in edw.get_layer_roles("EDW_ForestSystemBoundaries_01"):
+            print(layer["id"], layer["role"], layer["name"])
     """
     url = f"{EDW_BASE_URL}/{service_name}/MapServer"
     data = fetch_json(url, {"f": "pjson"})
@@ -602,6 +633,12 @@ def get_detail_layers(service_name: str) -> list[dict[str, Any]]:
 
     Use get_layer_roles() directly when you need to see what was set aside
     and why; this function reports only what survived.
+
+    Example::
+
+        from georest.restesri import edw
+
+        [layer["name"] for layer in edw.get_detail_layers("EDW_ForestSystemBoundaries_01")]
     """
     return [
         lyr for lyr in get_layer_roles(service_name)
@@ -622,6 +659,13 @@ def get_layer_info(service_name: str, layer_id: int) -> dict[str, Any]:
         supported operations, e.g. ["Map", "Query", "Data"]),
         advancedQueryCapabilities (dict of supportsX booleans, e.g.
         supportsQueryAnalytic, supportsStatistics — varies by service).
+
+    Example::
+
+        from georest.restesri import edw
+
+        layer = edw.get_layer_info("EDW_MTBS_01", 63)   # Burned Area Boundaries (All Years)
+        [f["name"] for f in layer["fields"]]
     """
     url = f"{EDW_BASE_URL}/{service_name}/MapServer/{layer_id}"
     data = fetch_json(url, {"f": "pjson"})
@@ -714,6 +758,13 @@ def get_layer_metadata(
     Raises:
         RuntimeError: If the request fails or the response isn't valid XML
             (some layers have no metadata document configured).
+
+    Example::
+
+        from georest.restesri import edw
+
+        meta = edw.get_layer_metadata("EDW_MTBS_01", 63)
+        meta["title"], meta["abstract"]
     """
     url = f"{EDW_BASE_URL}/{service_name}/MapServer/{layer_id}/metadata"
     raw = fetch_text(url)
@@ -840,6 +891,23 @@ def query_features(
         this function automatically falls back to fetching the matching
         object IDs (which isn't subject to the same limitation) and then
         re-fetching features by ID with a plain attribute filter.
+
+    Example::
+
+        from georest.restesri import edw
+
+        # One fire's perimeter, as GeoJSON
+        cameron = edw.query_features("EDW_MTBS_01", 63,
+                                     where="fire_name = 'CAMERON PEAK'",
+                                     out_fields="fire_name,year,acres")
+
+        # Every MTBS fire inside a bounding box (west, south, east, north)
+        box = edw.query_features("EDW_MTBS_01", 63, geometry="-106.0,40.4,-105.4,40.9",
+                                 out_fields="fire_name,year,acres")
+        len(box["features"])
+
+        # Just the count
+        edw.query_features("EDW_MTBS_01", 63, where="year = 2020", return_count_only=True)
     """
     url = f"{EDW_BASE_URL}/{service_name}/MapServer/{layer_id}/query"
 
@@ -1079,6 +1147,8 @@ def query_features_analytic(
 
     Example::
 
+        from georest.restesri.edw import query_features_analytic
+
         # Largest timber harvest per ranger district on one forest
         # (layer 8 = "Timber Harvest (All Years)")
         result = query_features_analytic(
@@ -1184,6 +1254,8 @@ def top_n_per_group(
         all satisfy rank_val <= 1).
 
     Example::
+
+        from georest.restesri.edw import top_n_per_group
 
         # Largest timber harvest per ranger district on one forest
         # (layer 8 = "Timber Harvest (All Years)")
@@ -1308,6 +1380,17 @@ def query_features_with_pagination(
     doesn't guarantee a stable row order across requests absent
     orderByFields, so a layer that reorders between pages could in principle
     duplicate or skip rows.
+
+    Example::
+
+        from georest.restesri import edw
+
+        # More than the server's 2,000-record page: 4,000 MTBS fire locations
+        # (layer 62, points), fetched a page at a time
+        fires = edw.query_features_with_pagination("EDW_MTBS_01", 62,
+                                                   out_fields="fire_name,ig_date,acres",
+                                                   max_features=4000)
+        len(fires["features"])   # 4000
     """
     all_features = []
     offset = 0

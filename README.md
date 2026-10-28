@@ -47,12 +47,12 @@ fc = waterdata.get_daily_values("USGS-09380000", "00060",
 rows = waterdata.to_rows(fc)   # [{"time": "2024-01-01", "value": 9870.0, ...}, ...]
 
 # Forest Service: FIA estimates always come with their sampling error
-from georest import restusfs as fs
+from georest.restusfs import fia, lcms
 
-fs.find_attributes("carbon")                      # what can be estimated
-wc = fs.find_evaluations("Oregon")["wc"].iloc[0]  # which inventory
-df = fs.estimate(wc, 2, rselected="County code and name")   # se_pct, plots, unreliable
-fs.lcms_summary("Land_Cover", state="Oregon", county="Crook")
+fia.find_attributes("carbon")                      # what can be estimated
+wc = fia.find_evaluations("Oregon")["wc"].iloc[0]  # which inventory
+df = fia.estimate(wc, 2, rselected="County code and name")   # se_pct, plots, unreliable
+lcms.lcms_summary("Land_Cover", state="Oregon", county="Crook")
 ```
 
 The provider modules are also re-exported at the top level, so `from georest import edw`
@@ -76,7 +76,8 @@ namespace collision, and each is self-contained — its private `_http` (and, fo
 restusgs, `_ogc`) module is its own.
 
 Full per-function reference: **[docs/api.md](docs/api.md)**.
-Runnable notebooks: **[examples/](examples/)**.
+Runnable notebooks: **[examples/](examples/)**. The `guide_*` notebooks each answer one question
+with interactive charts and maps; the others walk through one module function by function.
 
 ## Signing in to ArcGIS Online / Portal
 

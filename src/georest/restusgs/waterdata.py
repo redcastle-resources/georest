@@ -122,6 +122,14 @@ def set_api_key(key: str | None) -> None:
     Takes precedence over the environment variables; an explicit ``api_key=``
     argument on a call still wins. ``None`` (or ``""``) clears it, so
     resolution falls back to the environment again.
+
+    Example::
+
+        import os
+        from georest.restusgs import waterdata
+
+        # Once at startup, from wherever you keep secrets; every call then uses it
+        waterdata.set_api_key(os.environ.get("USGS_API_KEY"))
     """
     global _API_KEY
     _API_KEY = key or None
@@ -260,6 +268,12 @@ def list_collections(*, api_key: str | None = None, timeout: int | None = None) 
     Raises:
         RuntimeError: On an HTTP or connection failure (``RateLimitError`` on
             429). ``ValueError`` if the body isn't JSON.
+
+    Example::
+
+        from georest.restusgs import waterdata
+
+        [c["id"] for c in waterdata.list_collections()]
     """
     return _ogc.list_collections(BASE_URL, headers=_headers(api_key), timeout=timeout)
 
@@ -269,7 +283,14 @@ def get_queryables(
 ) -> dict:
     """``{property_name: json_schema}`` for a collection. Every key is a valid
     direct filter for :func:`get_items` and the helpers built on it —
-    ``daily`` alone has ~55, including every site attribute."""
+    ``daily`` alone has ~55, including every site attribute.
+
+    Example::
+
+        from georest.restusgs import waterdata
+
+        sorted(waterdata.get_queryables("daily"))   # every property you can filter daily values on
+    """
     return _ogc.get_queryables(BASE_URL, collection, headers=_headers(api_key), timeout=timeout)
 
 
@@ -339,6 +360,15 @@ def get_items(
             A 429 the server won't let us wait out raises the
             :class:`RateLimitError` subclass, whose ``retry_after`` says how
             long it asked for.
+
+    Example::
+
+        from georest.restusgs import waterdata
+
+        # Any collection with any filter: stream sites in Arizona's Coconino County
+        sites = waterdata.get_items("monitoring-locations", state_code="04",
+                                    county_code="005", site_type_code="ST", max_items=20)
+        len(sites["features"])
     """
     return _ogc.get_items(
         BASE_URL,
@@ -399,6 +429,15 @@ def search_monitoring_locations(
     Returns:
         A FeatureCollection of site Points; each Feature's ``id`` is the
         ``monitoring_location_id`` (``"USGS-09380000"``).
+
+    Example::
+
+        from georest.restusgs import waterdata
+
+        # Stream gages in a box (west, south, east, north) around Lees Ferry, Arizona
+        sites = waterdata.search_monitoring_locations(bbox=(-111.7, 36.8, -111.5, 37.0),
+                                                      site_type_code="ST")
+        [(f["id"], f["properties"]["monitoring_location_name"]) for f in sites["features"]]
     """
     site, site_clause = _eq_or_in("monitoring_location_id", monitoring_location_id, _site_id)
     kind, kind_clause = _eq_or_in("site_type_code", site_type_code)
@@ -435,6 +474,13 @@ def get_monitoring_location(
     Raises:
         RuntimeError: A 404 for an unknown id surfaces as
             ``Request failed (404): …``.
+
+    Example::
+
+        from georest.restusgs import waterdata
+
+        site = waterdata.get_monitoring_location("USGS-09380000")
+        site["properties"]["monitoring_location_name"], site["geometry"]["coordinates"]
     """
     return _ogc.get_item(
         BASE_URL,
@@ -466,6 +512,14 @@ def get_time_series_metadata(
     ``begin``/``end`` dates, unit and ``time_series_id``. Use it to discover
     which ``parameter_code`` values a site actually reports before pulling
     values.
+
+    Example::
+
+        from georest.restusgs import waterdata
+
+        # What this gage measures, and over which dates
+        series = waterdata.get_time_series_metadata(monitoring_location_id="USGS-09380000")
+        sorted({f["properties"]["parameter_name"] for f in series["features"]})
     """
     site, site_clause = _eq_or_in("monitoring_location_id", monitoring_location_id, _site_id)
     param, param_clause = _eq_or_in("parameter_code", parameter_code)
@@ -571,8 +625,11 @@ def get_daily_values(
 
     Example::
 
-        fc = get_daily_values("USGS-09380000", "00060", start="2024-01-01", end="2024-01-31")
-        rows = to_rows(fc)   # [{"time": "2024-01-01", "value": 9870.0, ...}, ...]
+        from georest.restusgs import waterdata
+
+        fc = waterdata.get_daily_values("USGS-09380000", "00060",
+                                        start="2024-01-01", end="2024-01-31")
+        rows = waterdata.to_rows(fc)   # [{"time": "2024-01-01", "value": 9870.0, ...}, ...]
     """
     return _series(
         "daily",
@@ -618,6 +675,16 @@ def get_continuous_values(
 
     Sorted by ``(time_series_id, time)``. Other arguments as for
     :func:`get_daily_values` (there is no ``statistic_id`` here).
+
+    Example::
+
+        from georest.restusgs import waterdata
+
+        # Fifteen-minute discharge readings for one day
+        fc = waterdata.get_continuous_values("USGS-09380000", "00060",
+                                             start="2024-06-01", end="2024-06-02")
+        rows = waterdata.to_rows(fc)
+        len(rows), rows[0]["time"], rows[0]["value"]
     """
     return _series(
         "continuous",
@@ -661,6 +728,13 @@ def get_latest_values(
 
     Raises:
         ValueError: For a ``source`` other than ``"daily"`` or ``"continuous"``.
+
+    Example::
+
+        from georest.restusgs import waterdata
+
+        latest = waterdata.to_rows(waterdata.get_latest_values("USGS-09380000", "00060"))
+        latest[0]["time"], latest[0]["value"], latest[0]["unit_of_measure"]
     """
     try:
         collection = _LATEST_SOURCES[source]
@@ -709,6 +783,15 @@ def get_field_measurements(
     ``time`` is the visit date (``YYYY-MM-DD``); ``time_of_day`` carries the
     clock time when known. Sorted by ``(monitoring_location_id, time)``
     (these rows have no ``time_series_id``).
+
+    Example::
+
+        from georest.restusgs import waterdata
+
+        # Discharge measured in the river by USGS hydrographers
+        visits = waterdata.to_rows(waterdata.get_field_measurements(
+            "USGS-09380000", "00060", start="2024-01-01", end="2024-12-31"))
+        [(v["time"], v["value"], v["observing_procedure"]) for v in visits]
     """
     return _series(
         "field-measurements",
@@ -751,6 +834,14 @@ def get_peaks(
     ``start``/``end`` work as everywhere else, but ``peaks`` rejects the OGC
     ``datetime`` parameter ("datetime query not supported", verified
     2026-09-14), so they are sent as a CQL2 ``time`` filter instead.
+
+    Example::
+
+        from georest.restusgs import waterdata
+
+        # The largest flow of each year since 2000
+        peaks = waterdata.to_rows(waterdata.get_peaks("USGS-09380000", start="2000-01-01"))
+        max(peaks, key=lambda p: p["value"] or 0)
     """
     return _series(
         "peaks",
@@ -795,6 +886,16 @@ def to_rows(fc: dict, numeric: Iterable[str] = ("value",)) -> list[dict]:
     and plotting directly, and keeps ``qualifier`` / ``approval_status``
     alongside the value. Group by ``time_series_id`` with
     ``itertools.groupby`` if a per-series shape is wanted.
+
+    Example::
+
+        import pandas as pd
+        from georest.restusgs import waterdata
+
+        fc = waterdata.get_daily_values("USGS-09380000", "00060",
+                                        start="2024-01-01", end="2024-01-31")
+        flow = pd.DataFrame(waterdata.to_rows(fc))   # one row per day, values as numbers
+        flow[["time", "value"]]
     """
     numeric = tuple(numeric)
     rows: list[dict] = []

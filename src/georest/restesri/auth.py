@@ -145,6 +145,14 @@ def login(
     Raises:
         ValueError: No portal or client id.
         RuntimeError: Sign-in failed, was cancelled, or timed out.
+
+    Example::
+
+        from georest.restesri import auth
+
+        # Opens a browser to sign in; enterprise single sign-on works.
+        auth.login("https://myorg.maps.arcgis.com", client_id="YOUR_CLIENT_ID",
+                   persist=True)   # persist=True keeps you signed in across sessions
     """
     portal_url = _resolve_portal(portal)
     client_id = client_id or os.environ.get(CLIENT_ID_ENV, "").strip()
@@ -217,6 +225,14 @@ def set_token(
 
     Returns:
         :func:`status` for the new session.
+
+    Example::
+
+        from arcgis.gis import GIS          # in ArcGIS Pro's Python
+        from georest.restesri import auth
+
+        gis = GIS("Pro")
+        auth.set_token(gis._con.token, portal=gis.url, refresh=lambda: gis._con.token)
     """
     if not token:
         raise ValueError("token must be a non-empty string.")
@@ -243,6 +259,13 @@ def restore(path: str | os.PathLike | None = None) -> dict[str, Any] | None:
 
     Returns:
         :func:`status`, or ``None`` if nothing usable is saved.
+
+    Example::
+
+        from georest.restesri import auth
+
+        # Pick up a session saved earlier by login(persist=True) or georest-login
+        auth.restore()
     """
     global _RESTORE_TRIED
     file = Path(path) if path else CREDENTIALS_PATH
@@ -286,6 +309,12 @@ def logout() -> None:
     """End the session and delete any saved credentials.
 
     ``$GEOREST_ESRI_TOKEN`` is not touched; unset it to go fully anonymous.
+
+    Example::
+
+        from georest.restesri import auth
+
+        auth.logout()   # ends the session and deletes any saved credentials
     """
     global _SESSION, _RESTORE_TRIED
     with _LOCK:
@@ -298,7 +327,14 @@ def logout() -> None:
 
 
 def status() -> dict[str, Any] | None:
-    """Describe the active session, or ``None``. Never includes the token."""
+    """Describe the active session, or ``None``. Never includes the token.
+
+    Example::
+
+        from georest.restesri import auth
+
+        auth.status()   # who is signed in, to which portal, until when; None if nobody
+    """
     session = _current()
     if session is None:
         return None
@@ -322,6 +358,13 @@ def trust_host(host: str) -> None:
 
     A leading dot trusts every subdomain: ``".gis.myagency.gov"``. Use for an
     ArcGIS Server that trusts the portal but is not listed as federated.
+
+    Example::
+
+        from georest.restesri import auth
+
+        # Also send the session token to a federated server outside the portal's domain
+        auth.trust_host("gis.myagency.gov")
     """
     host = host.strip().lower()
     if not host:
@@ -337,6 +380,13 @@ def credentials_for(url: str) -> tuple[str | None, dict[str, str]]:
     is plain http and the portal is not, or when the token has expired and
     cannot be renewed (an expired token makes even public services answer
     498, so sending none is the better failure).
+
+    Example::
+
+        from georest.restesri import auth
+
+        token, headers = auth.credentials_for("https://services.arcgis.com/abc/arcgis/rest/services/x/FeatureServer/0")
+        # token is None for hosts the session does not cover
     """
     session = _current()
     if session is None or not _covers(session, url):

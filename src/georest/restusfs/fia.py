@@ -56,7 +56,30 @@ from collections.abc import Sequence
 from typing import Any, Union
 
 from ._http import get_json
-from .vocab import FIA_BASE, _frame, get_attribute, get_evaluation, grouping_labels
+
+# FIA's discovery functions live in vocab, beside the catalog cache, but
+# they are part of using FIA, so they are reachable here too: one import,
+# ``from georest.restusfs import fia``, covers finding and estimating.
+from .vocab import (
+    FIA_BASE,
+    _frame,
+    describe_grouping,
+    find_attributes,
+    find_evaluations,
+    find_groupings,
+    get_attribute,
+    get_evaluation,
+    grouping_labels,
+)
+
+__all__ = [
+    "find_attributes", "get_attribute",
+    "find_evaluations", "get_evaluation",
+    "find_groupings", "describe_grouping", "grouping_labels",
+    "estimate", "validate", "reliable",
+    "FIAValidationError", "FOREST_DEFINITIONS",
+    "DEFAULT_MAX_SE_PCT", "DEFAULT_MIN_PLOTS",
+]
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +136,20 @@ def validate(wc: Union[int, Sequence[int]], snum: int) -> None:
     ``EXPVOL``, ``EXPGROW``, ``EXPMORT``, ``EXPREMV``, ``EXPCHNG``,
     ``EXPDWM``); evaluations advertise whether they support growth
     accounting. The pairing is knowable before the request leaves.
+
+    Example::
+
+        from georest.restusfs import fia
+
+        # Wyoming's current inventory has no growth accounting, so a
+        # mortality attribute is refused here, with the reason, before any
+        # request is sent.
+        wyoming = fia.find_evaluations("Wyoming")["wc"].iloc[0]
+        mortality = fia.find_attributes("mortality", eval_typ="EXPMORT")["snum"].iloc[0]
+        try:
+            fia.validate(wyoming, mortality)
+        except fia.FIAValidationError as err:
+            print(err)
     """
     evaluations = []
     for one in _as_list(wc):
@@ -232,6 +269,22 @@ def estimate(wc: Union[int, Sequence[int]], snum: int, *,
         FIAValidationError: The request would fail upstream.
         UpstreamError / UpstreamUnavailable: The API refused or could
             not be reached.
+
+    Example::
+
+        from georest.restusfs import fia
+
+        oregon = fia.find_evaluations("Oregon")["wc"].iloc[0]
+
+        # Forest land (attribute 2) by county, each cell with its sampling error
+        df = fia.estimate(oregon, 2, rselected="County code and name")
+        df[["row", "estimate", "se_pct", "plots", "unreliable"]]
+
+        # Oregon and Washington as one estimate, with a correct combined error
+        washington = fia.find_evaluations("Washington")["wc"].iloc[0]
+        both = fia.estimate([oregon, washington], 2)
+        both[both["row"] == "Total"]
+        both.attrs["warnings"]   # anything FIADB-API flagged about the estimate
     """
     if validate_first:
         validate(wc, snum)
@@ -533,6 +586,14 @@ def reliable(df) -> Any:
     everything with a reason attached; discarding is the caller's
     decision, and a silent drop at fetch time would hide how much of a
     cross-tabulation is too thin to use.
+
+    Example::
+
+        from georest.restusfs import fia
+
+        oregon = fia.find_evaluations("Oregon")["wc"].iloc[0]
+        df = fia.estimate(oregon, 2, rselected="Forest type group")
+        fia.reliable(df)   # the same table without the cells flagged too uncertain
     """
     try:
         return df[~df["unreliable"]]

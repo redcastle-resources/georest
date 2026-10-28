@@ -104,6 +104,13 @@ def lcms_releases(*, product: str = "", refresh: bool = False) -> list[dict]:
 
     Args:
         product: Keep only releases that publish this product.
+
+    Example::
+
+        from georest.restusfs import lcms
+
+        [r["VersionNumber"] for r in lcms.lcms_releases()]                       # every release
+        [r["VersionNumber"] for r in lcms.lcms_releases(product="Land_Cover")]  # those with land cover
     """
     if refresh or "releases" not in _CACHE:
         _CACHE["releases"] = _result(get_json(f"{LCMS_BASE}/release/")) or []
@@ -116,7 +123,14 @@ def lcms_releases(*, product: str = "", refresh: bool = False) -> list[dict]:
 
 
 def release_products(release: str = "") -> list[str]:
-    """Product names published by one release (default: newest overall)."""
+    """Product names published by one release (default: newest overall).
+
+    Example::
+
+        from georest.restusfs import lcms
+
+        lcms.release_products("2025-11")   # ['Change', 'Land_Cover', 'Land_Use']
+    """
     for r in lcms_releases():
         if not release or str(r.get("VersionNumber")) == str(release):
             return [str(p.get("Name")) for p in (r.get("Products") or [])]
@@ -137,6 +151,12 @@ def latest_release(product: str = "") -> str:
     a new release silently changes the answer to a question asked last
     year; resolving to a version once keeps an old analysis
     reproducible.
+
+    Example::
+
+        from georest.restusfs import lcms
+
+        lcms.latest_release("Land_Cover")   # newest release that has land cover, e.g. '2025-11'
     """
     for r in lcms_releases(product=product):
         v = r.get("VersionNumber")
@@ -209,6 +229,12 @@ def lcms_products(release: str = "", *, refresh: bool = False) -> list[dict]:
     """Products in a release, each with its full class list.
 
     Currently ``Change``, ``Land_Cover`` and ``Land_Use``.
+
+    Example::
+
+        from georest.restusfs import lcms
+
+        [p["Name"] for p in lcms.lcms_products()]   # products in the newest release
     """
     key = f"products:{release or 'latest'}"
     if refresh or key not in _CACHE:
@@ -226,6 +252,12 @@ def lcms_classes(product: str, release: str = "") -> Any:
     Raises:
         ValueError: The release does not publish this product, naming
             the releases that do.
+
+    Example::
+
+        from georest.restusfs import lcms
+
+        lcms.lcms_classes("Land_Cover")   # class_name, class_value and palette per class
     """
     _check_product(product, release)
     for p in lcms_products(release):
@@ -289,6 +321,12 @@ def lcms_summary_areas(release: str = "", *, type: str = "",
         release: Release version; defaults to latest.
         type: Filter on area type, e.g. ``"US-COUNTIES"`` or
             ``"RANGER-DISTRICTS"``.
+
+    Example::
+
+        from georest.restusfs import lcms
+
+        lcms.lcms_summary_areas(type="RANGER-DISTRICTS")   # the districts the API can summarize
     """
     key = f"areas:{release or 'latest'}"
     if refresh or key not in _CACHE:
@@ -344,6 +382,17 @@ def lcms_summary(product: str = "Land_Cover", *,
         ``pandas.DataFrame`` with ``year``, ``class_name``,
         ``square_meters``, ``acres``, ``hectares``, ``product``,
         ``area``, ``source``.
+
+    Example::
+
+        from georest.restusfs import lcms
+
+        # A county's land cover through time, from the API's precomputed summaries
+        crook = lcms.lcms_summary("Land_Cover", state="Oregon", county="Crook")
+        crook.pivot_table(index="year", columns="class_name", values="acres")
+
+        # One year of change in the same county
+        lcms.lcms_summary("Change", state="Oregon", county="Crook", year=2024)
     """
     # Product/release compatibility first. The API answers a mismatch
     # with an "Invalid Summary Area" ParameterError, which points at the

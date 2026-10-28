@@ -148,7 +148,7 @@ class EstimateTest(unittest.TestCase):
 
     def test_several_evaluations_go_in_one_request(self):
         self.reply = _njson([DE, MD])
-        df = fs.estimate([DE, MD], 2, rselected="State code")
+        df = fia.estimate([DE, MD], 2, rselected="State code")
         self.assertEqual(len(self.calls), 1)
         self.assertEqual(self.calls[0][1]["wc"], f"{DE},{MD}")
         total = df[df["row"] == "Total"].iloc[0]
@@ -156,12 +156,12 @@ class EstimateTest(unittest.TestCase):
         self.assertEqual(total["plots"], 527)
 
     def test_one_evaluation_is_still_a_plain_code(self):
-        fs.estimate(DE, 2)
+        fia.estimate(DE, 2)
         self.assertEqual(self.calls[0][1]["wc"], str(DE))
 
     def test_every_evaluation_is_validated(self):
-        with self.assertRaises(fs.FIAValidationError) as cm:
-            fs.estimate([DE, 999999], 2)
+        with self.assertRaises(fia.FIAValidationError) as cm:
+            fia.estimate([DE, 999999], 2)
         self.assertIn("999999", str(cm.exception))
         self.assertEqual(self.calls, [], "an invalid code must fail before the request")
 
@@ -169,42 +169,79 @@ class EstimateTest(unittest.TestCase):
         self.reply = _njson([DE], warnings=["Ratio estimate across evaluations"],
                             grm="GRM ratio caution")
         with self.assertLogs("georest.restusfs.fia", level="WARNING"):
-            df = fs.estimate(DE, 2)
+            df = fia.estimate(DE, 2)
         self.assertEqual(df.attrs["warnings"],
                          ["Ratio estimate across evaluations", "GRM ratio caution"])
 
     def test_no_warnings_is_an_empty_list(self):
-        df = fs.estimate(DE, 2)
+        df = fia.estimate(DE, 2)
         self.assertEqual(df.attrs["warnings"], [])
 
     def test_a_long_filter_goes_by_post(self):
-        fs.estimate(DE, 2, str_filter="plot.unitcd in (" + ", ".join(["1"] * 600) + ")")
+        fia.estimate(DE, 2, str_filter="plot.unitcd in (" + ", ".join(["1"] * 600) + ")")
         self.assertEqual(self.calls[0][2].get("method"), "POST")
 
     def test_a_short_filter_stays_get(self):
-        fs.estimate(DE, 2, str_filter="plot.unitcd in (0, 1, 2)")
+        fia.estimate(DE, 2, str_filter="plot.unitcd in (0, 1, 2)")
         self.assertEqual(self.calls[0][2].get("method"), "GET")
 
 
 class SearchTest(unittest.TestCase):
     def test_search_returns_every_match(self):
-        everything = fs.find_attributes("")
+        everything = fia.find_attributes("")
         self.assertEqual(len(everything), len(vocab.load_catalog("snum")))
-        self.assertGreater(len(fs.find_attributes("carbon")), 25)
+        self.assertGreater(len(fia.find_attributes("carbon")), 25)
+
+    def test_the_whole_phrase_outranks_scattered_words(self):
+        """"Area change of forest land" matches every word of "area of forest
+        land" too; the attribute that IS that phrase must come first."""
+        self.assertEqual(fia.find_attributes("area of forest land")["snum"].iloc[0], 2)
+        self.assertEqual(fia.find_attributes("number of live trees")["snum"].iloc[0], 4)
 
     def test_limit_is_still_available(self):
-        self.assertEqual(len(fs.find_attributes("carbon", limit=3)), 3)
+        self.assertEqual(len(fia.find_attributes("carbon", limit=3)), 3)
 
     def test_lookups_follow_a_refreshed_catalog(self):
         """The by-number index is rebuilt when the catalog is replaced."""
-        self.assertIsNotNone(fs.get_evaluation(DE))
+        self.assertIsNotNone(fia.get_evaluation(DE))
         saved = vocab._MEM_CACHE.get("wc")
         try:
             vocab._remember("wc", [{"EVAL_GRP": 1, "STATE": "Testland"}])
-            self.assertIsNone(fs.get_evaluation(DE))
-            self.assertEqual(fs.get_evaluation(1)["STATE"], "Testland")
+            self.assertIsNone(fia.get_evaluation(DE))
+            self.assertEqual(fia.get_evaluation(1)["STATE"], "Testland")
         finally:
             vocab._remember("wc", saved)
+
+
+class SpellingTest(unittest.TestCase):
+    """restusfs reads like the other providers: the module is in the call
+    (``fia.estimate``, like ``edw.search_edw_services``)."""
+
+    def test_fia_covers_finding_and_estimating(self):
+        from georest.restusfs import fia
+        for name in ("find_attributes", "find_evaluations", "find_groupings",
+                     "describe_grouping", "get_attribute", "get_evaluation",
+                     "estimate", "validate", "reliable"):
+            with self.subTest(name=name):
+                self.assertTrue(callable(getattr(fia, name)))
+                self.assertIn(name, fia.__all__)
+
+    def test_top_level_aliases_are_the_same_modules(self):
+        import georest
+        from georest.restusfs import fia, lcms
+        self.assertIs(georest.fia, fia)
+        self.assertIs(georest.lcms, lcms)
+
+    def test_the_package_exposes_its_modules_not_their_functions(self):
+        """One spelling per function, and a docs page that shows the
+        submodules: restusfs, like restesri and restusgs, exports modules
+        (plus the error classes every module raises), not flattened names."""
+        self.assertEqual(sorted(fs.__all__),
+                         sorted(["fia", "lcms", "lcms_ee", "align", "vocab",
+                                 "USFSError", "UpstreamError", "UpstreamUnavailable"]))
+        for flat in ("estimate", "find_attributes", "lcms_summary", "compare_area"):
+            with self.subTest(name=flat):
+                self.assertFalse(hasattr(fs, flat))
 
 
 if __name__ == "__main__":

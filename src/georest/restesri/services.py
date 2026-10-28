@@ -143,6 +143,13 @@ def queryFeatureServiceCount(
         ValueError: If the service answers 200 with an Esri error object in
             the body (e.g. an invalid *where* clause), or with a body that
             isn't JSON at all (what a degraded HTML error page looks like).
+
+    Example::
+
+        from georest.restesri import services
+
+        quakes = "https://sampleserver6.arcgisonline.com/arcgis/rest/services/Earthquakes_Since1970/FeatureServer/0"
+        services.queryFeatureServiceCount(quakes, where="magnitude >= 8")   # how many before fetching
     """
     url = _resolve_url(url_or_result)
     if url.lower().endswith("featureserver"):
@@ -386,6 +393,14 @@ def getLayerInfo(url_or_result: str | dict, token: str | None = None, timeout: i
             error object, or with a body that isn't JSON.
         RuntimeError: If the URL is unreachable or answers with an HTTP
             error status (see :func:`queryFeatureServiceCount`).
+
+    Example::
+
+        from georest.restesri import services
+
+        quakes = "https://sampleserver6.arcgisonline.com/arcgis/rest/services/Earthquakes_Since1970/FeatureServer/0"
+        info = services.getLayerInfo(quakes)
+        info["geometryType"], [f["name"] for f in info["fields"]]
     """
     url = _resolve_url(url_or_result)
     params = build_params({"f": "pjson"}, token)
@@ -522,6 +537,15 @@ def exportImage(
             error status (see :func:`queryFeatureServiceCount`). Note an
             over-large *size* is reported this way, as a server-side 500,
             rather than as a clean Esri error object.
+
+    Example::
+
+        from georest.restesri import services
+
+        lcms = "https://imagery.geoplatform.gov/iipp/rest/services/Vegetation/USFS_EDW_LCMS_AnnualChange_CONUS/ImageServer"
+        png = services.exportImage(lcms, bbox=(-105.95, 40.5, -105.55, 40.75),
+                                   size=(600, 400), image_format="png")
+        # In a notebook: from IPython.display import Image; Image(png)
     """
     url = _resolve_url(url_or_result)
 
@@ -603,6 +627,13 @@ def getSupportedOperations(
         RuntimeError: If the URL is unreachable or answers with an HTTP
             error status — including the 404 served for a service that does
             not exist (see :func:`queryFeatureServiceCount`).
+
+    Example::
+
+        from georest.restesri import services
+
+        lcms = "https://imagery.geoplatform.gov/iipp/rest/services/Vegetation/USFS_EDW_LCMS_AnnualChange_CONUS/ImageServer"
+        [op["name"] for op in services.getSupportedOperations(lcms)]
     """
     url = _resolve_url(url_or_result)
     params = build_params({"f": "html"}, token)
@@ -713,6 +744,17 @@ def computeStatisticsHistograms(
             service answers with an Esri error object or a non-JSON body.
         RuntimeError: If the service is unreachable or answers with an HTTP
             error status (see :func:`queryFeatureServiceCount`).
+
+    Example::
+
+        from georest.restesri import services
+
+        lcms = "https://imagery.geoplatform.gov/iipp/rest/services/Vegetation/USFS_EDW_LCMS_AnnualChange_CONUS/ImageServer"
+        box = {"rings": [[[-105.9, 40.55], [-105.6, 40.55], [-105.6, 40.7],
+                           [-105.9, 40.7], [-105.9, 40.55]]],
+               "spatialReference": {"wkid": 4326}}
+        stats = services.computeStatisticsHistograms(lcms, box)
+        stats[0]["histogram"]["counts"]   # pixel count per class value
     """
     url = _resolve_url(url_or_result)
 
@@ -842,6 +884,13 @@ def identifyPixelValue(
             non-JSON body.
         RuntimeError: If the service is unreachable or answers with an HTTP
             error status (see :func:`queryFeatureServiceCount`).
+
+    Example::
+
+        from georest.restesri import services
+
+        lcms = "https://imagery.geoplatform.gov/iipp/rest/services/Vegetation/USFS_EDW_LCMS_AnnualChange_CONUS/ImageServer"
+        services.identifyPixelValue(lcms, x=-105.75, y=40.62)["value"]   # the class at one point
     """
     url = _resolve_url(url_or_result)
 
@@ -955,6 +1004,14 @@ def getSamples(
         ``identify`` fallback has no equivalent parameter, so a point
         resolved by the fallback is sampled at the service's native
         resolution regardless.
+
+    Example::
+
+        from georest.restesri import services
+
+        lcms = "https://imagery.geoplatform.gov/iipp/rest/services/Vegetation/USFS_EDW_LCMS_AnnualChange_CONUS/ImageServer"
+        points = [(-105.75, 40.62), (-105.70, 40.60), (-105.65, 40.58)]
+        [s["value"] for s in services.getSamples(lcms, points)]
     """
     url = _resolve_url(url_or_result)
 
@@ -1074,6 +1131,13 @@ def queryBoundary(
             non-JSON body.
         RuntimeError: If the service is unreachable or answers with an HTTP
             error status (see :func:`queryFeatureServiceCount`).
+
+    Example::
+
+        from georest.restesri import services
+
+        lcms = "https://imagery.geoplatform.gov/iipp/rest/services/Vegetation/USFS_EDW_LCMS_AnnualChange_CONUS/ImageServer"
+        boundary = services.queryBoundary(lcms)   # the area the imagery actually covers
     """
     url = _resolve_url(url_or_result)
 

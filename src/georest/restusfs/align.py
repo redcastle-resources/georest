@@ -142,6 +142,13 @@ def lcms_tree_area(state: str = "", county: str = "", *,
     Returns:
         ``pandas.DataFrame`` with ``year``, ``acres``, ``classes_used``,
         ``source``, ``estimator``.
+
+    Example::
+
+        from georest.restusfs import align
+
+        # Acres in tree-bearing LCMS land cover classes, per year
+        align.lcms_tree_area(state="Oregon", county="Crook")
     """
     classes = tuple(tree_classes or TREE_CLASSES)
     _warn_unknown_classes(classes, release)
@@ -175,6 +182,13 @@ def fia_forest_area(wc: int, *, rselected: str = "",
     estimator label, so a frame from here and a frame from
     :func:`lcms_tree_area` can be concatenated without losing track of
     which is which.
+
+    Example::
+
+        from georest.restusfs import align, fia
+
+        oregon = fia.find_evaluations("Oregon")["wc"].iloc[0]
+        align.fia_forest_area(oregon)   # forest land with se_pct and plots, labelled as FIA
     """
     df = estimate(wc, snum, rselected=rselected, **kwargs)
     if hasattr(df, "assign"):
@@ -239,6 +253,14 @@ def compare_area(*, wc: int, state: str = "", county: str = "",
 
     The difference is offered as an observation, never as an error term.
     A 15% gap between these does not mean either is 15% wrong.
+
+    Example::
+
+        from georest.restusfs import align, fia
+
+        oregon = fia.find_evaluations("Oregon")["wc"].iloc[0]
+        result = align.compare_area(wc=oregon, state="Oregon", county="Crook", year=2024)
+        result["comparison"]   # both figures, their difference, and the caveats
     """
     lc = lcms_tree_area(state=state, county=county, year=year,
                         tree_classes=tree_classes, release=release)
@@ -305,6 +327,14 @@ def summarize_comparison(result: dict[str, Any]) -> str:
     Written to be pasted into a report. The caveat is part of the
     sentence rather than a footnote, because a number this easy to
     quote is a number that travels without its footnotes.
+
+    Example::
+
+        from georest.restusfs import align, fia
+
+        oregon = fia.find_evaluations("Oregon")["wc"].iloc[0]
+        result = align.compare_area(wc=oregon, state="Oregon", county="Crook", year=2024)
+        print(align.summarize_comparison(result))   # one paragraph, caveats included
     """
     c = result.get("comparison", {})
     lc, fi = c.get("lcms_treed_acres"), c.get("fia_forest_acres")

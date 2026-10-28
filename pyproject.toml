@@ -78,6 +78,8 @@ ee = [
 examples = [
     "jupyterlab>=4.0",
     "ipython>=8.0",
+    "plotly>=5.0",                    # the guides' interactive charts
+    "folium>=0.15",                   # and maps
 ]
 
 [project.urls]
