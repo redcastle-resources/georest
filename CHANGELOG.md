@@ -36,6 +36,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `elevations`, from the Elevation Point Query Service), and every downloadable National Map
   product covering an area (`find_products`, with `list_datasets` for the exact names): 3DEP
   elevation and lidar, US Topo, NAIP and more, each with its download link.
+- `georest.restusgs.earthquakes`: the USGS earthquake catalog. `search` by time, box or
+  circle, magnitude, depth, event type and PAGER alert level returns every match (the
+  service refuses searches over 20,000 events, so they are fetched in pages); `count` sizes a
+  search first; `get_event` lists an event's products, such as ShakeMap and DYFI.
 - An `Example::` section in the docstring of every public function, and
   `tests/test_live_docstring_examples.py`, which runs every one of them against the live
   services (behind the usual switches, plus new `FIA_LIVE`, `LCMS_LIVE` and `EE_LIVE`) and
