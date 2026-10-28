@@ -7,7 +7,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
-
+- added Lila as a cooperator ! Lila testing
 - `georest.usfs`, the USDA Forest Service provider, moved here from geeViz's
   `fsInsights`:
   - `fia`: FIA estimates from FIADB-API (EVALIDator) with `se_pct` and `plots` on every
