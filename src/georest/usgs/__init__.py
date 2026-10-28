@@ -19,6 +19,9 @@ earthquakes
 sciencebase
     ScienceBase, the catalog of USGS data releases: search, item details,
     the items inside an item, and attached files with download links.
+wqp
+    The Water Quality Portal (USGS and EPA): monitoring locations and
+    water-quality results from the USGS, EPA, states, tribes and others.
 
 ``usgs`` is the USGS provider. It sits under ``georest`` beside
 ``esri`` and ``usfs`` so providers can be added without a namespace
@@ -47,6 +50,6 @@ You may obtain a copy of the License at
 
 from __future__ import annotations
 
-from . import earthquakes, nationalmap, nldi, sciencebase, waterdata
+from . import earthquakes, nationalmap, nldi, sciencebase, waterdata, wqp
 
-__all__ = ["waterdata", "nldi", "nationalmap", "earthquakes", "sciencebase"]
+__all__ = ["waterdata", "nldi", "nationalmap", "earthquakes", "sciencebase", "wqp"]

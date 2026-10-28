@@ -117,7 +117,7 @@ class TestNoThirdPartyImports(unittest.TestCase):
     ALLOWED = {
         "__future__", "argparse", "ast", "base64", "collections", "contextlib",
         "dataclasses", "datetime", "difflib", "hashlib", "html", "http", "importlib",
-        "json", "logging", "math", "os", "pathlib", "pkgutil", "re", "secrets", "sys", "threading",
+        "io", "json", "logging", "math", "os", "pathlib", "pkgutil", "re", "secrets", "sys", "threading",
         "time", "typing", "unittest",
         "urllib", "uuid", "warnings", "webbrowser", "xml", "georest",
     }

@@ -30,6 +30,7 @@ MODULES = {
     "georest.usgs.nationalmap": LIVE_USGS,
     "georest.usgs.earthquakes": LIVE_USGS,
     "georest.usgs.sciencebase": LIVE_USGS,
+    "georest.usgs.wqp": LIVE_USGS,
     "georest.usfs.vocab": LIVE_FIA,
     "georest.usfs.fia": LIVE_FIA,
     "georest.usfs.lcms": LIVE_LCMS,
