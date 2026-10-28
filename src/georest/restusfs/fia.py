@@ -221,15 +221,15 @@ def estimate(wc: Union[int, Sequence[int]], snum: int, *,
     This is the EVALIDator ``fullreport`` call.
 
     Args:
-        wc: Evaluation group, see :func:`~georest.restusfs.find_evaluations`.
+        wc: Evaluation group, see :func:`~georest.restusfs.fia.find_evaluations`.
             Pass several (``[102025, 242025]``) to estimate across them in
             one request. That is the only way to get a correct combined
             standard error: estimating each separately gets a summed total
             right, but not its error.
         snum: Estimate attribute — see
-            :func:`~georest.restusfs.find_attributes`.
+            :func:`~georest.restusfs.fia.find_attributes`.
         rselected: Row grouping, as the exact display string from
-            :func:`~georest.restusfs.find_groupings`.
+            :func:`~georest.restusfs.fia.find_groupings`.
         cselected: Column grouping. Optional.
         pselected: Page grouping. Optional.
         sdenom: Denominator attribute, to produce a ratio estimate.

@@ -178,7 +178,7 @@ def fia_forest_area(wc: int, *, rselected: str = "",
                     snum: int = FOREST_AREA_SNUM, **kwargs) -> Any:
     """FIA forest-land area with its sampling error.
 
-    Thin wrapper over :func:`~georest.restusfs.estimate` that stamps the
+    Thin wrapper over :func:`~georest.restusfs.fia.estimate` that stamps the
     estimator label, so a frame from here and a frame from
     :func:`lcms_tree_area` can be concatenated without losing track of
     which is which.
