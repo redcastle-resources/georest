@@ -11,6 +11,9 @@ usgs
 usfs
     USDA Forest Service APIs: FIA estimates with their sampling errors
     (EVALIDator) and LCMS land cover, land use and change summaries.
+fema
+    FEMA APIs: the flood zone at a point from the National Flood Hazard
+    Layer, and when that map took effect, with new maps coming.
 
 Quick start::
 
@@ -51,11 +54,12 @@ from typing import TYPE_CHECKING
 __version__ = "0.5.0.dev0"
 
 __all__ = ["esri", "edw", "portal", "services", "usgs", "waterdata",
-           "usfs", "fia", "lcms", "__version__"]
+           "usfs", "fia", "lcms", "fema", "nfhl", "__version__"]
 
 if TYPE_CHECKING:  # so IDEs, mypy and pyright resolve the re-exports statically
-    from . import esri, usfs, usgs
+    from . import esri, fema, usfs, usgs
     from .esri import edw, portal, services
+    from .fema import nfhl
     from .usfs import fia, lcms
     from .usgs import waterdata
 
@@ -74,6 +78,8 @@ _LAZY = {
     "usfs": ".usfs",
     "fia": ".usfs.fia",
     "lcms": ".usfs.lcms",
+    "fema": ".fema",
+    "nfhl": ".fema.nfhl",
     # Pre-0.5 names, kept importable (with a DeprecationWarning); not in __all__.
     "restesri": ".restesri",
     "restusgs": ".restusgs",

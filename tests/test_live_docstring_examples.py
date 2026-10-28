@@ -8,7 +8,7 @@ this one checks that every example in every module runs.
 
 Each module's examples run only when its server's switch is on (see
 ``support.py``): ``SERVICES_LIVE``, ``EDW_LIVE``, ``USGS_LIVE``, ``FIA_LIVE``,
-``LCMS_LIVE``, or ``EDW_LIVE`` for all of them. Examples that sign in through
+``LCMS_LIVE``, ``FEMA_LIVE``, or ``EDW_LIVE`` for all of them. Examples that sign in through
 a browser never run unattended, and Earth Engine ones need ``EE_LIVE``.
 """
 
@@ -18,7 +18,16 @@ import pathlib
 import textwrap
 import unittest
 
-from .support import LIVE, LIVE_EE, LIVE_FIA, LIVE_LCMS, LIVE_SERVICES, LIVE_USGS, retry
+from .support import (
+    LIVE,
+    LIVE_EE,
+    LIVE_FEMA,
+    LIVE_FIA,
+    LIVE_LCMS,
+    LIVE_SERVICES,
+    LIVE_USGS,
+    retry,
+)
 
 #: module -> whether its examples may run now.
 MODULES = {
@@ -36,6 +45,7 @@ MODULES = {
     "georest.usfs.lcms": LIVE_LCMS,
     "georest.usfs.align": LIVE_FIA and LIVE_LCMS,
     "georest.usfs.lcms_ee": LIVE_EE,
+    "georest.fema.nfhl": LIVE_FEMA,
     "georest.esri.auth": False,   # signs in through a browser
 }
 

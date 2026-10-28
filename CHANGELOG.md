@@ -8,6 +8,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `georest.fema`, the FEMA provider (standard library only), with `nfhl`:
+  `flood_zone(lon, lat)` reads the flood zone at a point from the National Flood
+  Hazard Layer, and `map_dates(lon, lat)` says when that map took effect, with any
+  later Letter of Map Revision and new maps that are pending or preliminary. A failed
+  query raises, or is named in `unchecked`, rather than reading as "no zone".
+
 - `georest.usfs`, the USDA Forest Service provider, moved here from geeViz's
   `fsInsights`:
   - `fia`: FIA estimates from FIADB-API (EVALIDator) with `se_pct` and `plots` on every

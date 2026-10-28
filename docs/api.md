@@ -189,6 +189,27 @@ LCMS's in-body `ParameterError` and FIADB-API's HTML error pages under HTTP 200)
 `UpstreamUnavailable` when it could not be reached, and `FIAValidationError` for a request
 caught locally before it was sent (`fia.FIAValidationError`).
 
+## georest.fema
+
+FEMA data, standard library only. Import the module, `from georest.fema import nfhl`,
+and call through it. Points are `lon, lat` in decimal degrees.
+
+| Function | What it does |
+|---|---|
+| `nfhl.flood_zone(lon, lat)` | The flood zone at a point from the effective map: `zone`, `subtype`, `sfha` (in the 1%-annual-chance floodplain), `static_bfe`, `depth`, `units`, `datum`, `dfirm_id`; `mapped=False` where FEMA has no digital map (not "no hazard"); `zones` lists every zone when the point sits on a boundary |
+| `nfhl.map_dates(lon, lat)` | When that map took effect: `panel`, `effective`, `revised` (the latest Letter of Map Revision after the panel), `pending_effective` (adopted new maps), `preliminary_issued` (proposed maps); `unchecked` names any lookup that failed, so a `None` there means "could not check", not "none" |
+
+A flood zone is a regulatory designation, not a forecast, and an effective map is not
+necessarily a recent one: many panels are decades old, and new maps may be pending
+(Miami-Dade's take effect on 19 February 2027).
+
+### `_http.py` - fema transport (private)
+
+`fetch_json` only. FEMA's servers reset connections at random, so a reset (unlike a
+refused connection) is retried, as are `502/503/504`: 4 attempts with a 1, 2, 4 s
+backoff. An ArcGIS error object under HTTP 200 raises `RuntimeError`, so a failed query
+is never read as "no zone here".
+
 ## Using georest from an MCP server
 
 georest is built to be wrapped as tools for an LLM agent (the geeViz MCP server does this
