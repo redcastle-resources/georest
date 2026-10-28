@@ -201,6 +201,11 @@ def map_dates(lon: float, lat: float) -> dict[str, Any]:
           A value of ``None`` for a lookup named here means "could not
           check", not "none".
 
+    Raises:
+        ValueError: For coordinates that are not a longitude, latitude pair,
+            before any request. A lookup that fails is named in
+            ``unchecked`` rather than raised, so the others still answer.
+
     Example::
 
         from georest.fema import nfhl
