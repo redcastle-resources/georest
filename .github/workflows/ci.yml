@@ -121,9 +121,9 @@ jobs:
           print('collections', len(waterdata.COLLECTIONS))
           # restusfs ships its FIA catalogs as package data; a wheel missing
           # them would only fail when a user first searched.
-          from georest import restusfs as fs
-          assert georest.restusfs is fs
-          n = len(fs.find_attributes(''))
+          from georest.restusfs import fia
+          assert georest.fia is fia
+          n = len(fia.find_attributes(''))
           assert n > 700, n
           print('fia attributes', n)
           "
