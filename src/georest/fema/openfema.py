@@ -178,6 +178,12 @@ def declarations(state: str | None = None, *, fips: str | None = None,
         DR-4529, for one); the ``id`` tells them apart.
         No filter at all returns every row OpenFEMA has (tens of thousands).
 
+    Raises:
+        ValueError: For a malformed ``fips``, ``declaration_type`` or date,
+            before any request.
+        RuntimeError: If OpenFEMA refuses the query, cannot be reached, or
+            stops short of its own count.
+
     Example::
 
         from georest.fema import openfema
@@ -198,8 +204,15 @@ def disasters(state: str | None = None, *, fips: str | None = None,
               since: str | date | None = None, until: str | date | None = None) -> Any:
     """Disasters, one row each - the declared areas grouped by disaster number.
 
-    Same filters as :func:`declarations`. With ``fips``, these are the
-    disasters that covered that county.
+    Args:
+        state: Two-letter state or territory code, e.g. ``"TX"``.
+        fips: A 5-digit county FIPS code, e.g. ``"48201"``: the disasters
+            that covered that county.
+        incident_type: OpenFEMA's incident type, exactly - ``"Hurricane"``,
+            ``"Flood"``, ``"Severe Storm"``, ``"Fire"``, ...
+        declaration_type: ``"DR"``, ``"EM"`` or ``"FM"``.
+        since, until: Declaration dates, inclusive (``"2025-01-01"`` or a
+            ``date``).
 
     Returns:
         A DataFrame, newest first, with ``disaster_number``,
@@ -207,7 +220,15 @@ def disasters(state: str | None = None, *, fips: str | None = None,
         ``state``, ``incident_type``, ``title``, ``incident_begin``,
         ``incident_end`` and ``areas``: how many distinct declared areas
         matched the filters (all of the disaster's areas when no ``fips`` is
-        given).
+        given). No rows means no declaration matched, not that nothing
+        happened: a declaration is a federal decision, not a record of every
+        event.
+
+    Raises:
+        ValueError: For a malformed ``fips``, ``declaration_type`` or date,
+            before any request.
+        RuntimeError: If OpenFEMA refuses the query, cannot be reached, or
+            stops short of its own count.
 
     Example::
 
