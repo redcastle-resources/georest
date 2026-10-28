@@ -9,6 +9,10 @@ nldi
     The Hydro Network-Linked Data Index: find the river reach at a point,
     walk the network upstream or downstream, list the gages and other sites
     along the way, and delineate the basin that drains to a point.
+nationalmap
+    The National Map: the 3DEP elevation at any point (EPQS), and search
+    and download links for 3DEP elevation, lidar, US Topo, NAIP and other
+    National Map products (TNM Access).
 
 ``restusgs`` is the USGS provider. It sits under ``georest`` beside
 ``restesri`` and ``restusfs`` so providers can be added without a namespace
@@ -37,6 +41,6 @@ You may obtain a copy of the License at
 
 from __future__ import annotations
 
-from . import nldi, waterdata
+from . import nationalmap, nldi, waterdata
 
-__all__ = ["waterdata", "nldi"]
+__all__ = ["waterdata", "nldi", "nationalmap"]

@@ -32,6 +32,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   point (`find_flowline`), navigate upstream or downstream (`flowlines`, and `sites_along`
   for the gages, water-quality sites, dams and other features on the way), and delineate the
   basin draining to a point (`basin`). Sites come back as DataFrames, shapes as GeoJSON.
+- `georest.restusgs.nationalmap`: the 3DEP elevation at a point or many (`elevation`,
+  `elevations`, from the Elevation Point Query Service), and every downloadable National Map
+  product covering an area (`find_products`, with `list_datasets` for the exact names): 3DEP
+  elevation and lidar, US Topo, NAIP and more, each with its download link.
 - An `Example::` section in the docstring of every public function, and
   `tests/test_live_docstring_examples.py`, which runs every one of them against the live
   services (behind the usual switches, plus new `FIA_LIVE`, `LCMS_LIVE` and `EE_LIVE`) and
