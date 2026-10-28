@@ -16,6 +16,9 @@ nationalmap
 earthquakes
     The USGS earthquake catalog: events worldwide by time, area, magnitude
     and depth, with PAGER alerts and tsunami flags, and each event's detail.
+sciencebase
+    ScienceBase, the catalog of USGS data releases: search, item details,
+    the items inside an item, and attached files with download links.
 
 ``usgs`` is the USGS provider. It sits under ``georest`` beside
 ``esri`` and ``usfs`` so providers can be added without a namespace
@@ -44,6 +47,6 @@ You may obtain a copy of the License at
 
 from __future__ import annotations
 
-from . import earthquakes, nationalmap, nldi, waterdata
+from . import earthquakes, nationalmap, nldi, sciencebase, waterdata
 
-__all__ = ["waterdata", "nldi", "nationalmap", "earthquakes"]
+__all__ = ["waterdata", "nldi", "nationalmap", "earthquakes", "sciencebase"]
