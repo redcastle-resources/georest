@@ -1,10 +1,10 @@
-"""georest.restusgs.nationalmap, offline: EPQS's text replies and TNM paging."""
+"""georest.usgs.nationalmap, offline: EPQS's text replies and TNM paging."""
 
 import json
 import unittest
 from unittest import mock
 
-from georest.restusgs import nationalmap as nm
+from georest.usgs import nationalmap as nm
 
 
 def _epqs(value, resolution=1, acquired="9/1/2023"):

@@ -1,10 +1,10 @@
-"""georest.restusgs.nldi, offline: what is sent, and what comes back."""
+"""georest.usgs.nldi, offline: what is sent, and what comes back."""
 
 import unittest
 import urllib.parse
 from unittest import mock
 
-from georest.restusgs import nldi
+from georest.usgs import nldi
 
 
 def _point(lon, lat, **props):

@@ -8,15 +8,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `georest.restusfs`, the USDA Forest Service provider, moved here from geeViz's
+- `georest.usfs`, the USDA Forest Service provider, moved here from geeViz's
   `fsInsights`:
   - `fia`: FIA estimates from FIADB-API (EVALIDator) with `se_pct` and `plots` on every
     cell and thin cells flagged `unreliable`, plus local validation of attribute,
     evaluation and grouping before the request is sent; and the searches that find what
     to estimate (`fia.find_attributes`, `fia.find_evaluations`, `fia.find_groupings`).
-  - `vocab`: the FIA catalogs behind those searches, cached under `~/.georest/restusfs`
-    (`GEOREST_RESTUSFS_CACHE` to move it) with a bundled snapshot.
-  Use it like the other providers, through the module: `from georest.restusfs import fia`,
+  - `vocab`: the FIA catalogs behind those searches, cached under `~/.georest/usfs`
+    (`GEOREST_USFS_CACHE` to move it) with a bundled snapshot.
+  Use it like the other providers, through the module: `from georest.usfs import fia`,
   then `fia.estimate(...)`. The package itself exports only its modules and the shared
   error classes; `georest.fia` and `georest.lcms` are top-level aliases.
   - `lcms`: LCMS land cover, land use and change summaries for precomputed areas, with
@@ -28,15 +28,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Warnings FIADB-API attaches to an estimate are returned in `df.attrs["warnings"]` and
   logged.
 - An `ee` extra, `pip install "georest[ee]"`.
-- `georest.restusgs.nldi`: the USGS Hydro Network-Linked Data Index. Find the river reach at a
+- `georest.usgs.nldi`: the USGS Hydro Network-Linked Data Index. Find the river reach at a
   point (`find_flowline`), navigate upstream or downstream (`flowlines`, and `sites_along`
   for the gages, water-quality sites, dams and other features on the way), and delineate the
   basin draining to a point (`basin`). Sites come back as DataFrames, shapes as GeoJSON.
-- `georest.restusgs.nationalmap`: the 3DEP elevation at a point or many (`elevation`,
+- `georest.usgs.nationalmap`: the 3DEP elevation at a point or many (`elevation`,
   `elevations`, from the Elevation Point Query Service), and every downloadable National Map
   product covering an area (`find_products`, with `list_datasets` for the exact names): 3DEP
   elevation and lidar, US Topo, NAIP and more, each with its download link.
-- `georest.restusgs.earthquakes`: the USGS earthquake catalog. `search` by time, box or
+- `georest.usgs.earthquakes`: the USGS earthquake catalog. `search` by time, box or
   circle, magnitude, depth, event type and PAGER alert level returns every match (the
   service refuses searches over 20,000 events, so they are fetched in pages); `count` sizes a
   search first; `get_event` lists an event's products, such as ShakeMap and DYFI.
@@ -53,8 +53,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- pandas is now a dependency, for `restusfs`, which returns DataFrames. `restesri` and
-  `restusgs` still use only the standard library, and the packaging tests hold them to it.
+- The provider subpackages drop their `rest` prefix: `georest.restesri` is now
+  `georest.esri`, `georest.restusgs` is now `georest.usgs`, and the Forest Service clients
+  are `georest.usfs`. The old names still import, as the same modules, with a
+  `DeprecationWarning`, and will be removed in a later release.
+- `georest.usgs` returns pandas DataFrames, like `georest.usfs`; `georest.esri` still uses
+  only the standard library.
+- pandas is now a dependency, for `usfs`, which returns DataFrames. `esri` and
+  `usgs` still use only the standard library, and the packaging tests hold them to it.
 - Compared with geeViz's `fsInsights`: the transport uses `urllib` instead of `requests`;
   `find_attributes`, `find_groupings` and `find_evaluations` return every match, best
   first, instead of the first 25 (`limit=` is still accepted); long `strFilter` values are

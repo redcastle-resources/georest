@@ -1,4 +1,4 @@
-"""`restusgs/waterdata.py`: parameter mapping, sorting, `to_rows`, API-key resolution.
+"""`usgs/waterdata.py`: parameter mapping, sorting, `to_rows`, API-key resolution.
 
 Offline: every request lands on a `FakeOgcServer` patched onto `_ogc`.
 """
@@ -9,7 +9,7 @@ import random
 import unittest
 from unittest import mock
 
-from georest.restusgs import _http, _ogc, waterdata
+from georest.usgs import _http, _ogc, waterdata
 
 from .support import FakeOgcServer, observation, patched_ogc
 

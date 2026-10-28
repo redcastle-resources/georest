@@ -1,4 +1,4 @@
-"""Offline tests for `georest/restesri/services.py` - every public function.
+"""Offline tests for `georest/esri/services.py` - every public function.
 
 Deterministic and network-free: the HTTP helpers are replaced on the
 `services` module itself (see `support.patched_services`). The canned
@@ -15,7 +15,7 @@ import os
 import tempfile
 import unittest
 
-from georest.restesri import services as S
+from georest.esri import services as S
 
 from .support import RecordingFetch, patched_services
 
@@ -147,7 +147,7 @@ class EsriToGeoJsonTests(unittest.TestCase):
 
     def test_services_and_edw_share_one_converter(self):
         """Two copies is how the fallback drifted; there is one now."""
-        from georest.restesri import edw
+        from georest.esri import edw
         self.assertIs(S._esri_geometry_to_geojson, edw._esri_geometry_to_geojson)
         self.assertIs(S._sanitize_geojson, edw._sanitize_geojson)
 

@@ -4,13 +4,13 @@ Python clients for geospatial REST APIs: ArcGIS Image, Map and Feature Services,
 Portal search, the USFS Enterprise Data Warehouse (EDW), Forest Service FIA estimates and
 LCMS summaries, and the USGS Water Data OGC API.
 
-**One dependency: pandas**, used by the Forest Service clients, which return DataFrames.
-The Esri and USGS clients use only the standard library. Earth Engine is optional, for
+**One dependency: pandas**, used by the USGS and Forest Service clients, which return
+DataFrames. The Esri clients use only the standard library. Earth Engine is optional, for
 summarizing LCMS over your own polygon.
 
 ```bash
 pip install georest
-pip install "georest[ee]"      # adds Earth Engine for restusfs.lcms_ee
+pip install "georest[ee]"      # adds Earth Engine for usfs.lcms_ee
 ```
 
 Documentation: **[georest.io](https://georest.io)**.
@@ -18,7 +18,7 @@ Documentation: **[georest.io](https://georest.io)**.
 ## Quick start
 
 ```python
-from georest.restesri import edw, portal, services
+from georest.esri import edw, portal, services
 
 # Search the USFS EDW catalog by keyword or theme
 hits = edw.search_edw_services("fire")
@@ -38,7 +38,7 @@ results = portal.searchPortal("naip 2023", portal="agol")
 tile_url = services.getImageServiceTileUrl("https://.../ImageServer")
 
 # USGS Water Data: find gages in a box, pull a month of daily discharge
-from georest.restusgs import waterdata
+from georest.usgs import waterdata
 
 gages = waterdata.search_monitoring_locations(bbox=(-111.7, 36.8, -111.5, 37.0),
                                               site_type_code="ST")
@@ -47,7 +47,7 @@ fc = waterdata.get_daily_values("USGS-09380000", "00060",
 rows = waterdata.to_rows(fc)   # [{"time": "2024-01-01", "value": 9870.0, ...}, ...]
 
 # Forest Service: FIA estimates always come with their sampling error
-from georest.restusfs import fia, lcms
+from georest.usfs import fia, lcms
 
 fia.find_attributes("carbon")                      # what can be estimated
 wc = fia.find_evaluations("Oregon")["wc"].iloc[0]  # which inventory
@@ -63,17 +63,17 @@ almost nothing.
 
 | Import path | What it covers |
 |---|---|
-| `georest.restesri.edw` | USFS EDW: catalog search, layer-role tagging, FGDC/ISO metadata, feature and analytic queries |
-| `georest.restesri.portal` | ArcGIS Portal search and service metadata |
-| `georest.restesri.services` | Generic Image/Map/Feature Service queries and raster operations |
-| `georest.restusgs.waterdata` | USGS Water Data OGC API: monitoring locations, daily/continuous values, field measurements, peaks, time-series metadata |
-| `georest.restusfs` | Forest Service FIA estimates (EVALIDator) with sampling errors, LCMS land cover/use/change summaries, and the two side by side |
+| `georest.esri.edw` | USFS EDW: catalog search, layer-role tagging, FGDC/ISO metadata, feature and analytic queries |
+| `georest.esri.portal` | ArcGIS Portal search and service metadata |
+| `georest.esri.services` | Generic Image/Map/Feature Service queries and raster operations |
+| `georest.usgs.waterdata` | USGS Water Data OGC API: monitoring locations, daily/continuous values, field measurements, peaks, time-series metadata |
+| `georest.usfs` | Forest Service FIA estimates (EVALIDator) with sampling errors, LCMS land cover/use/change summaries, and the two side by side |
 
-`restesri` is the Esri/ArcGIS provider, `restusgs` the USGS provider, and `restusfs` the
+`esri` is the Esri/ArcGIS provider, `usgs` the USGS provider, and `usfs` the
 USDA Forest Service provider. Each sits under
 `georest` as a subpackage so providers can be added alongside one another without a
 namespace collision, and each is self-contained - its private `_http` (and, for
-restusgs, `_ogc`) module is its own.
+usgs, `_ogc`) module is its own.
 
 Full per-function reference: **[docs/api.md](docs/api.md)**.
 Runnable notebooks: **[examples/](examples/)**. The `guide_*` notebooks each answer one question
@@ -94,7 +94,7 @@ One-time setup, per AGOL org or Enterprise portal:
 Then pick whichever fits:
 
 ```python
-from georest.restesri import auth
+from georest.esri import auth
 
 # Notebook or script: browser sign-in; enterprise SSO (SAML/eAuth) works.
 auth.login("https://myorg.maps.arcgis.com", client_id="abc123")
@@ -148,10 +148,10 @@ repository root happened to be on `sys.path`. Update imports:
 
 ```python
 from RESTesri import edw                    # before
-from georest.restesri import edw            # after
+from georest.esri import edw            # after
 
 from RESTesri._http import fetch_json       # before
-from georest.restesri._http import fetch_json   # after
+from georest.esri._http import fetch_json   # after
 ```
 
 Then delete any `sys.path.insert(...)` bootstrap - `pip install georest` (or

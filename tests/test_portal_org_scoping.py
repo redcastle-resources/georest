@@ -1,6 +1,6 @@
 """Tests for the searchPortal org-scoping fix.
 
-Ported from the geeViz esriLib patch (redcastle-resources) to georest.restesri.portal - same style as the existing
+Ported from the geeViz esriLib patch (redcastle-resources) to georest.esri.portal - same style as the existing
 suite: all HTTP mocked via unittest.mock, no network required.
 
 Covers:
@@ -26,7 +26,7 @@ import time
 import unittest
 from unittest.mock import patch
 
-from georest.restesri import portal as el
+from georest.esri import portal as el
 
 HOU = "https://mycity.maps.arcgis.com"
 HOU_ORG = "NummVBqZSIJKUeVR"

@@ -95,7 +95,7 @@ jobs:
         run: |
           python -c "
           import georest
-          from georest.restesri import edw, portal, services
+          from georest.esri import edw, portal, services
           assert georest.edw is edw
           print(georest.__version__, len(edw._SERVICE_THEMES), sorted(portal.PORTALS))
           "

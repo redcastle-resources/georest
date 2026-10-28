@@ -2,7 +2,7 @@
 import json
 import unittest
 
-from georest.restesri import edw
+from georest.esri import edw
 
 # Esri winds exterior rings clockwise (negative signed area) and holes
 # counter-clockwise; GeoJSON (RFC 7946) is the opposite.

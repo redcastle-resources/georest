@@ -6,7 +6,7 @@ is the configuration that silently drops records.
 """
 import unittest
 
-from georest.restesri import edw
+from georest.esri import edw
 
 from .support import FakeServer, patched
 

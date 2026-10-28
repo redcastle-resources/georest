@@ -56,9 +56,9 @@ classifiers = [
     "Typing :: Typed",
 ]
 
-# pandas only, for georest.restusfs, which returns DataFrames. restesri and
-# restusgs still use only the standard library, and
-# tests/test_packaging.py holds them to it. Earth Engine is never a core
+# pandas only, for georest.usgs and georest.usfs, which return DataFrames.
+# georest.esri still uses only the standard library, and
+# tests/test_packaging.py holds it to that. Earth Engine is never a core
 # dependency: it is the optional "ee" extra below.
 dependencies = [
     "pandas>=1.5",
@@ -73,7 +73,7 @@ dev = [
     "twine>=6.1",                     # >=6.1 uploads PEP 639 (metadata 2.4)
 ]
 ee = [
-    "earthengine-api>=1.0",           # restusfs.lcms_ee: LCMS over any geometry
+    "earthengine-api>=1.0",           # usfs.lcms_ee: LCMS over any geometry
 ]
 examples = [
     "jupyterlab>=4.0",
@@ -83,15 +83,15 @@ examples = [
 ]
 
 [project.urls]
-Homepage      = "https://github.com/redcastle-resources/georest"
+Homepage      = "https://georest.io"
 Repository    = "https://github.com/redcastle-resources/georest"
 Issues        = "https://github.com/redcastle-resources/georest/issues"
 Changelog     = "https://github.com/redcastle-resources/georest/blob/main/CHANGELOG.md"
 Documentation = "https://georest.io"
 
 [project.scripts]
-georest-check-themes = "georest.restesri.cli.check_themes:main"
-georest-login = "georest.restesri.cli.login:main"
+georest-check-themes = "georest.esri.cli.check_themes:main"
+georest-login = "georest.esri.cli.login:main"
 
 
 # ---------------------------------------------------------------------------

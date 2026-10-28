@@ -22,19 +22,19 @@ from .support import LIVE, LIVE_EE, LIVE_FIA, LIVE_LCMS, LIVE_SERVICES, LIVE_USG
 
 #: module -> whether its examples may run now.
 MODULES = {
-    "georest.restesri.services": LIVE_SERVICES,
-    "georest.restesri.portal": LIVE_SERVICES,
-    "georest.restesri.edw": LIVE,
-    "georest.restusgs.waterdata": LIVE_USGS,
-    "georest.restusgs.nldi": LIVE_USGS,
-    "georest.restusgs.nationalmap": LIVE_USGS,
-    "georest.restusgs.earthquakes": LIVE_USGS,
-    "georest.restusfs.vocab": LIVE_FIA,
-    "georest.restusfs.fia": LIVE_FIA,
-    "georest.restusfs.lcms": LIVE_LCMS,
-    "georest.restusfs.align": LIVE_FIA and LIVE_LCMS,
-    "georest.restusfs.lcms_ee": LIVE_EE,
-    "georest.restesri.auth": False,   # signs in through a browser
+    "georest.esri.services": LIVE_SERVICES,
+    "georest.esri.portal": LIVE_SERVICES,
+    "georest.esri.edw": LIVE,
+    "georest.usgs.waterdata": LIVE_USGS,
+    "georest.usgs.nldi": LIVE_USGS,
+    "georest.usgs.nationalmap": LIVE_USGS,
+    "georest.usgs.earthquakes": LIVE_USGS,
+    "georest.usfs.vocab": LIVE_FIA,
+    "georest.usfs.fia": LIVE_FIA,
+    "georest.usfs.lcms": LIVE_LCMS,
+    "georest.usfs.align": LIVE_FIA and LIVE_LCMS,
+    "georest.usfs.lcms_ee": LIVE_EE,
+    "georest.esri.auth": False,   # signs in through a browser
 }
 
 #: An example containing any of these needs a person or credentials.

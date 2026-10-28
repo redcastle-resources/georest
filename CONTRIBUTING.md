@@ -72,7 +72,7 @@ services. Check it with:
 georest-check-themes --emit
 ```
 
-Paste the emitted entries into `src/georest/restesri/edw.py` under the right theme
+Paste the emitted entries into `src/georest/esri/edw.py` under the right theme
 heading, replacing `THEME` with the correct category from `edw.VALID_THEMES`.
 
 ## Notebooks

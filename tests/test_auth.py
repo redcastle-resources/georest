@@ -1,4 +1,4 @@
-"""Offline tests for `georest.restesri.auth` and its hooks in `_http`.
+"""Offline tests for `georest.esri.auth` and its hooks in `_http`.
 
 `urllib.request.urlopen` is replaced by a `FakeNet` that answers by URL and
 records every request, so nothing here touches the network. The OAuth tests
@@ -21,7 +21,7 @@ import warnings
 from pathlib import Path
 from unittest import mock
 
-from georest.restesri import _http, auth, portal
+from georest.esri import _http, auth, portal
 
 AGOL = "https://myorg.maps.arcgis.com"
 ENTERPRISE = "https://gis.agency.gov/portal"
@@ -153,7 +153,7 @@ class TestHostScoping(AuthTestCase):
     def test_services_call_uses_session(self):
         net = self.net({"FeatureServer/0": {"name": "layer", "type": "Feature Layer"}})
         auth.set_token("SECRET", portal=AGOL)
-        from georest.restesri import services
+        from georest.esri import services
         services.getLayerInfo("https://services.arcgis.com/abc/arcgis/rest/services/x/FeatureServer/0")
         self.assertEqual(net.tokens(), ["SECRET"])
 

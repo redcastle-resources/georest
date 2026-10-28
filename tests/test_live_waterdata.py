@@ -1,4 +1,4 @@
-"""Live tests for `restusgs.waterdata` against api.waterdata.usgs.gov.
+"""Live tests for `usgs.waterdata` against api.waterdata.usgs.gov.
 
 Opt-in via USGS_LIVE=1 (or EDW_LIVE=1). Every call goes through `retry`, so
 a server that is down skips rather than fails. Anonymous callers get "a few
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import unittest
 
-from georest.restusgs import _ogc, waterdata
+from georest.usgs import _ogc, waterdata
 
 from .support import requires_live_usgs, retry
 

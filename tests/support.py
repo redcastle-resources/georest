@@ -15,13 +15,13 @@ import unittest
 import urllib.parse
 from pathlib import Path
 
-from georest.restesri import edw, services
+from georest.esri import edw, services
 
 # VALID_THEMES and theme_drift now live in edw itself, so the shipped
 # `georest-check-themes` CLI can use them without importing the test suite.
 # Re-exported here so the existing tests keep importing them from support.
-from georest.restesri.edw import VALID_THEMES, theme_drift  # noqa: F401
-from georest.restusgs import _ogc
+from georest.esri.edw import VALID_THEMES, theme_drift  # noqa: F401
+from georest.usgs import _ogc
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -47,7 +47,7 @@ requires_live_services = unittest.skipUnless(
     "network test; set SERVICES_LIVE=1 (or EDW_LIVE=1) to enable",
 )
 
-#: Live tests for `restusgs.waterdata` hit api.waterdata.usgs.gov - a third
+#: Live tests for `usgs.waterdata` hit api.waterdata.usgs.gov - a third
 #: server with its own uptime and an anonymous rate limit of a few queries per
 #: hour, so they are gated separately. EDW_LIVE turns on everything.
 LIVE_USGS = (
@@ -59,7 +59,7 @@ requires_live_usgs = unittest.skipUnless(
     "network test; set USGS_LIVE=1 (or EDW_LIVE=1) to enable",
 )
 
-#: `restusfs` talks to two more servers: FIADB-API (apps.fs.usda.gov) and the
+#: `usfs` talks to two more servers: FIADB-API (apps.fs.usda.gov) and the
 #: LCMS API (lcms-dashboard.fs2c.usda.gov), each with its own uptime.
 LIVE_FIA = os.environ.get("FIA_LIVE", "").lower() in _TRUTHY or LIVE
 LIVE_LCMS = os.environ.get("LCMS_LIVE", "").lower() in _TRUTHY or LIVE
@@ -202,7 +202,7 @@ def patched_services(**attrs):
 
 
 def patched_ogc(**attrs):
-    """`patched_module` for `georest.restusgs._ogc`, the one place restusgs
+    """`patched_module` for `georest.usgs._ogc`, the one place usgs
     touches the network. `waterdata` delegates every request to it, so
     swapping `_ogc.fetch_json_with_headers` (usually for a
     :class:`FakeOgcServer`) covers the whole provider."""

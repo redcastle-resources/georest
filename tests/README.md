@@ -1,8 +1,8 @@
 # georest tests
 
 Mostly standard-library `unittest`; `pytest` collects these natively and is
-what CI runs. The `restusfs` tests ported from geeViz (`test_restusfs.py`,
-`test_restusfs_njson_shape.py`, `test_restusfs_grouping_labels.py`) are pytest
+what CI runs. The `usfs` tests ported from geeViz (`test_usfs.py`,
+`test_usfs_njson_shape.py`, `test_usfs_grouping_labels.py`) are pytest
 functions, so run those with pytest; `python -m unittest` does not collect them.
 
 Install first - this is a `src/` layout, so `georest` is not importable from
@@ -33,7 +33,7 @@ later - so network tests are opt-in:
 ```bash
 EDW_LIVE=1 python -m unittest discover -s tests -t .        # everything live
 SERVICES_LIVE=1 python -m unittest tests.test_live_services # services.py only
-USGS_LIVE=1 python -m unittest tests.test_live_waterdata    # restusgs only
+USGS_LIVE=1 python -m unittest tests.test_live_waterdata    # usgs only
 ```
 
 Three flags, because the live suites hit different servers: `EDW_LIVE`
@@ -66,9 +66,9 @@ page served with status 200 looks like).
 | `test_live_catalog.py` | **Live**: catalog↔theme drift, end-to-end smoke |
 | `test_live_examples.py` | **Live**: executes `edw.py`'s own docstring examples |
 | `test_live_services.py` | **Live**: `services.py` against real Image/Feature Services |
-| `test_restusgs_http.py` | `restusgs/_http.py`: retry/backoff policy, `RateLimitError`, error-body surfacing, headers - against a fake `urlopen` and clock |
-| `test_restusgs_ogc.py` | `restusgs/_ogc.py`: cursor paging, `max_items`/`truncated`, `rate_limit`, parameter builders |
-| `test_waterdata.py` | `restusgs/waterdata.py`: parameter mapping, client-side sorting, `to_rows`, API-key resolution |
+| `test_usgs_http.py` | `usgs/_http.py`: retry/backoff policy, `RateLimitError`, error-body surfacing, headers - against a fake `urlopen` and clock |
+| `test_usgs_ogc.py` | `usgs/_ogc.py`: cursor paging, `max_items`/`truncated`, `rate_limit`, parameter builders |
+| `test_waterdata.py` | `usgs/waterdata.py`: parameter mapping, client-side sorting, `to_rows`, API-key resolution |
 | `test_live_waterdata.py` | **Live**: `waterdata` against api.waterdata.usgs.gov (`USGS_LIVE=1`) |
 
 ## Fixtures
@@ -89,7 +89,7 @@ costs freshness rather than the fixture.
 
 ## Checking the theme catalog
 
-`src/georest/restesri/edw.py` carries `_SERVICE_THEMES`, a hand-curated table of every
+`src/georest/esri/edw.py` carries `_SERVICE_THEMES`, a hand-curated table of every
 MapServer service with a theme and description. It drives theme filtering and
 description matching in `search_edw_services`, and rots silently as EDW
 publishes and retires services: an untyped service still appears in results,
@@ -101,7 +101,7 @@ georest-check-themes           # drift report
 georest-check-themes --emit    # + paste-ready entries
 ```
 
-`VALID_THEMES` and `theme_drift()` live in `georest.restesri.edw` so this
+`VALID_THEMES` and `theme_drift()` live in `georest.esri.edw` so this
 shipped CLI does not import the test suite; `tests/support.py` re-exports both,
 so tests can keep importing them from there.
 
@@ -131,15 +131,15 @@ binds the HTTP helpers into its own namespace at import time
 entry that is an exception so the transport-failure and format-fallback
 paths can be driven offline.
 
-For `restusgs`, use `support.patched_ogc(...)` (a `patched_module` over
-`georest.restusgs._ogc`, the one place the provider touches the network;
+For `usgs`, use `support.patched_ogc(...)` (a `patched_module` over
+`georest.usgs._ogc`, the one place the provider touches the network;
 `waterdata` delegates every request to it). `support.FakeOgcServer(features,
 page_cap=..., rate_limit=(limit, remaining))` stands in for
 `_ogc.fetch_json_with_headers`: it serves the given Features with cursor-style
 `next` links that echo every query parameter, caps each page like the real
 server, answers the `collections`/`queryables`/single-item endpoints, and
 records every URL and header set. `support.observation(i, ...)` builds one
-USGS observation Feature. `restusgs/_http.py` is tested one level lower, by
+USGS observation Feature. `usgs/_http.py` is tested one level lower, by
 binding a fake `urlopen` and a fake `sleep` onto the module.
 
 ## What the services tests pin down

@@ -89,9 +89,9 @@ jobs:
           names = zipfile.ZipFile(whl).namelist()
           print("\n".join(sorted(names)))
           assert "georest/__init__.py" in names
-          assert "georest/restesri/edw.py" in names
-          assert "georest/restusgs/waterdata.py" in names
-          assert "georest/restusgs/_ogc.py" in names
+          assert "georest/esri/edw.py" in names
+          assert "georest/usgs/waterdata.py" in names
+          assert "georest/usgs/_ogc.py" in names
           assert "georest/py.typed" in names
           stray = [n for n in names if not n.startswith(("georest/", "georest-"))]
           assert not stray, f"unexpected files in the wheel: {stray}"
@@ -111,17 +111,17 @@ jobs:
           cd /tmp
           /tmp/verify/bin/python -c "
           import georest
-          from georest.restesri import edw, portal, services
-          from georest.restusgs import waterdata
+          from georest.esri import edw, portal, services
+          from georest.usgs import waterdata
           assert georest.edw is edw
           assert georest.waterdata is waterdata
           print('version', georest.__version__)
           print('themes', len(edw._SERVICE_THEMES))
           print('portals', sorted(portal.PORTALS))
           print('collections', len(waterdata.COLLECTIONS))
-          # restusfs ships its FIA catalogs as package data; a wheel missing
+          # usfs ships its FIA catalogs as package data; a wheel missing
           # them would only fail when a user first searched.
-          from georest.restusfs import fia
+          from georest.usfs import fia
           assert georest.fia is fia
           n = len(fia.find_attributes(''))
           assert n > 700, n

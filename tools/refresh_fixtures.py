@@ -20,8 +20,8 @@ import sys
 import time
 from pathlib import Path
 
-from georest.restesri import edw
-from georest.restesri._http import fetch_json
+from georest.esri import edw
+from georest.esri._http import fetch_json
 
 #: Repo root is the parent of tools/; the fixture lives under tests/.
 TARGET = (Path(__file__).resolve().parent.parent

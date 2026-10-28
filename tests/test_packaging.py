@@ -1,7 +1,8 @@
 """Guards on the package structure introduced by the georest restructure.
 
 These are cheap, offline, and protect invariants that are easy to break
-silently: the top-level re-export identity, and the stdlib-only guarantee.
+silently: the top-level re-export identity, and which third-party imports each
+subpackage may use.
 """
 from __future__ import annotations
 
@@ -10,12 +11,12 @@ import pathlib
 import unittest
 
 import georest
-from georest.restesri import edw, portal, services
+from georest.esri import edw, portal, services
 
 
 class TestReExports(unittest.TestCase):
     def test_reexports_are_the_same_objects(self):
-        """georest.edw must BE georest.restesri.edw, not a copy.
+        """georest.edw must BE georest.esri.edw, not a copy.
 
         tests/support.py patches the network layer with setattr() on the
         module object. If the two import paths yielded distinct modules, a
@@ -30,10 +31,10 @@ class TestReExports(unittest.TestCase):
         self.assertIs(lazy_edw, edw)
 
     def test_subpackage_is_reachable_both_ways(self):
-        """`from georest import restesri` and `georest.restesri` agree, and
+        """`from georest import esri` and `georest.esri` agree, and
         both are the module `edw` actually lives in."""
-        from georest import restesri as imported
-        self.assertIs(imported, georest.restesri)
+        from georest import esri as imported
+        self.assertIs(imported, georest.esri)
         self.assertIs(imported.edw, edw)
 
     def test_dunder_all_is_resolvable(self):
@@ -57,14 +58,14 @@ class TestReExports(unittest.TestCase):
                 self.assertNotIn(name, georest._LAZY)
                 self.assertNotIn(name, georest.__all__)
 
-    def test_restusgs_reexports_are_the_same_objects(self):
-        """Same identity rule as restesri: tests patch `_ogc` by setattr, and
+    def test_usgs_reexports_are_the_same_objects(self):
+        """Same identity rule as esri: tests patch `_ogc` by setattr, and
         `georest.waterdata` must be the module that actually calls it."""
-        from georest.restusgs import waterdata
+        from georest.usgs import waterdata
         self.assertIs(georest.waterdata, waterdata)
-        from georest import restusgs
-        self.assertIs(restusgs, georest.restusgs)
-        self.assertIs(restusgs.waterdata, waterdata)
+        from georest import usgs
+        self.assertIs(usgs, georest.usgs)
+        self.assertIs(usgs.waterdata, waterdata)
 
     def test_version_is_pep440ish(self):
         self.assertRegex(georest.__version__, r"^\d+\.\d+\.\d+")
@@ -74,8 +75,8 @@ class TestUserAgent(unittest.TestCase):
     def test_user_agent_tracks_the_package_version(self):
         """It read "hostedServiceTools/1.0" for a while - a dead project name
         sent on every outbound request. Keep it pinned to the real version."""
-        from georest.restesri import _http
-        from georest.restusgs import _http as usgs_http
+        from georest.esri import _http
+        from georest.usgs import _http as usgs_http
         self.assertIn(f"georest/{georest.__version__}", _http._USER_AGENT)
         self.assertEqual(usgs_http._USER_AGENT, _http._USER_AGENT)
 
@@ -98,39 +99,39 @@ class TestCliHelp(unittest.TestCase):
     def test_help_text_excludes_the_license_header(self):
         """The license lives in the module docstring, which argparse would
         otherwise dump into --help. Regressed once; guarded now."""
-        from georest.restesri.cli import check_themes
+        from georest.esri.cli import check_themes
         self.assertNotIn("Apache License", check_themes._HELP)
         self.assertNotIn("Copyright", check_themes._HELP)
         self.assertIn("_SERVICE_THEMES", check_themes._HELP)
 
     def test_help_text_keeps_the_usage_examples_indented(self):
         """The default argparse formatter reflows these into one paragraph."""
-        from georest.restesri.cli import check_themes
+        from georest.esri.cli import check_themes
         self.assertIn("    georest-check-themes --emit", check_themes._HELP)
 
 
 class TestNoThirdPartyImports(unittest.TestCase):
-    """restesri and restusgs use only the standard library; restusfs may
-    add pandas, and Earth Engine only inside functions."""
+    """esri uses only the standard library; usgs and usfs may add pandas,
+    and usfs Earth Engine, only inside functions."""
 
     ALLOWED = {
         "__future__", "argparse", "ast", "base64", "collections", "contextlib",
         "dataclasses", "datetime", "difflib", "hashlib", "html", "http", "importlib",
-        "json", "logging", "math", "os", "pathlib", "re", "secrets", "sys", "threading",
+        "json", "logging", "math", "os", "pathlib", "pkgutil", "re", "secrets", "sys", "threading",
         "time", "typing", "unittest",
         "urllib", "uuid", "warnings", "webbrowser", "xml", "georest",
     }
-    #: restusfs returns DataFrames, and its LCMS-over-a-geometry path uses
+    #: usfs returns DataFrames, and its LCMS-over-a-geometry path uses
     #: Earth Engine, the optional "ee" extra.
-    RESTUSFS_EXTRA = {"pandas", "ee"}
-    #: restusgs returns DataFrames too, but has no Earth Engine path.
-    RESTUSGS_EXTRA = {"pandas"}
+    USFS_EXTRA = {"pandas", "ee"}
+    #: usgs returns DataFrames too, but has no Earth Engine path.
+    USGS_EXTRA = {"pandas"}
 
     def _allowed_for(self, path):
-        if "restusfs" in path.parts:
-            return self.ALLOWED | self.RESTUSFS_EXTRA
-        if "restusgs" in path.parts:
-            return self.ALLOWED | self.RESTUSGS_EXTRA
+        if "usfs" in path.parts:
+            return self.ALLOWED | self.USFS_EXTRA
+        if "usgs" in path.parts:
+            return self.ALLOWED | self.USGS_EXTRA
         return self.ALLOWED
 
     def test_package_imports_only_stdlib(self):
@@ -213,8 +214,8 @@ class TestVersionSingleSource(unittest.TestCase):
         self.assertNotRegex(text, r'^\s*version\s*=\s*"', )
 
     def test_no_duplicate_version_in_subpackage(self):
-        from georest import restesri, restusgs
-        for package in (restesri, restusgs):
+        from georest import esri, usgs
+        for package in (esri, usgs):
             with self.subTest(package=package.__name__):
                 self.assertFalse(hasattr(package, "__version__"))
 

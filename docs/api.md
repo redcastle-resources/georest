@@ -1,26 +1,26 @@
 # georest - API reference
 
 Python clients for geospatial REST APIs, one provider subpackage per API family:
-`georest.restesri` (ArcGIS Image/Map/Feature Services, the USFS EDW, Portal search),
-`georest.restusgs` (the USGS Water Data OGC API), and `georest.restusfs` (Forest Service
+`georest.esri` (ArcGIS Image/Map/Feature Services, the USFS EDW, Portal search),
+`georest.usgs` (the USGS Water Data OGC API), and `georest.usfs` (Forest Service
 FIA estimates and LCMS summaries). The full generated reference is at
 [georest.io](https://georest.io).
 
 Contribution guidelines live in [CONTRIBUTING.md](../CONTRIBUTING.md); installation and
 a quick start are in the [README](../README.md).
 
-- [georest.restesri](#georestrestesri) - `services`, `edw`, `portal`, `_http`
-- [georest.restusgs](#georestrestusgs) - `waterdata`, `_ogc`, `_http`
-- [georest.restusfs](#georestrestusfs) - `fia`, `vocab`, `lcms`, `lcms_ee`, `align`
+- [georest.esri](#georestesri) - `services`, `edw`, `portal`, `_http`
+- [georest.usgs](#georestusgs) - `waterdata`, `_ogc`, `_http`
+- [georest.usfs](#georestusfs) - `fia`, `vocab`, `lcms`, `lcms_ee`, `align`
 - [Using georest from an MCP server](#using-georest-from-an-mcp-server)
 - [Tests](#tests)
 
-## georest.restesri
+## georest.esri
 
-All four modules live under `georest.restesri`:
+All four modules live under `georest.esri`:
 
 ```python
-from georest.restesri import edw, portal, services
+from georest.esri import edw, portal, services
 from georest import edw                      # equivalent top-level re-export
 ```
 
@@ -104,19 +104,19 @@ Default request timeout is 60 seconds (`_TIMEOUT`) - every fetch function above 
 
 Errors surface two ways: `RuntimeError` for HTTP and URL failures, and `ValueError` when a response won't parse as JSON - which is what a degraded HTML error page served with status 200 looks like. Callers retrying around a flaky server need to catch both. `services.py` and `portal.py` follow the same contract and add one more case: a service that answers **200 with an Esri error object** (a missing service, a bad `where` clause, an expired token) raises `ValueError` too. None of these modules raise `ConnectionError`, despite what earlier docstrings claimed.
 
-## georest.restusgs
+## georest.usgs
 
 The USGS provider. One public module so far, `waterdata`, for the **USGS Water Data OGC
 API** (`https://api.waterdata.usgs.gov/ogcapi/v1`) - the modern replacement for the legacy
 NWIS Water Services (`/nwis/site`, `/nwis/dv`, `/nwis/iv`, `/nwis/gwlevels`, `/nwis/peak`).
 
 ```python
-from georest.restusgs import waterdata
+from georest.usgs import waterdata
 from georest import waterdata                # equivalent top-level re-export
 ```
 
-`restusgs` is self-contained: its private `_http.py` (transport) and `_ogc.py` (a generic
-OGC API - Features client) are its own, not shared with `restesri`.
+`usgs` is self-contained: its private `_http.py` (transport) and `_ogc.py` (a generic
+OGC API - Features client) are its own, not shared with `esri`.
 
 ### `waterdata.py` - USGS Water Data OGC API client
 
@@ -154,21 +154,21 @@ live, authoritative list), `PARAMETER_CODES` (`00060` discharge, `00065` gage he
 
 **API key resolution**, per call: an explicit `api_key=` argument wins (`""` forces anonymous); else the value given to `set_api_key`; else the first non-empty of `USGS_API_KEY` / `USGS_WATERDATA_API_KEY` in the environment; else anonymous. Anonymous use works, rate-limited to "a few queries per hour" - get a key at <https://api.waterdata.usgs.gov/signup/>. The key is sent only as the `X-Api-Key` header, never as a query parameter, so it cannot appear in a URL, an error message, or a server log. Reading a `.env` file is the application's job, not the library's.
 
-**Error contract.** Same as restesri - `RuntimeError` for transport failures, `ValueError` for a non-JSON body - with two refinements. A `RuntimeError` message includes the first 400 characters of the response body, which for this API is a JSON object whose `description` says what was actually wrong (`"Unknown string format: not-a-date"`). And a 429 the client won't wait out raises `RateLimitError`, a `RuntimeError` subclass with `.retry_after` (seconds the server asked for, or `None`). `TypeError` for a reserved query parameter and `ValueError` for a bad `bbox`/`page_size`/`max_items` are raised before any request.
+**Error contract.** Same as esri - `RuntimeError` for transport failures, `ValueError` for a non-JSON body - with two refinements. A `RuntimeError` message includes the first 400 characters of the response body, which for this API is a JSON object whose `description` says what was actually wrong (`"Unknown string format: not-a-date"`). And a 429 the client won't wait out raises `RateLimitError`, a `RuntimeError` subclass with `.retry_after` (seconds the server asked for, or `None`). `TypeError` for a reserved query parameter and `ValueError` for a bad `bbox`/`page_size`/`max_items` are raised before any request.
 
 ### `_ogc.py` - generic OGC API - Features client (private)
 
 Nothing in it knows about USGS; `waterdata` is a thin layer over it, and another OGC endpoint could reuse it. `list_collections`, `get_collection`, `get_queryables`, `get_item`; `build_item_params(bbox, datetime, properties, skip_geometry, filter, filter_lang, limit, **filters)`; `bbox_param`, `datetime_param(start, end)`, `api_key_headers`; `iter_items(...)` (a generator over pages) and `get_items(...)` (merged FeatureCollection with the `truncated`/`rate_limit` members). Paging follows `rel="next"` hrefs verbatim - the server preserves every original parameter in them - and stops on a missing link, an empty page, `max_items`, or a link that points back at a URL already fetched. `MAX_LIMIT = 50_000` (the OpenAPI schema says 10 000, but 50 000 is accepted live; the live suite guards it), `DEFAULT_PAGE_SIZE = 10_000`. Binds `fetch_json_with_headers` from `_http` at import time, which is the test suite's patch point for the whole provider.
 
-### `_http.py` - restusgs transport (private)
+### `_http.py` - usgs transport (private)
 
-A copy of the restesri transport (`fetch_json`, `fetch_text`, `post_json`, the `georest/<version>` User-Agent, the same RuntimeError/ValueError contract) with what the USGS API needs: a keyword-only `headers=` on every fetcher; `fetch_json_with_headers` returning `(json, response_headers)`; `post_json_body` for a JSON-bodied POST (CQL2-JSON); the error-body excerpt in `RuntimeError` messages; and a retry policy tuned for a tool call inside an agent rather than a batch job - `502/503/504` are retried with a 1 s then 2 s backoff (3 attempts total; `retries=1` disables it), a `429` is retried only when the server's integer `Retry-After` is ≤ 5 s and otherwise raises `RateLimitError` immediately, and every other status (including 500, which from these APIs means "your query failed") raises at once. Worst-case added latency is 3 s. The duplication with `restesri._http` is deliberate for now; the two are candidates for a future shared core.
+A copy of the esri transport (`fetch_json`, `fetch_text`, `post_json`, the `georest/<version>` User-Agent, the same RuntimeError/ValueError contract) with what the USGS API needs: a keyword-only `headers=` on every fetcher; `fetch_json_with_headers` returning `(json, response_headers)`; `post_json_body` for a JSON-bodied POST (CQL2-JSON); the error-body excerpt in `RuntimeError` messages; and a retry policy tuned for a tool call inside an agent rather than a batch job - `502/503/504` are retried with a 1 s then 2 s backoff (3 attempts total; `retries=1` disables it), a `429` is retried only when the server's integer `Retry-After` is ≤ 5 s and otherwise raises `RateLimitError` immediately, and every other status (including 500, which from these APIs means "your query failed") raises at once. Worst-case added latency is 3 s. The duplication with `esri._http` is deliberate for now; the two are candidates for a future shared core.
 
-## georest.restusfs
+## georest.usfs
 
 USDA Forest Service data, in five modules: `fia` (estimates, and the searches that find
 what to estimate), `lcms`, `lcms_ee` (needs `georest[ee]`), `align` and `vocab` (the
-cached FIA catalogs). Import the module you need, `from georest.restusfs import fia`, and
+cached FIA catalogs). Import the module you need, `from georest.usfs import fia`, and
 call through it, `fia.estimate(...)`. Tabular results are pandas DataFrames.
 
 | Function | What it does |
@@ -182,7 +182,7 @@ call through it, `fia.estimate(...)`. Tabular results are pandas DataFrames.
 | `lcms.lcms_releases()`, `lcms.latest_release(product)`, `lcms.lcms_classes(product)`, `lcms.lcms_vis_params(product)` | Releases, class tables and palettes from the API |
 | `lcms_ee.lcms_ee_collection(product)` | The LCMS product as an `ee.ImageCollection` (needs `georest[ee]`) |
 | `align.compare_area(...)`, `align.summarize_comparison(result)` | LCMS treed area beside FIA forest-land area, with `align.COMPARISON_CAVEATS` |
-| `vocab.refresh_all()`, `vocab.cache_dir()` | Refresh the cached FIA vocabularies (`~/.georest/restusfs`) |
+| `vocab.refresh_all()`, `vocab.cache_dir()` | Refresh the cached FIA vocabularies (`~/.georest/usfs`) |
 
 Errors derive from `USFSError`: `UpstreamError` when an API refused the request (including
 LCMS's in-body `ParameterError` and FIADB-API's HTML error pages under HTTP 200),
@@ -192,7 +192,7 @@ caught locally before it was sent (`fia.FIAValidationError`).
 ## Using georest from an MCP server
 
 georest is built to be wrapped as tools for an LLM agent (the geeViz MCP server does this
-for `restesri`; it lives in its own repository). The library side of that contract:
+for `esri`; it lives in its own repository). The library side of that contract:
 
 - **Set the key once, at startup, and keep `api_key` out of every tool schema.** Read it
   from the server's secret store into `USGS_API_KEY` (or call `waterdata.set_api_key`) the
@@ -205,7 +205,7 @@ for `restesri`; it lives in its own repository). The library side of that contra
   surface `.retry_after`; the library never sleeps more than a few seconds inside a call.
 - **Error messages are safe to return to the model.** A `RuntimeError` carries the request
   URL and the API's own `description` - never the key, which travels only as a header.
-  restesri tokens do travel in the query string, so `_http` replaces them with `REDACTED`
+  esri tokens do travel in the query string, so `_http` replaces them with `REDACTED`
   in every error message.
 - **Sign users in out-of-band, never through a tool.** Run `georest-login` once in a
   terminal (a browser SSO sign-in that saves a refresh token); the server picks the session

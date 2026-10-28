@@ -2,20 +2,20 @@
 
 Subpackages
 -----------
-restesri
+esri
     ArcGIS / Esri REST services: Image, Map and Feature Services, the USFS
     Enterprise Data Warehouse (EDW), and ArcGIS Portal search.
-restusgs
+usgs
     USGS APIs: the Water Data OGC API (monitoring locations, daily and
     continuous values, field measurements, peaks).
-restusfs
+usfs
     USDA Forest Service APIs: FIA estimates with their sampling errors
     (EVALIDator) and LCMS land cover, land use and change summaries.
 
 Quick start::
 
-    from georest.restesri import edw, portal, services
-    from georest.restusgs import waterdata
+    from georest.esri import edw, portal, services
+    from georest.usgs import waterdata
 
     hits = edw.search_edw_services("fire")
     meta = portal.getServiceMetadata("https://.../ImageServer")
@@ -27,11 +27,11 @@ are imported lazily (PEP 562), so ``import georest`` itself costs almost
 nothing::
 
     from georest import edw          # the same module object as
-                                     # georest.restesri.edw
-    from georest import waterdata    # georest.restusgs.waterdata
+                                     # georest.esri.edw
+    from georest import waterdata    # georest.usgs.waterdata
 
-``restesri`` and ``restusgs`` use only the standard library. ``restusfs``
-returns pandas DataFrames, and its Earth Engine path needs the optional
+``esri`` uses only the standard library. ``usgs`` and ``usfs`` return
+pandas DataFrames, and ``usfs``' Earth Engine path needs the optional
 ``georest[ee]`` extra.
 
 Copyright 2026 Ryan Rock and Ian Housman
@@ -50,30 +50,33 @@ from typing import TYPE_CHECKING
 
 __version__ = "0.5.0.dev0"
 
-__all__ = ["restesri", "edw", "portal", "services", "restusgs", "waterdata",
-           "restusfs", "fia", "lcms", "__version__"]
+__all__ = ["esri", "edw", "portal", "services", "usgs", "waterdata",
+           "usfs", "fia", "lcms", "__version__"]
 
 if TYPE_CHECKING:  # so IDEs, mypy and pyright resolve the re-exports statically
-    from . import restesri, restusfs, restusgs
-    from .restesri import edw, portal, services
-    from .restusfs import fia, lcms
-    from .restusgs import waterdata
+    from . import esri, usfs, usgs
+    from .esri import edw, portal, services
+    from .usfs import fia, lcms
+    from .usgs import waterdata
 
 #: Names resolved on first access by :func:`__getattr__`, mapped to the
-#: module they alias. The private transports (``restesri._http``,
-#: ``restusgs._http``, ``restusgs._ogc``) are deliberately absent - callers
+#: module they alias. The private transports (``esri._http``,
+#: ``usgs._http``, ``usgs._ogc``) are deliberately absent - callers
 #: who genuinely need one should reach it through the explicit dotted path so
 #: its private status stays visible at the call site.
 _LAZY = {
+    "esri": ".esri",
+    "edw": ".esri.edw",
+    "portal": ".esri.portal",
+    "services": ".esri.services",
+    "usgs": ".usgs",
+    "waterdata": ".usgs.waterdata",
+    "usfs": ".usfs",
+    "fia": ".usfs.fia",
+    "lcms": ".usfs.lcms",
+    # Pre-0.5 names, kept importable (with a DeprecationWarning); not in __all__.
     "restesri": ".restesri",
-    "edw": ".restesri.edw",
-    "portal": ".restesri.portal",
-    "services": ".restesri.services",
     "restusgs": ".restusgs",
-    "waterdata": ".restusgs.waterdata",
-    "restusfs": ".restusfs",
-    "fia": ".restusfs.fia",
-    "lcms": ".restusfs.lcms",
 }
 
 
@@ -81,7 +84,7 @@ def __getattr__(name: str):
     """PEP 562 lazy attribute access for the re-exported provider modules.
 
     ``importlib.import_module`` returns the object already registered in
-    ``sys.modules``, so ``georest.edw is georest.restesri.edw``. That identity
+    ``sys.modules``, so ``georest.edw is georest.esri.edw``. That identity
     matters: the test suite patches the network layer with
     ``setattr(edw, ...)``, which would silently stop working against one
     import path if these were distinct module objects.

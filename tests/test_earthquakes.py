@@ -1,9 +1,9 @@
-"""georest.restusgs.earthquakes, offline: checks, paging and the rows."""
+"""georest.usgs.earthquakes, offline: checks, paging and the rows."""
 
 import unittest
 from unittest import mock
 
-from georest.restusgs import earthquakes as eq
+from georest.usgs import earthquakes as eq
 
 
 def _quake(i, mag=5.0, ms=1_735_689_600_000):

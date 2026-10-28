@@ -8,7 +8,7 @@ matching, so theme filters and alias searches stop finding it.
 """
 import unittest
 
-from georest.restesri import edw
+from georest.esri import edw
 
 from .support import requires_live, retry, theme_drift
 
