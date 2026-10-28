@@ -5,7 +5,7 @@ what CI runs. The `restusfs` tests ported from geeViz (`test_restusfs.py`,
 `test_restusfs_njson_shape.py`, `test_restusfs_grouping_labels.py`) are pytest
 functions, so run those with pytest; `python -m unittest` does not collect them.
 
-Install first — this is a `src/` layout, so `georest` is not importable from
+Install first - this is a `src/` layout, so `georest` is not importable from
 the repository root without it. That is deliberate: the suite imports the
 *installed* package, so a packaging mistake fails loudly instead of being
 masked by the working directory.
@@ -26,9 +26,9 @@ python -m unittest tests.test_layers             # one module
 ## Offline by default
 
 The offline suite never touches the network and is fully deterministic. The
-EDW server is genuinely unreliable — it intermittently answers 404, 500,
+EDW server is genuinely unreliable - it intermittently answers 404, 500,
 `Layer not found`, or 200-with-no-layers for services that work moments
-later — so network tests are opt-in:
+later - so network tests are opt-in:
 
 ```bash
 EDW_LIVE=1 python -m unittest discover -s tests -t .        # everything live
@@ -66,7 +66,7 @@ page served with status 200 looks like).
 | `test_live_catalog.py` | **Live**: catalog↔theme drift, end-to-end smoke |
 | `test_live_examples.py` | **Live**: executes `edw.py`'s own docstring examples |
 | `test_live_services.py` | **Live**: `services.py` against real Image/Feature Services |
-| `test_restusgs_http.py` | `restusgs/_http.py`: retry/backoff policy, `RateLimitError`, error-body surfacing, headers — against a fake `urlopen` and clock |
+| `test_restusgs_http.py` | `restusgs/_http.py`: retry/backoff policy, `RateLimitError`, error-body surfacing, headers - against a fake `urlopen` and clock |
 | `test_restusgs_ogc.py` | `restusgs/_ogc.py`: cursor paging, `max_items`/`truncated`, `rate_limit`, parameter builders |
 | `test_waterdata.py` | `restusgs/waterdata.py`: parameter mapping, client-side sorting, `to_rows`, API-key resolution |
 | `test_live_waterdata.py` | **Live**: `waterdata` against api.waterdata.usgs.gov (`USGS_LIVE=1`) |
@@ -74,8 +74,8 @@ page served with status 200 looks like).
 ## Fixtures
 
 `fixtures/layer_cache.json` holds every service's real MapServer layer tree,
-so the layer-role logic is exercised against genuine data — including the
-awkward shapes — without a network round-trip. The key regression test
+so the layer-role logic is exercised against genuine data - including the
+awkward shapes - without a network round-trip. The key regression test
 replays all ~105 of them.
 
 Refresh after EDW restructures services:
@@ -105,7 +105,7 @@ georest-check-themes --emit    # + paste-ready entries
 shipped CLI does not import the test suite; `tests/support.py` re-exports both,
 so tests can keep importing them from there.
 
-Exit code is 0 in sync, 1 drifted, 2 if the catalog was unreachable — so it
+Exit code is 0 in sync, 1 drifted, 2 if the catalog was unreachable - so it
 can gate a job. `test_live_catalog.py` asserts the same thing under
 `EDW_LIVE=1`.
 
@@ -123,7 +123,7 @@ Use `support.patched(...)` to swap out `fetch_json` / `post_json` /
 exit. `support.fake_layers([...])` serves a fixed layer list, and
 `support.layer(...)` builds entries with EDW's field names.
 
-For `services.py`, use `support.patched_services(...)` instead — the module
+For `services.py`, use `support.patched_services(...)` instead - the module
 binds the HTTP helpers into its own namespace at import time
 (`from ._http import fetch_json, ...`), so patching `_http` has no effect.
 `support.RecordingFetch(...)` stands in for `fetch_json`: it records every
@@ -148,7 +148,7 @@ binding a fake `urlopen` and a fake `sleep` onto the module.
 tests exist mostly to keep those workarounds honest:
 
 - `_http` turns **every** HTTP/URL failure into `RuntimeError`, so
-  `services.py` raises that rather than `ConnectionError` — which its
+  `services.py` raises that rather than `ConnectionError` - which its
   docstrings used to promise and could never deliver. `test_services.py`
   guards the docstrings themselves against that claim reappearing.
 - `getSamples` must never raise for a point it cannot sample; a failing

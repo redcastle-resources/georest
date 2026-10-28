@@ -30,7 +30,7 @@ geojson = edw.query_features(
     out_fields="fire_name,acres,year",
 )
 
-# Search any ArcGIS Portal — IIPP, ArcGIS Online, USGS, NOAA, USFS, NASA,
+# Search any ArcGIS Portal - IIPP, ArcGIS Online, USGS, NOAA, USFS, NASA,
 # or any ArcGIS Enterprise install
 results = portal.searchPortal("naip 2023", portal="agol")
 
@@ -72,7 +72,7 @@ almost nothing.
 `restesri` is the Esri/ArcGIS provider, `restusgs` the USGS provider, and `restusfs` the
 USDA Forest Service provider. Each sits under
 `georest` as a subpackage so providers can be added alongside one another without a
-namespace collision, and each is self-contained — its private `_http` (and, for
+namespace collision, and each is self-contained - its private `_http` (and, for
 restusgs, `_ogc`) module is its own.
 
 Full per-function reference: **[docs/api.md](docs/api.md)**.
@@ -123,7 +123,7 @@ then run the command again. `georest-login --logout` removes it. `GEOREST_ESRI_P
 The Water Data API works anonymously, rate-limited to "a few queries per hour". For more,
 [get a free key](https://api.waterdata.usgs.gov/signup/) and set `USGS_API_KEY` in the
 environment (or call `waterdata.set_api_key(...)` once at startup). The key is sent only as
-the `X-Api-Key` header — never in a URL, so it cannot leak through an error message or a
+the `X-Api-Key` header - never in a URL, so it cannot leak through an error message or a
 log line. Every result carries the remaining budget when the server reports it
 (`fc["rate_limit"]`), and a 429 the server won't let the client wait out raises
 `waterdata.RateLimitError` with a `.retry_after` rather than blocking.
@@ -137,7 +137,7 @@ georest-check-themes --emit   # + paste-ready _SERVICE_THEMES entries
 
 `edw._SERVICE_THEMES` is hand-curated and powers theme filtering and description
 matching. EDW publishes and retires services without notice, so the table rots
-quietly — an untyped service still appears in search results, but as theme
+quietly - an untyped service still appears in search results, but as theme
 `uncategorized` with no description for keyword matching to reach. Exit status is
 0 in sync, 1 drifted, 2 unreachable.
 
@@ -154,7 +154,7 @@ from RESTesri._http import fetch_json       # before
 from georest.restesri._http import fetch_json   # after
 ```
 
-Then delete any `sys.path.insert(...)` bootstrap — `pip install georest` (or
+Then delete any `sys.path.insert(...)` bootstrap - `pip install georest` (or
 `pip install -e .` from a clone) makes it unnecessary.
 
 ## Development
@@ -169,7 +169,7 @@ EDW_LIVE=1 SERVICES_LIVE=1 USGS_LIVE=1 python -m pytest   # include the network 
 ```
 
 This is a `src/` layout, so `pip install -e .` is required before the tests can
-import the package — that is deliberate. It makes the suite import the installed
+import the package - that is deliberate. It makes the suite import the installed
 artifact rather than the source directory, so a packaging mistake fails loudly
 instead of being masked by the working directory.
 
@@ -185,7 +185,7 @@ Python 3.9 or newer, and pandas 1.5 or newer. The 3.9 floor is deliberate: ArcGI
 
 ## License
 
-Apache License 2.0 — see [LICENSE](LICENSE).
+Apache License 2.0 - see [LICENSE](LICENSE).
 
 `portal.py` and `services.py` were ported from
 [geeViz](https://github.com/gee-community/geeViz)'s `esriLib.py`, with the

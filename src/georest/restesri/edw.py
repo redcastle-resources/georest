@@ -8,7 +8,7 @@ Quick start::
 
     from georest.restesri import edw
 
-    # Search for fire-related services (EDW catalog only — see search_edw_services)
+    # Search for fire-related services (EDW catalog only - see search_edw_services)
     services = edw.search_edw_services("fire")
 
     # Get layer info
@@ -53,7 +53,7 @@ EDW_BASE_URL = "https://apps.fs.usda.gov/arcx/rest/services/EDW"
 _MAX_RECORD_COUNT = 2000  # ArcGIS server default max
 
 # ---------------------------------------------------------------------------
-# Theme catalog — maps EDW service names to thematic categories + descriptions.
+# Theme catalog - maps EDW service names to thematic categories + descriptions.
 # Regenerated 2026-08-07 against the live catalog (GET {EDW_BASE_URL}?f=json)
 # and https://data.fs.usda.gov/geodata/edw/datasets.php (per-category pages
 # + the default/unfiltered page, which together cover more of the catalog
@@ -270,23 +270,23 @@ def theme_drift(services) -> dict[str, list[str]]:
     """Compare the live EDW catalog against the hand-maintained theme table.
 
     _SERVICE_THEMES powers theme filtering and description matching in
-    search_edw_services, and is curated by hand — so it silently rots as EDW
+    search_edw_services, and is curated by hand - so it silently rots as EDW
     publishes and retires services.
 
     Only MapServer services are expected to carry a theme. The catalog also
     publishes the odd GPServer (a geoprocessing tool, not a queryable data
-    service — currently RAVG_DataExtract_01), which has no layers and
+    service - currently RAVG_DataExtract_01), which has no layers and
     nothing to categorise; those are reported under "non_mapserver" for
     visibility rather than counted as drift.
 
     Takes the list of dicts from search_edw_services. Returns:
 
-        untyped  — live MapServer services with no theme entry. They still
+        untyped  - live MapServer services with no theme entry. They still
                    appear in search results, but as theme "uncategorized"
                    and with no description to match keywords against.
-        orphaned — theme entries whose service is gone from the catalog.
-        bad_theme / missing_desc — malformed entries.
-        non_mapserver — informational; not drift.
+        orphaned - theme entries whose service is gone from the catalog.
+        bad_theme / missing_desc - malformed entries.
+        non_mapserver - informational; not drift.
 
     Example::
 
@@ -325,11 +325,11 @@ def theme_drift(services) -> dict[str, list[str]]:
 def search_edw_services(query: str = "", theme: str = "") -> list[dict[str, str]]:
     """Search the USFS EDW catalog ONLY by keyword and/or theme.
 
-    IMPORTANT — scope: this searches exactly one flat catalog,
+    IMPORTANT - scope: this searches exactly one flat catalog,
     ``EDW_BASE_URL`` (https://apps.fs.usda.gov/arcx/rest/services/EDW). It
     does NOT search IIPP, ArcGIS Online, or any other portal. To search
     IIPP (or another portal) instead, use
-    ``georest.restesri.portal.searchPortal(query, portal="iipp")`` — that function
+    ``georest.restesri.portal.searchPortal(query, portal="iipp")`` - that function
     hits the portal's ``/sharing/rest/search`` endpoint directly and has no
     EDW-specific theme/keyword-alias matching.
 
@@ -407,12 +407,12 @@ def search_edw_services(query: str = "", theme: str = "") -> list[dict[str, str]
             # Strategy 2: substring match on theme description
             elif query_lower in svc_desc.lower():
                 matched = True
-            # Strategy 3: keyword alias — match expanded terms against name + desc
+            # Strategy 3: keyword alias - match expanded terms against name + desc
             elif alias_terms:
                 name_and_desc = (short_name + " " + svc_desc).lower()
                 if any(t in name_and_desc for t in alias_terms):
                     matched = True
-            # Strategy 4: keyword alias — match expanded themes
+            # Strategy 4: keyword alias - match expanded themes
             if not matched and alias_themes and svc_theme in alias_themes:
                 matched = True
 
@@ -486,7 +486,7 @@ def _int_or(value: Any, default: int) -> int:
     """Coerce a possibly-null/missing/non-numeric field to an int.
 
     dict.get(key, default) only supplies the default when the key is
-    *absent* — ArcGIS also emits keys that are present with a null value
+    *absent* - ArcGIS also emits keys that are present with a null value
     (minScale, maxScale, parentLayerId, id all show up this way), and those
     come back as None and blow up the numeric comparisons downstream.
     """
@@ -503,7 +503,7 @@ LAYER_ROLES = ("group", "detail", "coarse", "standalone")
 def get_layer_roles(service_name: str) -> list[dict[str, Any]]:
     """Every layer in an EDW service, tagged with its cartographic role.
 
-    ~18% of EDW services (19 of the 105 whose layer trees were surveyed —
+    ~18% of EDW services (19 of the 105 whose layer trees were surveyed -
     EDW_NorWeST_StreamTemperatures_01, the EDW_HydroFlowMetrics* family,
     EDW_County_01, EDW_State_01, EDW_RangerDistricts_01/03, ...) publish a
     theme more than once: a coarse layer meant only for small-scale
@@ -511,22 +511,22 @@ def get_layer_roles(service_name: str) -> list[dict[str, Any]]:
     zoom in) alongside a detailed layer carrying the real
     geometry/attribute resolution (drawn only once zoomed in). For
     feature-level work (query_features, spatial joins, attribute stats) the
-    coarse layer is almost never what you want — querying it can silently
+    coarse layer is almost never what you want - querying it can silently
     return generalized geometry rather than an error.
 
     Rather than drop anything, this returns the full layer list with each
     entry tagged, so a mis-grouping is visible instead of silently losing a
     layer. Each dict is get_service_info()['layers'] shape plus:
 
-        type, parentLayerId — as reported by the server
-        role — one of:
+        type, parentLayerId - as reported by the server
+        role - one of:
             "group"      a Group Layer container. Has no /query endpoint,
                          so it is never directly queryable.
             "detail"     the full-resolution member of a coarse/detail split
             "coarse"     a small-scale sibling superseded by a "detail"
                          layer in the same group
             "standalone" no split applies to its group; use it as-is
-        groupKey — the ("parent", id) or ("name", base) key its siblings
+        groupKey - the ("parent", id) or ("name", base) key its siblings
                    were matched on (None for group layers), so you can audit
                    why two layers were treated as versions of each other
 
@@ -537,7 +537,7 @@ def get_layer_roles(service_name: str) -> list[dict[str, Any]]:
     have minScale > 0 (EDW_CongressionalDistricts_04 publishes its national
     tier as minScale=77000000, maxScale=1000000), which is why the coarse
     test is maxScale > 0 alone. Any member of a splitting group that is not
-    detail — including a mid-resolution tier banded on both sides — is
+    detail - including a mid-resolution tier banded on both sides - is
     tagged coarse.
 
     Grouping caveat: siblings are matched by shared parent Group Layer when
@@ -545,7 +545,7 @@ def get_layer_roles(service_name: str) -> list[dict[str, Any]]:
     or "(National/Regional Extent)" stripped. Parent-based matching assumes
     a group holds one dataset at several resolutions. That holds throughout
     the current EDW catalog, but a group mixing genuinely different
-    datasets could see one tagged "coarse" against another — inspect
+    datasets could see one tagged "coarse" against another - inspect
     groupKey if a result looks wrong.
 
     Raises:
@@ -568,12 +568,12 @@ def get_layer_roles(service_name: str) -> list[dict[str, Any]]:
     if not raw_layers:
         # EDW intermittently answers 200 with the layers array missing or
         # empty. Every service seen doing this had layers on retry, so an
-        # empty list means a degraded response, not a layerless service —
+        # empty list means a degraded response, not a layerless service -
         # returning [] here would look identical to "nothing to query".
         raise RuntimeError(
             f"EDW returned no layers for {service_name}. The MapServer "
             f"response was empty or truncated (EDW does this intermittently) "
-            f"— retry before concluding the service has no layers."
+            f" - retry before concluding the service has no layers."
         )
 
     layers = [
@@ -628,7 +628,7 @@ def get_detail_layers(service_name: str) -> list[dict[str, Any]]:
 
     Convenience filter over get_layer_roles(): keeps the "detail" and
     "standalone" layers and sets aside Group Layers (not queryable) and
-    "coarse" small-scale duplicates. Safe to call on any service — one with
+    "coarse" small-scale duplicates. Safe to call on any service - one with
     no coarse/detail split returns all of its data layers.
 
     Use get_layer_roles() directly when you need to see what was set aside
@@ -658,7 +658,7 @@ def get_layer_info(service_name: str, layer_id: int) -> dict[str, Any]:
         maxRecordCount, supportedQueryFormats, capabilities (list of
         supported operations, e.g. ["Map", "Query", "Data"]),
         advancedQueryCapabilities (dict of supportsX booleans, e.g.
-        supportsQueryAnalytic, supportsStatistics — varies by service).
+        supportsQueryAnalytic, supportsStatistics - varies by service).
 
     Example::
 
@@ -705,7 +705,7 @@ def _get_max_record_count(service_name: str, layer_id: int) -> int:
     """The layer's own maxRecordCount, fetched once and cached.
 
     The server silently truncates every response to this many records, so it
-    — not the _MAX_RECORD_COUNT fallback — is the only safe page/chunk
+    - not the _MAX_RECORD_COUNT fallback - is the only safe page/chunk
     stride. Striding wider than the server will actually return makes the
     caller skip past records it never received: page 2 starts at offset
     `stride` while the server only handed back `maxRecordCount` rows, and the
@@ -729,7 +729,7 @@ def get_layer_metadata(
 ) -> dict[str, Any]:
     """Fetch and parse a layer's FGDC/ISO metadata XML (the `/metadata` operation).
 
-    This is a separate document from get_layer_info's REST JSON — it carries
+    This is a separate document from get_layer_info's REST JSON - it carries
     things the layer JSON doesn't: a dataset abstract/purpose, keywords, and
     per-field definitions (e.g. what "Post_ID" actually means).
 
@@ -873,7 +873,7 @@ def query_features(
         return_count_only: If True, return only the count of matching features.
         in_sr: Spatial reference WKID the input `geometry` is expressed in.
             Defaults to 4326 (WGS84), matching GeoJSON's own coordinate
-            convention. This is deliberately independent of `out_sr` —
+            convention. This is deliberately independent of `out_sr` -
             asking for output in another projection must not change how the
             input geometry is read.
 
@@ -883,8 +883,8 @@ def query_features(
     Note:
         Some EDW layers 500 or silently return zero features
         (exceededTransferLimit=True with an empty features list) for a
-        spatial query against a geometrically complex AOI — many disjoint
-        polygon parts and/or holes, e.g. a national forest boundary — even
+        spatial query against a geometrically complex AOI - many disjoint
+        polygon parts and/or holes, e.g. a national forest boundary - even
         though the AOI itself is valid (returnCountOnly on the identical
         geometry reports the correct match count). This is an upstream
         ArcGIS Server limitation, not a client-side bug. When detected,
@@ -917,7 +917,7 @@ def query_features(
         "outSR": str(out_sr),
         "f": "geojson",
         # Sent unclamped: the server caps this at the layer's own
-        # maxRecordCount anyway (verified — asking 100000 of a 2000-record
+        # maxRecordCount anyway (verified - asking 100000 of a 2000-record
         # layer returns 2000 + exceededTransferLimit, not an error). Clamping
         # to a hardcoded 2000 here only under-fetched layers allowing more.
         "resultRecordCount": str(max_features),
@@ -1002,7 +1002,7 @@ def _fetch_features_by_ids(
     """Fetch features for a known list of object IDs, in chunks.
 
     A plain attribute IN (...) filter carries no geometry payload, so it
-    sidesteps the complex-geometry query limitation entirely — used to
+    sidesteps the complex-geometry query limitation entirely - used to
     retrieve attributes/geometry for IDs already resolved by
     _query_object_ids.
 
@@ -1029,7 +1029,7 @@ def _fetch_features_by_ids(
         features = result.get("features", [])
         # Every ID came from this same layer via returnIdsOnly and the filter
         # is a bare IN (...), so a short chunk means records were dropped
-        # rather than legitimately filtered out. Fail loudly — silently
+        # rather than legitimately filtered out. Fail loudly - silently
         # returning a subset would corrupt any downstream analysis.
         if len(features) < len(chunk):
             raise RuntimeError(
@@ -1104,7 +1104,7 @@ def query_features_analytic(
     """Run SQL window-function analytics (rank, running total, LAG/LEAD, ...)
     against an EDW layer via the ArcGIS queryAnalytic operation.
 
-    Unlike query_features, rows are not collapsed — each analytic value is
+    Unlike query_features, rows are not collapsed - each analytic value is
     appended as a new field on its source feature. Use `analytic_where` to
     filter down to specific computed rows (e.g. "rank_val = 1" to keep only
     the top-ranked feature per partition).
@@ -1154,7 +1154,7 @@ def query_features_analytic(
         result = query_features_analytic(
             "EDW_TimberHarvest_01", 8,
             out_analytics=[{
-                # RANK takes no input field — the field being ranked is
+                # RANK takes no input field - the field being ranked is
                 # named in order_by.
                 "type": "RANK",
                 "order_by": "gis_acres DESC", "out_name": "acres_rank",
@@ -1169,7 +1169,7 @@ def query_features_analytic(
     url = f"{EDW_BASE_URL}/{service_name}/MapServer/{layer_id}/queryAnalytic"
 
     if partition_by:
-        # queryAnalytic has no top-level partitionBy request parameter — the
+        # queryAnalytic has no top-level partitionBy request parameter - the
         # partition must be nested in each analytic's own analyticParameters,
         # or the server silently computes the analytic over the whole result
         # set instead of per partition (verified against the live EDW server).
@@ -1272,7 +1272,7 @@ def top_n_per_group(
         service_name,
         layer_id,
         out_analytics=[{
-            # RANK takes no input field — `field` reaches the server via the
+            # RANK takes no input field - `field` reaches the server via the
             # window's own orderBy below.
             "type": "RANK",
             "order_by": f"{field} {direction}",
@@ -1373,7 +1373,7 @@ def query_features_with_pagination(
     """Query features with automatic pagination past the server's per-request cap.
 
     Same args as query_features, but max_features can exceed the layer's
-    maxRecordCount — results are fetched a page at a time and combined.
+    maxRecordCount - results are fetched a page at a time and combined.
     Returns a combined GeoJSON FeatureCollection.
 
     Note: pages are taken by resultOffset without an explicit sort. ArcGIS
@@ -1432,7 +1432,7 @@ def query_features_with_pagination(
         offset += len(features)
 
         # A short page means end-of-data only if the server isn't also
-        # flagging more rows behind it — belt and braces in case server_max
+        # flagging more rows behind it - belt and braces in case server_max
         # fell back to a guess after a failed metadata fetch.
         if len(features) < page_size and not data.get("exceededTransferLimit"):
             break

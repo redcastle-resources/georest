@@ -41,7 +41,7 @@ from ._http import fetch_json_with_headers
 _now = lambda: _dt.datetime.now(_dt.timezone.utc)  # noqa: E731
 
 #: ISO 8601 durations with a fixed length: weeks, days, hours, minutes,
-#: seconds. Years and months are rejected — they have no fixed length.
+#: seconds. Years and months are rejected - they have no fixed length.
 _DURATION_RE = re.compile(
     r"^P(?:(?P<weeks>\d+(?:\.\d+)?)W)?(?:(?P<days>\d+(?:\.\d+)?)D)?"
     r"(?:T(?:(?P<hours>\d+(?:\.\d+)?)H)?(?:(?P<minutes>\d+(?:\.\d+)?)M)?"
@@ -205,8 +205,8 @@ def datetime_param(
     - ``(None, None)`` → ``None`` (no filter).
     - A ``start`` string that already is an interval (contains ``/``) passes
       through untouched: ``start="2020-01-01/2020-01-31"``, ``"../2020-12-31"``.
-    - A ``start`` that is an ISO 8601 duration — ``"P7D"``, ``"PT6H"``,
-      ``"P2W"`` — means "the last …" and is resolved client-side to
+    - A ``start`` that is an ISO 8601 duration - ``"P7D"``, ``"PT6H"``,
+      ``"P2W"`` - means "the last …" and is resolved client-side to
       ``<now minus duration>/..``, because the server rejects durations.
     - ``date`` → ``YYYY-MM-DD``; a naive ``datetime`` → RFC 3339 with ``Z``
       (naive is taken to mean UTC); an aware ``datetime`` → its own offset.
@@ -239,7 +239,7 @@ def datetime_param(
 
 
 def api_key_headers(api_key: str | None) -> dict[str, str]:
-    """``{"X-Api-Key": key}`` or ``{}``. The key travels only as a header —
+    """``{"X-Api-Key": key}`` or ``{}``. The key travels only as a header -
     never in the query string, where it would land in every URL that an
     error message or a log line repeats."""
     return {"X-Api-Key": api_key} if api_key else {}
@@ -260,7 +260,7 @@ def build_item_params(
 
     Args:
         bbox: See :func:`bbox_param`.
-        datetime: A ready ``datetime`` value — see :func:`datetime_param`.
+        datetime: A ready ``datetime`` value - see :func:`datetime_param`.
         properties: Property names to include (a comma-separated string or an
             iterable). Verified to trim the response to exactly those keys.
         skip_geometry: Send ``skipGeometry=true``; geometry comes back null.
@@ -396,11 +396,11 @@ def get_items(
 
     The result carries two foreign members beyond ``type``/``features``:
 
-    - ``truncated: True`` — only present when the fetch stopped at
+    - ``truncated: True`` - only present when the fetch stopped at
       ``max_items`` while the server still had more. The API reports no
       ``numberMatched``, so this is the caller's only signal that the
       collection was cut; a silent cut would be the worst outcome.
-    - ``rate_limit: {"limit": n, "remaining": m}`` — from the last page's
+    - ``rate_limit: {"limit": n, "remaining": m}`` - from the last page's
       ``X-RateLimit-*`` headers when present. With one shared server key every
       caller draws on the same hourly budget, so it is reported in-band.
 

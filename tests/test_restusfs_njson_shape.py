@@ -3,7 +3,7 @@
 Background: ``/fullreport&outputFormat=JSON`` is broken server-side.
 EVALIDator raises ``Key Error / Received an Error: 'row'`` while building
 its nested row/column structure and returns an HTML error page under
-**HTTP 200** — so a naive client sees "200 OK" and tries to parse HTML.
+**HTTP 200** - so a naive client sees "200 OK" and tries to parse HTML.
 The identical query succeeds as HTML, NHTML, CSV, XML or NJSON, which is
 what proves it a serializer bug rather than an outage or a bad request.
 Observed against API v2.1.7 (2026-07-30) / FIADB_1.9.4.00.
@@ -17,7 +17,7 @@ Two things here are easy to get wrong and expensive to notice:
 2. **GRP ordering.** NJSON flattens to GRP1/GRP2/GRP3, which map
    positionally to pselected/rselected/cselected. Swapping row and column
    transposes every table while still producing plausible-looking
-   output — the worst kind of wrong.
+   output - the worst kind of wrong.
 
 These are offline tests over recorded payload shapes; they do not call
 the network, so they still pass while the upstream is unwell.
@@ -280,10 +280,10 @@ def test_fullreport_requests_njson_and_vocab_requests_json():
 
     m = re.search(r'"outputFormat":\s*"([A-Z]+)"', fia_src)
     assert m and m.group(1) == "NJSON", (
-        "fia.estimate must request NJSON — /fullreport&outputFormat=JSON "
+        "fia.estimate must request NJSON - /fullreport&outputFormat=JSON "
         "returns an HTML error page (KeyError 'row') under HTTP 200"
     )
     assert '"outputFormat": "JSON"' in vocab_src, (
-        "vocab must request JSON — the parameter endpoints return an "
+        "vocab must request JSON - the parameter endpoints return an "
         "error page for NJSON"
     )

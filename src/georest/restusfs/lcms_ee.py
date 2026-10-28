@@ -1,13 +1,13 @@
 """Earth Engine access to the LCMS products.
 
-The LCMS API serves 3,643 *precomputed* summary areas and nothing else —
+The LCMS API serves 3,643 *precomputed* summary areas and nothing else -
 ``bbox``, ``geojson`` and ``geometry`` are rejected, and ``POST`` returns
 403. So an arbitrary polygon has to be computed rather than requested,
 and the same products are published as Earth Engine assets.
 
 This module is the bridge. It is imported lazily by
 :func:`georest.restusfs.lcms.lcms_summary`, so the API-only path keeps
-working on a machine with no Earth Engine credentials — which is the
+working on a machine with no Earth Engine credentials - which is the
 normal case for the MCP tool and for anyone who just wants a county
 summary.
 
@@ -25,7 +25,7 @@ For *display*, prefer geeViz's built-in thematic handling::
 The assets carry ``<Product>_class_names`` / ``_class_values`` /
 ``_class_palette`` properties, which ``autoViz`` reads directly.
 :func:`georest.restusfs.lcms.lcms_vis_params` exists for the cases
-``autoViz`` cannot cover — charting API results, or building a legend
+``autoViz`` cannot cover - charting API results, or building a legend
 outside geeViz.
 
 Copyright 2026 Ryan Rock and Ian Housman
@@ -101,7 +101,7 @@ RELEASE_STUDY_AREAS = {
 #: Note this is NOT every product the LCMS *API* publishes. Release
 #: ``2025-6`` is a tree-canopy release carrying only
 #: ``NLCD_Percent_Tree_Canopy_Cover``, which is continuous rather than
-#: thematic and lives in a different Earth Engine collection — it is
+#: thematic and lives in a different Earth Engine collection - it is
 #: served by the API path, not by this module.
 PRODUCTS = ("Change", "Land_Cover", "Land_Use")
 
@@ -135,7 +135,7 @@ def lcms_ee_collection(product: str, release: str = "",
         product: ``"Change"``, ``"Land_Cover"`` or ``"Land_Use"``.
         release: Release version; defaults to current.
         study_area: Restrict to one study area (e.g. ``"CONUS"``,
-            ``"AK"``, ``"PRUSVI"``). Leave unset to keep all of them —
+            ``"AK"``, ``"PRUSVI"``). Leave unset to keep all of them -
             they do not overlap, so a geometry naturally selects the
             right one and a reduction over the union is correct.
 
@@ -176,7 +176,7 @@ def lcms_class_properties(product: str, release: str = "") -> dict:
     A second source of truth for the class table, independent of the
     API. Useful when Earth Engine is reachable but the API is not, and
     as a cross-check that the two backends agree about what the pixel
-    values mean — if they ever disagree, that is worth knowing loudly
+    values mean - if they ever disagree, that is worth knowing loudly
     rather than discovering through a mislabeled map.
 
     Example::

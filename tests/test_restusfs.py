@@ -1,8 +1,8 @@
 """Tests for georest.restusfs.
 
 Deliberately offline. Both upstreams are public government services with
-no uptime guarantee — FIADB-API was observed returning HTTP 200 with an
-HTML error page across *every* endpoint during development — so a suite
+no uptime guarantee - FIADB-API was observed returning HTTP 200 with an
+HTML error page across *every* endpoint during development - so a suite
 that depends on them is a suite that fails for reasons unrelated to the
 code. The bundled vocabularies make that avoidable: discovery,
 validation, reliability flagging, and response parsing are all testable
@@ -197,7 +197,7 @@ def test_unexpected_shape_raises_clearly():
 # ── LCMS envelope handling ───────────────────────────────────────────────
 
 def test_result_envelope_flattens_list_of_lists():
-    """``/release/`` returns [[rel], [rel], ...] — one list per release."""
+    """``/release/`` returns [[rel], [rel], ...] - one list per release."""
     payload = {"Result": [[{"VersionNumber": "2025-11"}],
                           [{"VersionNumber": "2025-6"}]]}
     out = lcms._result(payload)
@@ -212,7 +212,7 @@ def test_result_envelope_leaves_flat_lists_alone():
 
 
 def test_lcms_requires_a_parent_for_child_areas(stub_releases):
-    """county needs state, district needs forest — caught locally, with no
+    """county needs state, district needs forest - caught locally, with no
     network: the release list is stubbed, since the product check runs first."""
     with pytest.raises(ValueError):
         align.lcms_summary(county="Crook")
@@ -228,7 +228,7 @@ def test_lcms_inband_error_raises():
     """LCMS answers a bad area with HTTP 200 and ParameterError in body.
 
     A client trusting the status code returns an empty result instead of
-    an error — the most likely source of silent wrong answers here.
+    an error - the most likely source of silent wrong answers here.
     """
     from georest.restusfs._http import UpstreamError, _raise_for_inband_error
 
@@ -251,7 +251,7 @@ def test_evalidator_error_page_is_recognized():
     """FIADB-API delivers its 500s as an HTML page under HTTP 200.
 
     Without this, the error reads "expected JSON, got text/html" and
-    points at a missing outputFormat — sending the reader to fix
+    points at a missing outputFormat - sending the reader to fix
     something that is not broken.
     """
     from georest.restusfs._http import _evalidator_error

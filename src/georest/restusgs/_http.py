@@ -1,7 +1,7 @@
 """
 Private stdlib-only HTTP/JSON helpers used across the georest.restusgs modules.
 
-No third-party dependencies — GET/POST + JSON parsing via urllib only.
+No third-party dependencies - GET/POST + JSON parsing via urllib only.
 
 Duplicated from ``georest.restesri._http`` on purpose: the two providers are
 kept self-contained for now, and the two transports are candidates for a
@@ -12,7 +12,7 @@ needs and the Esri one does not:
 - A bounded retry on 502/503/504, and on 429 only when the server's
   ``Retry-After`` is short. The policy is tuned for a tool call inside an
   agent, not a batch job: it never blocks for more than a few seconds.
-- The first 400 characters of an HTTP error body in the raised message —
+- The first 400 characters of an HTTP error body in the raised message -
   the USGS API answers 400 with a JSON ``description`` that says what was
   actually wrong.
 - ``fetch_json_with_headers`` so callers can read ``X-RateLimit-*``, and
@@ -88,7 +88,7 @@ def _read_error_body(exc: urllib.error.HTTPError) -> str:
 
 def _retry_after_seconds(value: str | None) -> int | None:
     """Parse an integer-seconds `Retry-After`. The HTTP-date form is treated as
-    unknown rather than parsed — it would cost another stdlib import for a
+    unknown rather than parsed - it would cost another stdlib import for a
     form these APIs have not been seen to send."""
     if value is None:
         return None

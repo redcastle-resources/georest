@@ -16,7 +16,7 @@ Uncertainty             Map accuracy                 Design-based std. error
 
 **Map-derived area is not a design-based area estimate.** Comparing them
 conflates map accuracy with sampling error, and the two can differ
-substantially without either being wrong — different definitions of
+substantially without either being wrong - different definitions of
 "forest", different minimum mapping units, different reference dates.
 
 So nothing here returns a blended number. Every row carries the
@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 
 #: LCMS land-cover classes that carry tree cover. Used to build a
 #: "treed area" figure that is *comparable in spirit* to FIA forest
-#: land — not equal to it. FIA's definition is about land use and
+#: land - not equal to it. FIA's definition is about land use and
 #: stocking potential, not present canopy, so a recently harvested
 #: stand stays forest land in FIA while LCMS may map it as grass or
 #: barren in the same year. That divergence is real signal, and it is
@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 #:
 #: The ``(AK Only)`` suffix is part of the real class name, not a
 #: comment. Writing it without the suffix looks correct, matches nothing,
-#: and silently drops the class — invisible in CONUS where it never
+#: and silently drops the class - invisible in CONUS where it never
 #: occurs, and an understatement of tree area everywhere in Alaska. That
 #: is why :func:`lcms_tree_area` validates these names against the API's
 #: class list rather than trusting this tuple.
@@ -87,7 +87,7 @@ COMPARISON_CAVEATS = (
 )
 
 
-#: FIA attribute 2 — "Area of forest land, in acres".
+#: FIA attribute 2 - "Area of forest land, in acres".
 FOREST_AREA_SNUM = 2
 
 
@@ -101,7 +101,7 @@ def _warn_unknown_classes(classes, release: str = "") -> list:
 
     Without this, a wrong name is a silent undercount. ``'Tall Shrubs &
     Trees Mix'`` looks right but the real class carries an ``(AK Only)``
-    suffix — matching nothing, invisible across CONUS where the class
+    suffix - matching nothing, invisible across CONUS where the class
     never occurs, and quietly understating tree area throughout Alaska.
     Sums that are wrong but plausible are the worst kind.
 
@@ -200,9 +200,9 @@ def fia_forest_area(wc: int, *, rselected: str = "",
 def _select_county(fi, county: str):
     """Narrow a county-grouped FIA frame to one county.
 
-    FIA county labels look like ``` `41013 4113 OR Crook ``` — a
+    FIA county labels look like ``` `41013 4113 OR Crook ``` - a
     backtick-prefixed code, the state/county numeric, the state
-    abbreviation, then the name — so matching is a case-insensitive
+    abbreviation, then the name - so matching is a case-insensitive
     substring test on the name rather than equality.
 
     The county's aggregate row is relabelled ``Total`` so the caller
@@ -239,15 +239,15 @@ def compare_area(*, wc: int, state: str = "", county: str = "",
     """Put an LCMS treed area and an FIA forest-land estimate side by side.
 
     Returns a dict rather than a single frame, because the two halves are
-    not rows of one table — they are two different estimators of two
+    not rows of one table - they are two different estimators of two
     related-but-distinct quantities, and stacking them would imply a
     comparability that does not exist.
 
     Keys:
 
-    * ``lcms`` — per-year treed area frame.
-    * ``fia`` — forest-land estimate with ``se_pct`` and ``plots``.
-    * ``comparison`` — a small dict with both figures, their absolute
+    * ``lcms`` - per-year treed area frame.
+    * ``fia`` - forest-land estimate with ``se_pct`` and ``plots``.
+    * ``comparison`` - a small dict with both figures, their absolute
       and percentage difference, and ``caveats``, a list of the reasons
       they can legitimately disagree.
 

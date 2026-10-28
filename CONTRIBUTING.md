@@ -11,8 +11,8 @@ pip install -e ".[dev]"
 
 The editable install is **required**, not a convenience. This is a `src/` layout, so
 `georest` is not importable from the repository root without it. That is the point:
-the test suite imports the installed artifact, so a packaging mistake — a missing
-`__init__.py`, a wrong `packages =` — fails loudly instead of being masked by the
+the test suite imports the installed artifact, so a packaging mistake - a missing
+`__init__.py`, a wrong `packages =` - fails loudly instead of being masked by the
 working directory.
 
 ## The one rule that matters
@@ -24,7 +24,7 @@ resolver fight. `tests/test_packaging.py` enforces it by AST-walking every modul
 the package, so adding an import of `requests` fails the suite rather than shipping.
 
 If you genuinely need a third-party library, it belongs in an optional extra with a
-lazy import at the call site — never at module scope.
+lazy import at the call site - never at module scope.
 
 ## Tests
 
@@ -38,7 +38,7 @@ ruff check .
 `ruff format` is **not** enforced yet. The code predates any formatter, so
 adopting one reformats 21 files at once; that deserves its own commit rather
 than being smuggled into unrelated diffs. The lint ruleset in `pyproject.toml`
-is likewise a starter set, with the deferred rules listed there as a backlog —
+is likewise a starter set, with the deferred rules listed there as a backlog - 
 turn them on one at a time so each diff stays reviewable.
 
 Tests are written as `unittest.TestCase` classes to match the package's own
@@ -47,7 +47,7 @@ runner is fine locally.
 
 Live tests are opt-in and **skip** rather than fail when a server is unreachable.
 EDW intermittently answers 404, 500, `Layer not found`, or 200-with-no-layers for
-services that work moments later — a red run there says nothing about your change,
+services that work moments later - a red run there says nothing about your change,
 which is why CI leaves `EDW_LIVE`/`SERVICES_LIVE` unset and runs them on a weekly
 schedule instead.
 
@@ -85,7 +85,7 @@ jupyter nbconvert --clear-output --inplace examples/*.ipynb
 
 ## Releasing
 
-1. Bump `__version__` in `src/georest/__init__.py` — the single source of truth;
+1. Bump `__version__` in `src/georest/__init__.py` - the single source of truth;
    hatchling reads it by AST and `pyproject.toml` carries no literal version.
 2. Move the `## [Unreleased]` section of `CHANGELOG.md` under a new dated heading.
 3. Commit, then `git tag -a v0.1.0 -m "v0.1.0"` and push both.
@@ -93,6 +93,6 @@ jupyter nbconvert --clear-output --inplace examples/*.ipynb
    publishes to TestPyPI, installs from TestPyPI and smoke-tests it, and only then
    publishes to PyPI behind an environment approval.
 
-Version numbers are **immutable on PyPI and TestPyPI alike** — a bad release can be
+Version numbers are **immutable on PyPI and TestPyPI alike** - a bad release can be
 yanked but never replaced. Use `0.1.0.dev1`, `.dev2`, … for rehearsals so the real
 number stays available.

@@ -1,4 +1,4 @@
-"""georest.restusfs — clients for USDA Forest Service data APIs.
+"""georest.restusfs - clients for USDA Forest Service data APIs.
 
 Two public Forest Service APIs that answer complementary halves of the
 same question and look nothing alike:

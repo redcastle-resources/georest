@@ -1,6 +1,6 @@
 """Tests for the searchPortal org-scoping fix.
 
-Ported from the geeViz esriLib patch (redcastle-resources) to georest.restesri.portal — same style as the existing
+Ported from the geeViz esriLib patch (redcastle-resources) to georest.restesri.portal - same style as the existing
 suite: all HTTP mocked via unittest.mock, no network required.
 
 Covers:
@@ -68,7 +68,7 @@ class TestResolveOrgId(unittest.TestCase):
         self.assertEqual(m.call_count, 1)
 
     def test_failure_raises_and_is_not_cached(self):
-        """A transient failure must NOT be cached — caching it would silently
+        """A transient failure must NOT be cached - caching it would silently
         and permanently disable scoping, returning other orgs' data."""
         with patch.object(el, "fetch_json", side_effect=OSError("boom")) as m:
             with self.assertRaises(RuntimeError):
@@ -428,7 +428,7 @@ class TestResolveOrgIdRobustness(unittest.TestCase):
         should go out and all 8 should get the id.
 
         The fetcher sleeps so the other threads are guaranteed to arrive while
-        it is still in flight — without single-flight they would each issue
+        it is still in flight - without single-flight they would each issue
         their own request.
         """
         calls = []

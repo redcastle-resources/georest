@@ -166,12 +166,12 @@ on `sys.path`.
 ### Changed
 
 - **BREAKING:** `RESTesri` is no longer a top-level package. It is now
-  `georest.restesri`, a subpackage of the new `georest` distribution — lowercase,
+  `georest.restesri`, a subpackage of the new `georest` distribution - lowercase,
   because a mixed-case import name resolves on Windows and macOS but fails on Linux.
 
   ```python
   from RESTesri import edw                  # before
-  from georest.restesri import edw          # after — or: from georest import edw
+  from georest.restesri import edw          # after - or: from georest import edw
   ```
 
   There is no compatibility shim: the package was never published, so every user
@@ -203,10 +203,10 @@ on `sys.path`.
 
 ### Removed
 
-- `scratch/` — both generator scripts hardcoded paths into a temporary directory
+- `scratch/` - both generator scripts hardcoded paths into a temporary directory
   that no longer exists, so neither could run; `georest-check-themes --emit`
   supersedes them.
-- `esriToolsTest.ipynb` — a scratch notebook importing `arcgis.gis`, contrary to the
+- `esriToolsTest.ipynb` - a scratch notebook importing `arcgis.gis`, contrary to the
   stdlib-only design.
 - All five `sys.path.insert(...)` bootstraps (two CLIs, three notebooks), made
   unnecessary by the `src/` layout plus an editable install.

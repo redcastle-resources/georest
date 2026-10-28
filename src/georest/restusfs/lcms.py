@@ -1,4 +1,4 @@
-"""LCMS API client — Landscape Change Monitoring System.
+"""LCMS API client - Landscape Change Monitoring System.
 
 Wall-to-wall 30 m maps of land cover, land use, and change across the
 conterminous US, Alaska, Hawaii and Puerto Rico, currently spanning
@@ -19,7 +19,7 @@ inspects the payload; that check is the reason it exists.
 parameters can be built *from the API* rather than from constants that
 drift out of sync at every release. See :func:`lcms_vis_params`.
 
-Areas are precomputed — 3,643 of them (counties, ranger districts, plus
+Areas are precomputed - 3,643 of them (counties, ranger districts, plus
 CONUS and All-Lands rollups). There is no runtime zonal-statistics
 engine behind this API: ``bbox``, ``geojson`` and ``geometry`` are all
 rejected, and ``POST`` returns 403. For an arbitrary polygon, use the
@@ -89,7 +89,7 @@ def lcms_releases(*, product: str = "", refresh: bool = False) -> list[dict]:
     * **Products differ.** ``2025-11`` carries ``Change`` /
       ``Land_Cover`` / ``Land_Use``; ``2025-6`` is a tree-canopy release
       carrying only ``NLCD_Percent_Tree_Canopy_Cover``. "The latest
-      release" is therefore ambiguous unless you say latest *of what* —
+      release" is therefore ambiguous unless you say latest *of what* -
       see :func:`latest_release`.
     * **The API's summaries cover less than the imagery.** The API's
       pre-computed summaries for ``2025-11`` list only CONUS and AK,
@@ -98,7 +98,7 @@ def lcms_releases(*, product: str = "", refresh: bool = False) -> list[dict]:
       the asset over a geometry (the Earth Engine path) rather than pin
       an older release for the API.
 
-    Note also that ``2022-8`` reports ``SummaryAreaCount = 0`` — it has
+    Note also that ``2022-8`` reports ``SummaryAreaCount = 0`` - it has
     no summary areas, so the API cannot answer area queries against it
     even though it lists products.
 
@@ -143,7 +143,7 @@ def latest_release(product: str = "") -> str:
     Args:
         product: Resolve to the newest release **carrying this
             product**. Without it you get the newest release overall,
-            which may not publish what you are about to ask for —
+            which may not publish what you are about to ask for -
             ``2025-6`` is newer than ``2024-10`` but has no
             ``Land_Cover``.
 
@@ -177,12 +177,12 @@ def _check_product(product: str, release: str = "") -> None:
     """Raise if ``release`` does not publish ``product``.
 
     Caught locally because the API's answer is an "Invalid Summary Area"
-    ParameterError, which points at the *area* — sending the reader to
+    ParameterError, which points at the *area* - sending the reader to
     check a county name when the real problem is that they asked a
     tree-canopy release for land cover.
     """
     # A release can publish the product and still be unable to answer,
-    # because it has no summary areas at all — 2022-8 reports
+    # because it has no summary areas at all - 2022-8 reports
     # SummaryAreaCount = 0. Left to the API that surfaces as "Invalid
     # Summary Area for LCMS Release 2022-8", which blames the county and
     # is wrong in the same way the product mismatch was.
@@ -190,7 +190,7 @@ def _check_product(product: str, release: str = "") -> None:
         if release and str(r.get("VersionNumber")) == str(release):
             # Only an EXPLICIT zero counts. A missing key means the
             # release list did not report a count, which is unknown
-            # rather than empty — treating it as empty would reject
+            # rather than empty - treating it as empty would reject
             # perfectly good releases on incomplete metadata.
             count = r.get("SummaryAreaCount")
             if count is not None and int(count) == 0:
@@ -244,7 +244,7 @@ def lcms_products(release: str = "", *, refresh: bool = False) -> list[dict]:
 
 
 def lcms_classes(product: str, release: str = "") -> Any:
-    """Class table for one product — name, pixel value, and palette hex.
+    """Class table for one product - name, pixel value, and palette hex.
 
     Returns a ``pandas.DataFrame`` with ``class_name``, ``class_value``
     and ``palette``.
@@ -280,7 +280,7 @@ def lcms_vis_params(product: str, release: str = "") -> dict:
         Map.addLayer(lcms_change, fs.lcms_vis_params("Change"), "LCMS Change")
 
     Taking the palette from the API rather than a hardcoded constant
-    means the legend cannot drift out of sync with the release — the
+    means the legend cannot drift out of sync with the release - the
     classes and their colors arrive from the same place as the data.
 
     The palette is emitted as a dense, value-ordered list so it lines up
@@ -353,7 +353,7 @@ def lcms_summary(product: str = "Land_Cover", *,
     Dispatches on what it is given:
 
     * A **named area** (``state``/``county``, or ``region``/``forest``/
-      ``district``) goes to the LCMS API — instant, precomputed, and no
+      ``district``) goes to the LCMS API - instant, precomputed, and no
       Earth Engine authentication required.
     * A **geometry** goes to Earth Engine, computing the same class
       areas over an arbitrary polygon. Slower, needs EE initialized, and
@@ -369,7 +369,7 @@ def lcms_summary(product: str = "Land_Cover", *,
         county: County name.
         region, forest, district: Forest Service units. ``district``
             requires ``forest``.
-        year: Single year. Omit for the full time series — the whole
+        year: Single year. Omit for the full time series - the whole
             1985-2025 range is ~64 KB, small enough to fetch eagerly.
         startyear, endyear: Inclusive year range.
         geometry: An ``ee.Geometry`` / ``ee.Feature`` /
@@ -407,7 +407,7 @@ def lcms_summary(product: str = "Land_Cover", *,
 
     # District without forest, or county without state, is rejected by
     # the API in a way that reads as "invalid summary area" rather than
-    # "you omitted the parent" — clearer to catch it here.
+    # "you omitted the parent" - clearer to catch it here.
     if county and not state:
         raise ValueError("county= requires state=")
     if district and not forest:
@@ -465,7 +465,7 @@ def _summary_from_ee(product: str, geometry: Any, *, scale: int,
 
     Deliberately imported lazily: Earth Engine is an *optional* path
     here, and the API path must keep working on a machine with no EE
-    credentials — which is the normal case for the MCP tool.
+    credentials - which is the normal case for the MCP tool.
     """
     try:
         import ee
@@ -511,7 +511,7 @@ def _summary_from_ee(product: str, geometry: Any, *, scale: int,
             })
 
     if not records:
-        # Almost always an AOI outside the release's coverage. Say so —
+        # Almost always an AOI outside the release's coverage. Say so -
         # and still return a frame WITH the expected columns, because an
         # empty DataFrame has no columns at all and the caller's very
         # next line is usually a column selection that would raise a
@@ -538,8 +538,8 @@ def _iter_year_images(coll, years):
     """Yield ``(year, ee.Image)`` for the requested years.
 
     **Mosaics across study areas rather than taking ``.first()``.** A
-    single year holds one image per study area — filtering 2024 in the
-    2025-11 release returns two, AK and CONUS — so ``.first()`` picks an
+    single year holds one image per study area - filtering 2024 in the
+    2025-11 release returns two, AK and CONUS - so ``.first()`` picks an
     arbitrary one. It picked AK, which meant an Oregon geometry reduced
     to nothing and produced an empty frame. The study areas do not
     overlap, so mosaicking them is both correct and the only way a

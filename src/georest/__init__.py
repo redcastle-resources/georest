@@ -1,4 +1,4 @@
-"""georest — Python clients for geospatial REST APIs.
+"""georest - Python clients for geospatial REST APIs.
 
 Subpackages
 -----------
@@ -61,7 +61,7 @@ if TYPE_CHECKING:  # so IDEs, mypy and pyright resolve the re-exports statically
 
 #: Names resolved on first access by :func:`__getattr__`, mapped to the
 #: module they alias. The private transports (``restesri._http``,
-#: ``restusgs._http``, ``restusgs._ogc``) are deliberately absent — callers
+#: ``restusgs._http``, ``restusgs._ogc``) are deliberately absent - callers
 #: who genuinely need one should reach it through the explicit dotted path so
 #: its private status stays visible at the call site.
 _LAZY = {

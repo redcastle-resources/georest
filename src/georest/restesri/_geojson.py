@@ -36,12 +36,12 @@ def _esri_rings_to_geojson(rings: list) -> dict | None:
     `rings` list, distinguished only by winding: clockwise (negative signed
     area) rings are exterior, counter-clockwise rings are holes belonging to
     the most recently seen exterior ring. GeoJSON instead nests holes inside
-    their parent polygon and treats *every* ring after the first as a hole —
+    their parent polygon and treats *every* ring after the first as a hole -
     so handing Esri's flat list straight to a GeoJSON Polygon silently turns
     the separate parts of e.g. Maui County into holes punched out of Maui.
 
     Output rings follow the RFC 7946 right-hand rule (exterior
-    counter-clockwise, holes clockwise) — the opposite of Esri's convention,
+    counter-clockwise, holes clockwise) - the opposite of Esri's convention,
     so each ring is reversed on the way out.
     """
     polygons: list[list[list]] = []
@@ -104,19 +104,19 @@ _OBJECT_ID_KEYS = ("objectid", "OBJECTID", "fid", "FID", "oid", "OID")
 def _sanitize_geojson(geojson: dict) -> dict:
     """Sanitize a GeoJSON FeatureCollection for downstream compatibility.
 
-    - Removes properties with dots in the name (e.g. 'SHAPE.LEN') — many
+    - Removes properties with dots in the name (e.g. 'SHAPE.LEN') - many
       consumers (e.g. Earth Engine) reject dotted property keys
     - Gives each feature a string 'id' it doesn't already have, preferring
       its object-id attribute and falling back to the positional index.
 
     The id is only ever filled in, never overwritten. A positional index is
-    not stable — it shifts with paging, filtering and result ordering, so the
-    same feature would answer to a different id on every call — and clobbering
+    not stable - it shifts with paging, filtering and result ordering, so the
+    same feature would answer to a different id on every call - and clobbering
     a server-supplied OBJECTID with one would destroy the only durable handle
     the caller has on a feature.
     """
     for i, feat in enumerate(geojson.get("features", [])):
-        # `or {}` — properties is legally null in GeoJSON, and iterating None
+        # `or {}` - properties is legally null in GeoJSON, and iterating None
         # raises.
         props = feat.get("properties") or {}
         for key in [k for k in props if "." in k]:

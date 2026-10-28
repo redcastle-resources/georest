@@ -1,4 +1,4 @@
-"""georest.restusgs — stdlib-only clients for USGS REST/OGC APIs.
+"""georest.restusgs - stdlib-only clients for USGS REST/OGC APIs.
 
 The first (and so far only) module is :mod:`waterdata`, a client for the
 USGS Water Data OGC API (``https://api.waterdata.usgs.gov/ogcapi/``):

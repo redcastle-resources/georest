@@ -1,4 +1,4 @@
-"""ArcGIS / Esri REST service clients — stdlib only, no third-party deps.
+"""ArcGIS / Esri REST service clients - stdlib only, no third-party deps.
 
 Modules
 -------

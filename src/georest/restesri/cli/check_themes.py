@@ -109,7 +109,7 @@ def main() -> int:
         ("orphaned", "theme entries for services no longer in the catalog"),
         ("bad_theme", "entries whose theme is not a known theme"),
         ("missing_desc", "entries with an empty description"),
-        ("non_mapserver", "non-MapServer services (informational — these "
+        ("non_mapserver", "non-MapServer services (informational - these "
                           "carry no layers and need no theme)"),
     ):
         names = drift[label]

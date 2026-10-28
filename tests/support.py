@@ -2,7 +2,7 @@
 
 Offline tests are the default and never touch the network. Live tests are
 opt-in via the EDW_LIVE environment variable, because the EDW server is
-genuinely unreliable — it intermittently answers 404, 500, "Layer not found",
+genuinely unreliable - it intermittently answers 404, 500, "Layer not found",
 or 200-with-no-layers for services that work moments later.
 """
 from __future__ import annotations
@@ -35,7 +35,7 @@ requires_live = unittest.skipUnless(
 )
 
 #: Live tests for `services.py` are gated separately, because they hit
-#: public ArcGIS hosts (geoplatform.gov, arcgisonline.com) rather than EDW —
+#: public ArcGIS hosts (geoplatform.gov, arcgisonline.com) rather than EDW -
 #: different servers, different uptime. EDW_LIVE also enables them so a
 #: single flag still turns on the whole network suite.
 LIVE_SERVICES = (
@@ -47,7 +47,7 @@ requires_live_services = unittest.skipUnless(
     "network test; set SERVICES_LIVE=1 (or EDW_LIVE=1) to enable",
 )
 
-#: Live tests for `restusgs.waterdata` hit api.waterdata.usgs.gov — a third
+#: Live tests for `restusgs.waterdata` hit api.waterdata.usgs.gov - a third
 #: server with its own uptime and an anonymous rate limit of a few queries per
 #: hour, so they are gated separately. EDW_LIVE turns on everything.
 LIVE_USGS = (
@@ -80,7 +80,7 @@ def load_layer_cache() -> dict[str, list[dict]]:
 
 
 #: How EDW's transient failures reach us. _http raises RuntimeError for
-#: HTTP/URL errors, but ValueError when a response won't parse as JSON —
+#: HTTP/URL errors, but ValueError when a response won't parse as JSON -
 #: which is what a degraded HTML error page served with status 200 looks
 #: like. Both are noise about the server, not signal about the code.
 TRANSIENT_ERRORS = (RuntimeError, ValueError)
@@ -175,7 +175,7 @@ def patched_module(module, **attrs):
 
     Every provider module binds its HTTP helpers into its own namespace at
     import time (`from ._http import fetch_json, ...`), so patching `_http`
-    directly has no effect — the names have to be replaced on the module
+    directly has no effect - the names have to be replaced on the module
     that calls them.
     """
     saved = {name: getattr(module, name) for name in attrs}
@@ -195,7 +195,7 @@ def patched_services(**attrs):
     The `services` counterpart of :func:`patched`. `services.py` binds the
     HTTP helpers into its own namespace at import time
     (`from ._http import fetch_json, ...`), so patching `_http` directly has
-    no effect — the names have to be replaced on `services` itself.
+    no effect - the names have to be replaced on `services` itself.
     """
     with patched_module(services, **attrs):
         yield
@@ -277,7 +277,7 @@ class FakeOgcServer:
 
     Stands in for `_ogc.fetch_json_with_headers`: returns `(page, headers)`.
     `/collections/{id}/items` serves `features` at most `page_cap` per page
-    regardless of the requested `limit` — the real server caps too — and
+    regardless of the requested `limit` - the real server caps too - and
     emits a `rel="next"` link whose `cursor` is the next offset and which
     echoes every other query parameter, exactly as the USGS API does. The
     other endpoints answer from `collections` / `queryables`. Records every

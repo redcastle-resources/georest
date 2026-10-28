@@ -1,7 +1,7 @@
 """
 Shared stdlib-only HTTP/JSON helpers used across the georest.restesri modules.
 
-No third-party dependencies — GET/POST + JSON parsing via urllib only.
+No third-party dependencies - GET/POST + JSON parsing via urllib only.
 
 Copyright 2026 Ryan Rock and Ian Housman
 
@@ -39,7 +39,7 @@ def fetch_json(url: str, params: dict[str, str] | None = None, timeout: int | No
             ArcGIS Image Service operations against large mosaic catalogs
             (hundreds of contributing rasters) or fine `pixelSize` requests
             over a sizable area can genuinely take 30-45+ seconds server-side
-            even for a simple answer (verified against live services) — pass
+            even for a simple answer (verified against live services) - pass
             a larger value for those rather than assuming a hang.
 
     Returns:
@@ -209,13 +209,13 @@ def format_esri_error(err: dict) -> str:
     Esri's `err["message"]` is frequently a generic, unhelpful string (e.g.
     "Invalid or missing input parameters") while the actually-diagnostic
     text lives in `err["details"]` (e.g. "The requested image exceeds the
-    size limit.") — verified against a live service, where the bare message
+    size limit.") - verified against a live service, where the bare message
     alone was actively misleading. Always include details when present.
 
     Lives here rather than in `services.py` so `portal.py` can use it too:
     `services` imports from `portal`, so the reverse import would be a cycle.
     """
-    msg = f"{err.get('code')} — {err.get('message', str(err))}"
+    msg = f"{err.get('code')} - {err.get('message', str(err))}"
     details = err.get("details")
     if details:
         msg += f" ({'; '.join(str(d) for d in details)})"

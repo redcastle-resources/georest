@@ -72,7 +72,7 @@ class TestReExports(unittest.TestCase):
 
 class TestUserAgent(unittest.TestCase):
     def test_user_agent_tracks_the_package_version(self):
-        """It read "hostedServiceTools/1.0" for a while — a dead project name
+        """It read "hostedServiceTools/1.0" for a while - a dead project name
         sent on every outbound request. Keep it pinned to the real version."""
         from georest.restesri import _http
         from georest.restusgs import _http as usgs_http

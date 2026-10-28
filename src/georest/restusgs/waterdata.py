@@ -1,5 +1,5 @@
 """
-USGS Water Data OGC API client — the modern replacement for NWIS Water Services.
+USGS Water Data OGC API client - the modern replacement for NWIS Water Services.
 
 Base URL ``https://api.waterdata.usgs.gov/ogcapi/v1``. Every function returns a
 GeoJSON ``FeatureCollection`` dict (one Feature per *observation* for the
@@ -172,7 +172,7 @@ def _eq_or_in(
 ) -> tuple[str | None, str | None]:
     """A scalar becomes a direct equality param; a list becomes a CQL2 ``IN``.
 
-    Returns ``(param_value, cql_clause)`` — exactly one is non-None, or both
+    Returns ``(param_value, cql_clause)`` - exactly one is non-None, or both
     are None when ``value`` is None.
     """
     if value is None:
@@ -282,7 +282,7 @@ def get_queryables(
     collection: str, *, api_key: str | None = None, timeout: int | None = None
 ) -> dict:
     """``{property_name: json_schema}`` for a collection. Every key is a valid
-    direct filter for :func:`get_items` and the helpers built on it —
+    direct filter for :func:`get_items` and the helpers built on it -
     ``daily`` alone has ~55, including every site attribute.
 
     Example::
@@ -321,9 +321,9 @@ def get_items(
     the code tables) or for a filter the helpers don't spell out.
 
     Args:
-        collection: A collection id — see :data:`COLLECTIONS` / :func:`list_collections`.
+        collection: A collection id - see :data:`COLLECTIONS` / :func:`list_collections`.
         bbox: ``minx,miny,maxx,maxy`` as a string, 4-tuple, or Esri-style dict.
-        start, end: The ``datetime`` window — strings, ``date`` or
+        start, end: The ``datetime`` window - strings, ``date`` or
             ``datetime`` objects; either side may be open. ``start`` may also
             be a ready interval (``"2020-01-01/2020-01-31"``, ``"../2020-12-31"``)
             or an ISO 8601 duration such as ``"P7D"`` or ``"PT6H"`` (the last 7
@@ -332,7 +332,7 @@ def get_items(
             months (``"P1Y"``, ``"P3M"``) raise ``ValueError``.
         properties: Property names to keep; the response is trimmed to exactly
             these (verified). Note this generic function does *not* add the
-            time-series essentials back — the helpers do.
+            time-series essentials back - the helpers do.
         skip_geometry: Return ``geometry: null`` on every Feature. Large
             observation pulls don't need a point repeated per row.
         filter: A CQL2 text expression (``"statistic_id IN ('00001','00003')"``).
@@ -505,7 +505,7 @@ def get_time_series_metadata(
     timeout: int | None = None,
     **filters: object,
 ) -> dict:
-    """What time series exist — the ``time-series-metadata`` collection
+    """What time series exist - the ``time-series-metadata`` collection
     (the old ``/nwis/site?seriesCatalogOutput=true``).
 
     One Feature per (site, parameter, statistic, computation) with its
@@ -604,10 +604,10 @@ def get_daily_values(
     timeout: int | None = None,
     **filters: object,
 ) -> dict:
-    """Daily statistics for a site — the ``daily`` collection (old ``/nwis/dv``).
+    """Daily statistics for a site - the ``daily`` collection (old ``/nwis/dv``).
 
     One Feature per day, sorted by ``(time_series_id, time)``. ``time`` is a
-    ``YYYY-MM-DD`` string; ``value`` is a string — see :func:`to_rows`.
+    ``YYYY-MM-DD`` string; ``value`` is a string - see :func:`to_rows`.
 
     Args:
         monitoring_location_id: ``"09380000"`` or ``"USGS-09380000"``; a list
@@ -615,7 +615,7 @@ def get_daily_values(
         parameter_code: Default ``"00060"`` (discharge). See :data:`PARAMETER_CODES`.
         statistic_id: Default ``"00003"`` (daily mean). See :data:`STATISTIC_CODES`.
         start, end: Date window (inclusive), open on either side.
-        skip_geometry: Default ``True`` — the site's point is the same on
+        skip_geometry: Default ``True`` - the site's point is the same on
             every row; use :func:`get_monitoring_location` for it.
         properties: Trim the response; ``time_series_id``, ``monitoring_location_id``,
             ``time`` and ``value`` are always kept.
@@ -664,7 +664,7 @@ def get_continuous_values(
     timeout: int | None = None,
     **filters: object,
 ) -> dict:
-    """Sensor readings, typically every 15 minutes — the ``continuous``
+    """Sensor readings, typically every 15 minutes - the ``continuous``
     collection (old ``/nwis/iv``, "instantaneous values").
 
     ``time`` is an RFC 3339 timestamp with offset. **Volume warning:** one
@@ -719,7 +719,7 @@ def get_latest_values(
     timeout: int | None = None,
     **filters: object,
 ) -> dict:
-    """The most recent observation per time series — ``latest-daily`` or
+    """The most recent observation per time series - ``latest-daily`` or
     ``latest-continuous`` (``source="daily"`` / ``"continuous"``).
 
     Unlike the history functions, no site is required: a ``bbox`` with
@@ -775,7 +775,7 @@ def get_field_measurements(
     timeout: int | None = None,
     **filters: object,
 ) -> dict:
-    """Manually collected site-visit readings — the ``field-measurements``
+    """Manually collected site-visit readings - the ``field-measurements``
     collection (old ``/nwis/gwlevels`` and ``/measurements``): groundwater
     levels, gage height and discharge measurements used to calibrate the
     sensors.
@@ -825,7 +825,7 @@ def get_peaks(
     timeout: int | None = None,
     **filters: object,
 ) -> dict:
-    """Annual peak streamflow — the ``peaks`` collection (old ``/nwis/peak``).
+    """Annual peak streamflow - the ``peaks`` collection (old ``/nwis/peak``).
 
     One Feature per water year with the peak ``value`` (ft³/s), its date in
     ``time``, ``water_year``, and a ``qualifier`` list (e.g. ``["REGULATED"]``).
@@ -877,7 +877,7 @@ def to_rows(fc: dict, numeric: Iterable[str] = ("value",)) -> list[dict]:
 
     Each row is the Feature's ``properties`` (copied), with the Feature's
     ``id`` added under ``"id"`` when the properties don't already carry one,
-    and every key named in ``numeric`` converted with ``float()`` — ``None``
+    and every key named in ``numeric`` converted with ``float()`` - ``None``
     when the value is missing or non-numeric (the API sends ``value`` as a
     string, and a qualifier such as ``"Ice"`` can stand in for a number).
     Rows are sorted by ``(time_series_id, time)`` like the series functions.

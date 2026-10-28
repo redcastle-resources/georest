@@ -1,4 +1,4 @@
-"""FIADB-API client — Forest Inventory and Analysis estimates.
+"""FIADB-API client - Forest Inventory and Analysis estimates.
 
 Wraps **EVALIDator**, the USFS tool behind ``fiadb-api/fullreport``.
 EVALIDator is the name people know this service by, so it is said
@@ -27,13 +27,13 @@ flags the ones too thin to report.
 
 Why plot count as well as standard error, when SE already grows as the
 sample shrinks: there are three regimes where SE cannot police itself.
-At ``n = 0`` it is zero or undefined — reading as *maximum precision*
+At ``n = 0`` it is zero or undefined - reading as *maximum precision*
 when it means *no information*, which is the dangerous inversion. At
 ``n = 1`` no variance estimate exists at all. And at small ``n`` the SE
 is itself estimated from that same tiny sample, so a small value can be
 luck rather than precision. There is a fourth, quieter problem: an SE
 is normally consumed as ``estimate ± 1.96·SE``, which assumes
-approximate normality — at small ``n`` that interval *undercovers*, in
+approximate normality - at small ``n`` that interval *undercovers*, in
 the direction of overconfidence.
 
 See Bechtold & Patterson, *The Enhanced Forest Inventory and Analysis
@@ -88,7 +88,7 @@ DEFAULT_MAX_SE_PCT = 30.0
 
 #: Flag a cell resting on fewer than this many plots. 30 is the
 #: conventional floor for the normal approximation that turns an SE into
-#: a confidence interval — which is exactly the assumption ``± 1.96·SE``
+#: a confidence interval - which is exactly the assumption ``± 1.96·SE``
 #: relies on.
 DEFAULT_MIN_PLOTS = 30
 
@@ -226,7 +226,7 @@ def estimate(wc: Union[int, Sequence[int]], snum: int, *,
             one request. That is the only way to get a correct combined
             standard error: estimating each separately gets a summed total
             right, but not its error.
-        snum: Estimate attribute — see
+        snum: Estimate attribute - see
             :func:`~georest.restusfs.fia.find_attributes`.
         rselected: Row grouping, as the exact display string from
             :func:`~georest.restusfs.fia.find_groupings`.
@@ -239,7 +239,7 @@ def estimate(wc: Union[int, Sequence[int]], snum: int, *,
             ``forest_definition`` column carries the definition the
             server reports having applied, so a saved frame records it.
         str_filter: SQL-style filter passed through as ``strFilter``.
-            Qualify columns with the FULL table name — ``plot.unitcd``,
+            Qualify columns with the FULL table name - ``plot.unitcd``,
             ``cond.owncd``, ``tree.spcd``. The short aliases that appear
             in FIA documentation and in the ``db_column`` values from
             :func:`find_groupings` (``P.``, ``C.``, ``PG.``) are NOT
@@ -249,7 +249,7 @@ def estimate(wc: Union[int, Sequence[int]], snum: int, *,
             problem. Two separate agent sessions burned several turns
             guessing before landing on ``plot.``.
 
-            Example — western Oregon survey units only::
+            Example - western Oregon survey units only::
 
                 estimate(wc=412022, snum=98, rselected="Unit code",
                          str_filter="plot.unitcd in (0, 1, 2)")
@@ -346,7 +346,7 @@ def _reason(se_pct, plots, max_se_pct, min_plots) -> str:
 
     ``n = 0`` and ``n = 1`` get their own reasons rather than being
     folded into "high error", because their standard errors are not
-    merely large — they are meaningless, and a zero SE on an empty cell
+    merely large - they are meaningless, and a zero SE on an empty cell
     looks like the most precise number on the page.
     """
     if plots is None:
@@ -367,7 +367,7 @@ def _grp_assignment(selections: tuple | None) -> dict[str, str | None]:
     """Map page/row/column onto the GRP keys NJSON will actually use.
 
     NJSON numbers its grouping columns GRP1..GRPn over the selections
-    that were SENT, in p, r, c order — not into fixed slots. So with
+    that were SENT, in p, r, c order - not into fixed slots. So with
     ``rselected`` and ``cselected`` but no ``pselected``, the row lands
     in ``GRP1`` and the column in ``GRP2``.
 
@@ -395,14 +395,14 @@ def _to_frame(payload: Any, *, max_se_pct: float, min_plots: int,
 
     Handles both response shapes:
 
-    * **NJSON** (what ``estimate`` now requests) — a flat object with an
+    * **NJSON** (what ``estimate`` now requests) - a flat object with an
       ``estimates`` list at the top level and no wrapper.
-    * **legacy JSON** — everything nested under ``EVALIDatorOutput`` as a
+    * **legacy JSON** - everything nested under ``EVALIDatorOutput`` as a
       row/column tree.
     """
     if not isinstance(payload, dict):
         raise ValueError(
-            "unexpected FIA response shape — expected a JSON object, "
+            "unexpected FIA response shape - expected a JSON object, "
             f"got {type(payload).__name__}"
         )
 
@@ -413,7 +413,7 @@ def _to_frame(payload: Any, *, max_se_pct: float, min_plots: int,
     if not isinstance(out, dict):
         if "estimates" not in payload:
             raise ValueError(
-                "unexpected FIA response shape — expected either an "
+                "unexpected FIA response shape - expected either an "
                 "'EVALIDatorOutput' object (legacy JSON) or a top-level "
                 f"'estimates' list (NJSON), got keys: "
                 f"{sorted(payload.keys())}"

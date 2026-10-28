@@ -2,7 +2,7 @@
 
 The headline check here is catalog drift: _SERVICE_THEMES is a hand-curated
 table of 143 services, and EDW publishes and retires services without notice.
-When it drifts, search_edw_services quietly degrades — an untyped service
+When it drifts, search_edw_services quietly degrades - an untyped service
 still appears, but as theme "uncategorized" with no description for keyword
 matching, so theme filters and alias searches stop finding it.
 """

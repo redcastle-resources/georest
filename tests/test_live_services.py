@@ -5,10 +5,10 @@ network suite). Skipped by default.
 
 These hit two public services rather than EDW:
 
-* an **Image Service** — USFS LCMS Annual Change (CONUS), a mosaic whose
+* an **Image Service** - USFS LCMS Annual Change (CONUS), a mosaic whose
   catalog rows are calendar years, so a single year is selected with a
   mosaic rule rather than a URL path;
-* a **Feature Service** — Esri's public Earthquakes_Since1970 sample.
+* a **Feature Service** - Esri's public Earthquakes_Since1970 sample.
 
 Assertions are kept to properties that are structural rather than editorial:
 shapes, types, spatial references, and the relationships between operations.
@@ -33,13 +33,13 @@ IMG = ("https://imagery.geoplatform.gov/iipp/rest/services/Vegetation/"
 FEAT = ("https://sampleserver6.arcgisonline.com/arcgis/rest/services/"
         "Earthquakes_Since1970/FeatureServer/0")
 
-#: A small AOI near the 2020 Castle Fire (Sequoia NF, CA) — inside the
+#: A small AOI near the 2020 Castle Fire (Sequoia NF, CA) - inside the
 #: service's coverage, small enough to compute over quickly.
 AOI = "-118.65,36.05,-118.45,36.25"
 IN_AOI = (-118.55, 36.15)
 YEAR_2020 = {"where": "year=2020"}
 
-#: Mid-Pacific — comfortably outside a CONUS service, so it must read NoData.
+#: Mid-Pacific - comfortably outside a CONUS service, so it must read NoData.
 OFF_COVERAGE = (-140.0, 36.15)
 
 #: Image Service operations can take 30-45+ seconds against a large mosaic
@@ -129,7 +129,7 @@ class FeatureServiceTests(unittest.TestCase):
 
 #: A genuinely *cached* service, for the tile-template test. The LCMS Image
 #: Service above has no tile cache at all (no `tileInfo`), so every tile URL
-#: built from it answers 404 — see `getImageServiceTileUrl`'s docstring.
+#: built from it answers 404 - see `getImageServiceTileUrl`'s docstring.
 TILED = "https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer"
 
 
@@ -251,7 +251,7 @@ class ImageServiceTests(unittest.TestCase):
         self.assertLess(coarse[0]["count"], native[0]["count"])
 
     def test_an_absurd_pixel_size_returns_empty_rather_than_erroring(self):
-        """90 *degrees*, not 90 m — the documented empty-list case."""
+        """90 *degrees*, not 90 m - the documented empty-list case."""
         got = retry(lambda: S.computeStatisticsHistograms(
             IMG, geometry=AOI, geometry_type="esriGeometryEnvelope", mosaic_rule=YEAR_2020,
             pixel_size={"x": 90, "y": 90, "spatialReference": {"wkid": 4326}}, timeout=SLOW))

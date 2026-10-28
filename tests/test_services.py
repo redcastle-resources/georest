@@ -1,4 +1,4 @@
-"""Offline tests for `georest/restesri/services.py` — every public function.
+"""Offline tests for `georest/restesri/services.py` - every public function.
 
 Deterministic and network-free: the HTTP helpers are replaced on the
 `services` module itself (see `support.patched_services`). The canned
@@ -29,7 +29,7 @@ FEAT = "https://example.com/arcgis/rest/services/Thing/FeatureServer/0"
 class TileUrlTests(unittest.TestCase):
 
     def test_uses_esri_zyx_order_not_xyz(self):
-        """ArcGIS puts y before x — the whole point of the helper."""
+        """ArcGIS puts y before x - the whole point of the helper."""
         self.assertEqual(
             S.getImageServiceTileUrl(IMG),
             f"{IMG}/tile/{{z}}/{{y}}/{{x}}",
@@ -190,7 +190,7 @@ class SanitizeGeoJsonTests(unittest.TestCase):
 class FormatEsriErrorTests(unittest.TestCase):
 
     def test_code_and_message(self):
-        self.assertEqual(S._format_esri_error({"code": 400, "message": "Bad"}), "400 — Bad")
+        self.assertEqual(S._format_esri_error({"code": 400, "message": "Bad"}), "400 - Bad")
 
     def test_details_are_appended_because_message_alone_misleads(self):
         got = S._format_esri_error({
@@ -423,7 +423,7 @@ class LayerInfoTests(unittest.TestCase):
         self.assertIn("states (0)", str(ctx.exception))
 
     def test_imageserver_root_is_still_a_valid_target(self):
-        """It carries real catalog fields and no `layers` — must not be rejected."""
+        """It carries real catalog fields and no `layers` - must not be rejected."""
         payload = {"name": "Veg/LCMS", "fields": [{"name": "objectid", "type": "esriFieldTypeOID"}],
                    "capabilities": "Image,Catalog"}
         with patched_services(fetch_json=RecordingFetch(payload)):
@@ -524,7 +524,7 @@ class ExportImageTests(unittest.TestCase):
                 self.assertEqual(handle.read(), self.TIFF)
 
     def test_json_error_body_is_detected_by_sniffing_the_bytes(self):
-        """Content-Type is unreliable here — an error body arrived as image/tiff."""
+        """Content-Type is unreliable here - an error body arrived as image/tiff."""
         body = json.dumps({"error": {"code": 400, "message": "Invalid or missing input parameters",
                                      "details": ["The requested image exceeds the size limit."]}}).encode()
         with patched_services(fetch_bytes=_FakeBytes(body, content_type="image/tiff")):
@@ -657,7 +657,7 @@ class StatisticsHistogramsTests(unittest.TestCase):
         self.assertEqual(json.loads(p["renderingRule"]), {"rasterFunction": "None"})
 
     def test_empty_result_is_an_empty_list_not_an_error(self):
-        """What an absurdly coarse pixel_size produces — documented behaviour."""
+        """What an absurdly coarse pixel_size produces - documented behaviour."""
         with patched_services(fetch_json=RecordingFetch({"statistics": [], "histograms": []})):
             self.assertEqual(S.computeStatisticsHistograms(IMG, geometry="0,0,1,1"), [])
 
