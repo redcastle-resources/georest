@@ -111,8 +111,8 @@ class TestCliHelp(unittest.TestCase):
 
 
 class TestNoThirdPartyImports(unittest.TestCase):
-    """esri uses only the standard library; usgs and usfs may add pandas,
-    and usfs Earth Engine, only inside functions."""
+    """esri uses only the standard library; usgs, usfs and noaa may add
+    pandas, and usfs Earth Engine, only inside functions."""
 
     ALLOWED = {
         "__future__", "argparse", "ast", "base64", "collections", "contextlib",
@@ -126,12 +126,16 @@ class TestNoThirdPartyImports(unittest.TestCase):
     USFS_EXTRA = {"pandas", "ee"}
     #: usgs returns DataFrames too, but has no Earth Engine path.
     USGS_EXTRA = {"pandas"}
+    #: noaa returns DataFrames, with no Earth Engine path.
+    NOAA_EXTRA = {"pandas"}
 
     def _allowed_for(self, path):
         if "usfs" in path.parts:
             return self.ALLOWED | self.USFS_EXTRA
         if "usgs" in path.parts:
             return self.ALLOWED | self.USGS_EXTRA
+        if "noaa" in path.parts:
+            return self.ALLOWED | self.NOAA_EXTRA
         return self.ALLOWED
 
     def test_package_imports_only_stdlib(self):

@@ -68,9 +68,10 @@ almost nothing.
 | `georest.esri.services` | Generic Image/Map/Feature Service queries and raster operations |
 | `georest.usgs.waterdata` | USGS Water Data OGC API: monitoring locations, daily/continuous values, field measurements, peaks, time-series metadata |
 | `georest.usfs` | Forest Service FIA estimates (EVALIDator) with sampling errors, LCMS land cover/use/change summaries, and the two side by side |
+| `georest.noaa` | NWS alerts, forecasts and observations (one unit system per call), NWPS river gauges with flood stages, CO-OPS tides, NHC active storms |
 
-`esri` is the Esri/ArcGIS provider, `usgs` the USGS provider, and `usfs` the
-USDA Forest Service provider. Each sits under
+`esri` is the Esri/ArcGIS provider, `usgs` the USGS provider, `usfs` the
+USDA Forest Service provider, and `noaa` the NOAA provider. Each sits under
 `georest` as a subpackage so providers can be added alongside one another without a
 namespace collision, and each is self-contained - its private `_http` (and, for
 usgs, `_ogc`) module is its own.

@@ -11,6 +11,9 @@ usgs
 usfs
     USDA Forest Service APIs: FIA estimates with their sampling errors
     (EVALIDator) and LCMS land cover, land use and change summaries.
+noaa
+    NOAA APIs: NWS alerts, forecasts and observations, river forecast
+    gauges (NWPS), tides (CO-OPS) and active hurricanes (NHC).
 
 Quick start::
 
@@ -51,11 +54,13 @@ from typing import TYPE_CHECKING
 __version__ = "0.5.0.dev0"
 
 __all__ = ["esri", "edw", "portal", "services", "usgs", "waterdata",
-           "usfs", "fia", "lcms", "__version__"]
+           "usfs", "fia", "lcms", "noaa", "nws", "nwps", "coops", "nhc",
+           "__version__"]
 
 if TYPE_CHECKING:  # so IDEs, mypy and pyright resolve the re-exports statically
-    from . import esri, usfs, usgs
+    from . import esri, noaa, usfs, usgs
     from .esri import edw, portal, services
+    from .noaa import coops, nhc, nwps, nws
     from .usfs import fia, lcms
     from .usgs import waterdata
 
@@ -74,6 +79,11 @@ _LAZY = {
     "usfs": ".usfs",
     "fia": ".usfs.fia",
     "lcms": ".usfs.lcms",
+    "noaa": ".noaa",
+    "nws": ".noaa.nws",
+    "nwps": ".noaa.nwps",
+    "coops": ".noaa.coops",
+    "nhc": ".noaa.nhc",
     # Pre-0.5 names, kept importable (with a DeprecationWarning); not in __all__.
     "restesri": ".restesri",
     "restusgs": ".restusgs",

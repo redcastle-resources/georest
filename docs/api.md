@@ -189,6 +189,36 @@ LCMS's in-body `ParameterError` and FIADB-API's HTML error pages under HTTP 200)
 `UpstreamUnavailable` when it could not be reached, and `FIAValidationError` for a request
 caught locally before it was sent (`fia.FIAValidationError`).
 
+## georest.noaa
+
+NOAA data, as pandas DataFrames. Import the module, `from georest.noaa import nws`, and
+call through it. Points are `lon, lat`; boxes `(xmin, ymin, xmax, ymax)`.
+
+| Function | What it does |
+|---|---|
+| `nws.alerts(point=None, area=None, event=, severity=)` | Active watches, warnings and advisories; with `point`, every row is in effect there (the NWS matched it), whatever its `area` text says. `has_polygon` and `zones` flag alerts issued for forecast zones with no polygon of their own |
+| `nws.alerts_geojson(...)` | The same as the NWS's GeoJSON FeatureCollection |
+| `nws.forecast(lon, lat, units="us", hourly=False)` | One row per period; `temperature_f`/`_c`, `wind_max_mph`/`_kmh` (upper end of the NWS's range) with the original `wind_text`; `NotCovered` outside the NWS |
+| `nws.stations(lon, lat)` | Observation stations for the point's grid, nearest first, with `distance_km` |
+| `nws.latest_observation(station, units="us")` | One station's latest reading, converted from the NWS's SI units; `qc` names unvalidated readings and unrecognized units (left `None`, never mislabelled) |
+| `nws.observations(lon, lat, n=3, units="us", max_age_minutes=90)` | Latest readings at the nearest stations with a current one; `df.attrs` names stations `dropped_stale` and `failed` |
+| `nwps.gauges(bbox, flooding_only=False)` | River forecast gauges: `stage`, `flood_category`, and the `forecast_*` crest (`None` when not current); `-999` sentinels become `None`; `df.attrs["flooding_now"]` |
+| `nwps.gauge(lid)` | One gauge in full, with `flood_stages` (action, minor, moderate, major) |
+| `coops.stations(kind)`, `coops.nearest(lon, lat, n=3, max_km=100)` | Tide stations, and the nearest ones with `distance_km` |
+| `coops.water_levels(station, hours=24, datum="MLLW", units="english")` | Measured water levels, oldest first, with `quality` (`p`/`v`); the datum and unit travel in `df.attrs` and the column name |
+| `coops.predictions(station, begin, end, interval="hilo")` | Tide predictions; `type` H/L for high and low |
+| `nhc.active_storms()` | Tropical cyclones the NHC is advising on: class, `wind_kt`, `pressure_mb`, position, motion, advisory and cone links |
+
+Errors are `NOAAError` (a `RuntimeError`) with the HTTP `status` where there is one; a
+CO-OPS error under HTTP 200 is raised as one too.
+
+### `_http.py` - noaa transport (private)
+
+`fetch_json` with an `Accept` header (the NWS API answers GeoJSON). Retries 500, 502,
+503 and 504 - the NWS API answers those for requests that succeed a moment later - and
+dropped connections: 3 attempts, 1 then 2 s. The problem-detail of an NWS error is kept
+in the message.
+
 ## Using georest from an MCP server
 
 georest is built to be wrapped as tools for an LLM agent (the geeViz MCP server does this
