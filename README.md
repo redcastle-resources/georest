@@ -69,6 +69,7 @@ almost nothing.
 | `georest.usgs.waterdata` | USGS Water Data OGC API: monitoring locations, daily/continuous values, field measurements, peaks, time-series metadata |
 | `georest.usfs` | Forest Service FIA estimates (EVALIDator) with sampling errors, LCMS land cover/use/change summaries, and the two side by side |
 | `georest.fema.nfhl` | FEMA's National Flood Hazard Layer: the flood zone at a point, when that map took effect, and new maps that are pending or preliminary |
+| `georest.fema.openfema` | OpenFEMA disaster declarations: by declared county, or one row per disaster |
 
 `esri` is the Esri/ArcGIS provider, `usgs` the USGS provider, `usfs` the
 USDA Forest Service provider, and `fema` the FEMA provider. Each sits under

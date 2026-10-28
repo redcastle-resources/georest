@@ -10,7 +10,7 @@ from __future__ import annotations
 import unittest
 from datetime import date
 
-from georest.fema import nfhl
+from georest.fema import nfhl, openfema
 
 from .support import requires_live_fema, retry
 
@@ -42,6 +42,26 @@ class LiveNfhlTests(unittest.TestCase):
         z = retry(lambda: nfhl.flood_zone(-157.0, 30.0))
         self.assertIsNone(z["zone"])
         self.assertFalse(z["mapped"])
+
+
+@requires_live_fema
+class LiveOpenFemaTests(unittest.TestCase):
+
+    def test_harvey_is_one_disaster_over_many_counties(self):
+        rows = retry(lambda: openfema.declarations(number=4332))
+        self.assertGreaterEqual(len(rows), 50)
+        self.assertEqual(set(rows["declaration_string"]), {"DR-4332-TX"})
+
+    def test_harris_county_had_harvey(self):
+        df = retry(lambda: openfema.disasters(fips="48201", since="2017-08-01",
+                                              until="2017-09-30"))
+        self.assertIn(4332, list(df["disaster_number"]))
+
+    def test_grouping_never_has_more_disasters_than_rows(self):
+        rows = retry(lambda: openfema.declarations(state="TX", since="2024-01-01"))
+        grouped = retry(lambda: openfema.disasters(state="TX", since="2024-01-01"))
+        self.assertLessEqual(len(grouped), len(rows))
+        self.assertEqual(len(grouped), rows["disaster_number"].nunique())
 
 
 if __name__ == "__main__":

@@ -6,9 +6,14 @@ nfhl
     The National Flood Hazard Layer: the flood zone at a point from the
     effective Flood Insurance Rate Map, and when that map took effect -
     with any later revision, and new maps that are pending or preliminary.
+openfema
+    OpenFEMA's disaster declarations: every federal declaration since
+    1953 and the counties each covers - by declared area, or one row per
+    disaster.
 
 ``fema`` is the FEMA provider. It sits under ``georest`` beside ``esri``,
-``usgs`` and ``usfs``, uses only the standard library, and is
+``usgs`` and ``usfs``. ``nfhl`` uses only the standard library;
+``openfema`` returns pandas DataFrames, like ``usgs``. It is
 self-contained: its private ``_http`` module is its own and not part of
 the public API.
 
@@ -18,6 +23,10 @@ Quick start::
 
     nfhl.flood_zone(-95.3698, 29.7604)
     nfhl.map_dates(-80.1300, 25.7907)
+
+    from georest.fema import openfema
+
+    openfema.disasters(state="TX", since="2025-01-01")
 
 Copyright 2026 Ryan Rock and Ian Housman
 
@@ -30,6 +39,6 @@ You may obtain a copy of the License at
 
 from __future__ import annotations
 
-from . import nfhl
+from . import nfhl, openfema
 
-__all__ = ["nfhl"]
+__all__ = ["nfhl", "openfema"]

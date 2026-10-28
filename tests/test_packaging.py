@@ -126,12 +126,16 @@ class TestNoThirdPartyImports(unittest.TestCase):
     USFS_EXTRA = {"pandas", "ee"}
     #: usgs returns DataFrames too, but has no Earth Engine path.
     USGS_EXTRA = {"pandas"}
+    #: fema.openfema returns DataFrames; fema.nfhl stays stdlib-only.
+    FEMA_EXTRA = {"pandas"}
 
     def _allowed_for(self, path):
         if "usfs" in path.parts:
             return self.ALLOWED | self.USFS_EXTRA
         if "usgs" in path.parts:
             return self.ALLOWED | self.USGS_EXTRA
+        if "fema" in path.parts:
+            return self.ALLOWED | self.FEMA_EXTRA
         return self.ALLOWED
 
     def test_package_imports_only_stdlib(self):

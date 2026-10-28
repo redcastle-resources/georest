@@ -7,6 +7,9 @@ misses:
   request fails with "connection reset by peer" and the same request
   succeeds a second later. Unlike a refused connection or a failed DNS
   lookup, that is transient, so it is retried here, briefly.
+* **Errors in the body.** OpenFEMA explains a refused query in the body of
+  its HTTP 400, as a list of errors; that text is kept in the raised
+  message.
 * **Errors under HTTP 200.** Like every ArcGIS server, a query that fails
   answers 200 with ``{"error": {...}}`` in the body. Read as an empty
   result it would say "no flood zone here" when nothing was checked, so
@@ -55,6 +58,19 @@ def _reset(exc: BaseException) -> bool:
                                TimeoutError))
 
 
+def _error_text(err) -> str:
+    """The message of an error object: ArcGIS sends one dict, OpenFEMA a
+    list of them."""
+    errs = err if isinstance(err, list) else [err]
+    parts = []
+    for e in errs:
+        if isinstance(e, dict):
+            parts.append(f"{e.get('code')}: {e.get('message')}")
+        elif e:
+            parts.append(str(e))
+    return "; ".join(parts) or "no message"
+
+
 def fetch_json(url: str, params: dict[str, str] | None = None,
                timeout: int | None = None) -> dict:
     """GET ``url`` with ``params`` and return the parsed JSON.
@@ -77,7 +93,14 @@ def fetch_json(url: str, params: dict[str, str] | None = None,
             if exc.code in _RETRY_STATUSES and not last:
                 _sleep(_RETRY_BASE * 2**attempt)
                 continue
-            raise RuntimeError(f"Request failed ({exc.code}): {full}") from exc
+            detail = ""
+            try:
+                body = json.loads(exc.read().decode("utf-8", errors="replace"))
+                if isinstance(body, dict) and body.get("error"):
+                    detail = "\n" + _error_text(body["error"])
+            except Exception:  # noqa: BLE001 - a body we can't read is not worth a second error
+                pass
+            raise RuntimeError(f"Request failed ({exc.code}): {full}{detail}") from exc
         except (urllib.error.URLError, OSError) as exc:
             if _reset(exc) and not last:
                 _sleep(_RETRY_BASE * 2**attempt)
@@ -89,9 +112,8 @@ def fetch_json(url: str, params: dict[str, str] | None = None,
         data = json.loads(text)
     except json.JSONDecodeError as exc:
         raise ValueError(f"Expected JSON from {full!r} but got:\n{text[:400]}") from exc
-    if isinstance(data, dict) and "error" in data:
-        err = data["error"] or {}
+    if isinstance(data, dict) and data.get("error"):
         raise RuntimeError(
             f"FEMA's service answered with an error "
-            f"({err.get('code')}: {err.get('message')}): {full}")
+            f"({_error_text(data['error'])}): {full}")
     return data
