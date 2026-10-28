@@ -8,6 +8,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `georest.noaa`, the NOAA provider: `nws` (active alerts at a point, in a state or
+  nationwide, with `has_polygon` for zone-only alerts; the forecast at a point; the
+  latest observations at the nearest stations, dropping stale readings), with one unit
+  system per call (`units="us"` or `"si"`, the unit in the column name) since the NWS
+  API itself mixes them; `nwps` (river gauges, flood categories, forecast crests and
+  flood stages, `-999` sentinels as `None`); `coops` (tide stations, measured water
+  levels with their datum, predictions); `nhc` (active tropical cyclones).
+
 - `georest.usfs`, the USDA Forest Service provider, moved here from geeViz's
   `fsInsights`:
   - `fia`: FIA estimates from FIADB-API (EVALIDator) with `se_pct` and `plots` on every
