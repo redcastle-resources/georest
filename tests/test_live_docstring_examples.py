@@ -26,6 +26,7 @@ MODULES = {
     "georest.restesri.portal": LIVE_SERVICES,
     "georest.restesri.edw": LIVE,
     "georest.restusgs.waterdata": LIVE_USGS,
+    "georest.restusgs.nldi": LIVE_USGS,
     "georest.restusfs.vocab": LIVE_FIA,
     "georest.restusfs.fia": LIVE_FIA,
     "georest.restusfs.lcms": LIVE_LCMS,

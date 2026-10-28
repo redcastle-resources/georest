@@ -123,10 +123,14 @@ class TestNoThirdPartyImports(unittest.TestCase):
     #: restusfs returns DataFrames, and its LCMS-over-a-geometry path uses
     #: Earth Engine, the optional "ee" extra.
     RESTUSFS_EXTRA = {"pandas", "ee"}
+    #: restusgs returns DataFrames too, but has no Earth Engine path.
+    RESTUSGS_EXTRA = {"pandas"}
 
     def _allowed_for(self, path):
         if "restusfs" in path.parts:
             return self.ALLOWED | self.RESTUSFS_EXTRA
+        if "restusgs" in path.parts:
+            return self.ALLOWED | self.RESTUSGS_EXTRA
         return self.ALLOWED
 
     def test_package_imports_only_stdlib(self):

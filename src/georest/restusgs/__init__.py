@@ -1,23 +1,30 @@
-"""georest.restusgs - stdlib-only clients for USGS REST/OGC APIs.
+"""georest.restusgs - clients for USGS APIs.
 
-The first (and so far only) module is :mod:`waterdata`, a client for the
-USGS Water Data OGC API (``https://api.waterdata.usgs.gov/ogcapi/``):
-monitoring locations, daily and continuous values, field measurements,
-annual peaks, and the metadata collections that describe them.
+Modules
+-------
+waterdata
+    The USGS Water Data OGC API: monitoring locations, daily and continuous
+    values, field measurements, annual peaks, and their metadata.
+nldi
+    The Hydro Network-Linked Data Index: find the river reach at a point,
+    walk the network upstream or downstream, list the gages and other sites
+    along the way, and delineate the basin that drains to a point.
 
 ``restusgs`` is the USGS provider. It sits under ``georest`` beside
-``restesri`` so providers can be added without a namespace collision, and
-it is self-contained: its private ``_http`` and ``_ogc`` modules are its own.
+``restesri`` and ``restusfs`` so providers can be added without a namespace
+collision, and it is self-contained: its private ``_http``, ``_ogc`` and
+``_frames`` modules are its own and not part of the public API.
 
 Quick start::
 
-    from georest.restusgs import waterdata
+    from georest.restusgs import nldi, waterdata
 
     fc = waterdata.get_daily_values("USGS-09380000", "00060",
                                     start="2024-01-01", end="2024-01-31")
     rows = waterdata.to_rows(fc)
 
-``_http`` and ``_ogc`` are not part of the public API.
+    upstream_gages = nldi.sites_along("nwissite", "USGS-09380000",
+                                      "upstream_tributaries", distance_km=100)
 
 Copyright 2026 Ryan Rock and Ian Housman
 
@@ -30,6 +37,6 @@ You may obtain a copy of the License at
 
 from __future__ import annotations
 
-from . import waterdata
+from . import nldi, waterdata
 
-__all__ = ["waterdata"]
+__all__ = ["waterdata", "nldi"]
