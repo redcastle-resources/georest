@@ -288,6 +288,11 @@ class CoopsTest(unittest.TestCase):
         self.assertEqual((calls[0]["begin_date"], calls[0]["end_date"]), ("20261101", "20261102"))
         self.assertEqual(df.iloc[0]["type"], "H")
 
+    def test_a_bad_date_fails_before_any_request(self):
+        _patch(self, coops, mock.Mock(side_effect=AssertionError("no request")))
+        with self.assertRaises(ValueError):
+            coops.predictions("8771450", "next week", "2026-11-02")
+
 
 # ---------------------------------------------------------------------------
 # nhc

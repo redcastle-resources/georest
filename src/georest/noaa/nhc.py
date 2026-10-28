@@ -53,7 +53,17 @@ def active_storms() -> Any:
         ``pressure_mb``, ``lon``, ``lat``, ``moving_toward_deg`` and
         ``speed_kt``, ``updated``, and the ``advisory_url`` and
         ``cone_url`` (a zipped shapefile of the forecast cone) where the
-        NHC publishes them.
+        NHC publishes them. No rows means the NHC is advising on no storm
+        right now.
+
+    Raises:
+        NOAAError: If the NHC's feed cannot be reached.
+
+    Example::
+
+        from georest.noaa import nhc
+
+        nhc.active_storms()[["name", "classification_name", "wind_kt"]]
     """
     data = fetch_json(STORMS_URL)
     rows = []

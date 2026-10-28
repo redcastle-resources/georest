@@ -45,9 +45,25 @@ _STATIONS_CACHE: dict[str, list[dict]] = {}
 
 
 def stations(kind: str = "waterlevels") -> Any:
-    """Every CO-OPS station of a kind (``"waterlevels"``, the default, or
-    another kind the metadata API knows, such as ``"tidepredictions"``).
-    Cached for the life of the process."""
+    """Every CO-OPS station of a kind.
+
+    Args:
+        kind: ``"waterlevels"`` (the default: stations that measure water
+            level) or another kind the CO-OPS metadata API knows, such as
+            ``"tidepredictions"``.
+
+    Returns:
+        A DataFrame with ``station``, ``name``, ``state``, ``lon``,
+        ``lat``, ``tidal`` and ``great_lakes``. Cached for the life of the
+        process.
+
+    Example::
+
+        from georest.noaa import coops
+
+        tx = coops.stations()
+        tx[tx["state"] == "TX"][["station", "name"]]
+    """
     if kind not in _STATIONS_CACHE:
         data = fetch_json(STATIONS_URL, {"type": kind})
         _STATIONS_CACHE[kind] = [{
@@ -60,10 +76,24 @@ def stations(kind: str = "waterlevels") -> Any:
 
 def nearest(lon: float, lat: float, *, n: int = 3, kind: str = "waterlevels",
             max_km: float | None = 100) -> Any:
-    """The ``n`` CO-OPS stations nearest a point, with ``distance_km``.
+    """The CO-OPS stations nearest a point.
 
-    ``max_km`` drops stations farther than that (``None`` keeps all): a
-    tide gauge 300 km away says nothing about the water at the point.
+    Args:
+        lon, lat: The point, in decimal degrees.
+        n: How many stations, nearest first.
+        kind: As for :func:`stations`.
+        max_km: Drop stations farther than this (``None`` keeps all): a tide
+            gauge 300 km away says nothing about the water at the point.
+
+    Returns:
+        A DataFrame like :func:`stations`, plus ``distance_km``. No rows
+        means no station within ``max_km``.
+
+    Example::
+
+        from georest.noaa import coops
+
+        coops.nearest(-94.79, 29.31)[["station", "name", "distance_km"]]
     """
     lon, lat = check_point(lon, lat)
     rows = []
@@ -80,7 +110,12 @@ def nearest(lon: float, lat: float, *, n: int = 3, kind: str = "waterlevels",
 def _yyyymmdd(value: str | date | datetime) -> str:
     if isinstance(value, (date, datetime)):
         return value.strftime("%Y%m%d")
-    return str(value).replace("-", "")
+    text = str(value).strip().replace("-", "")
+    try:
+        datetime.strptime(text, "%Y%m%d")
+    except ValueError:
+        raise ValueError(f"{value!r} is not a date (use 'YYYY-MM-DD' or 'YYYYMMDD')") from None
+    return text
 
 
 def _get(params: dict) -> dict:
@@ -107,6 +142,17 @@ def water_levels(station: str, *, hours: int = 24, datum: str = "MLLW",
         (or ``_m``), ``quality`` (``"p"`` preliminary, ``"v"`` verified) and
         ``flags``. ``df.attrs`` holds the station's ``name``, ``lon``,
         ``lat``, the ``datum`` and the ``units``.
+
+    Raises:
+        NOAAError: If CO-OPS refuses the request (an unknown station, or no
+            data for that datum) or cannot be reached.
+
+    Example::
+
+        from georest.noaa import coops
+
+        df = coops.water_levels("8771450", hours=6)
+        df.tail(3), df.attrs["datum"]
     """
     col = "water_level_ft" if units == "english" else "water_level_m"
     data = _get({"station": station, "product": "water_level", "datum": datum,
@@ -136,6 +182,19 @@ def predictions(station: str, begin: str | date, end: str | date, *,
         A DataFrame with ``time`` (UTC), ``prediction_ft`` (or ``_m``) and,
         for ``"hilo"``, ``type``: ``"H"`` or ``"L"``. These are modelled
         astronomical tides; weather can push the water well above them.
+
+    Raises:
+        ValueError: For a date that is not ``YYYY-MM-DD``-like.
+        NOAAError: If CO-OPS refuses the request or cannot be reached.
+
+    Example::
+
+        from datetime import date, timedelta
+
+        from georest.noaa import coops
+
+        today = date.today()
+        coops.predictions("8771450", today, today + timedelta(days=2))
     """
     col = "prediction_ft" if units == "english" else "prediction_m"
     data = _get({"station": station, "product": "predictions", "datum": datum,

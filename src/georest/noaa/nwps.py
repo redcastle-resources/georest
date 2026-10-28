@@ -86,6 +86,11 @@ def gauges(bbox: tuple[float, float, float, float], *, flooding_only: bool = Fal
         ``forecast_stage``, ``forecast_category`` and ``forecast_at`` of the
         forecast crest (``None`` when the forecast is not current).
         ``df.attrs["flooding_now"]`` counts gauges at a flood category.
+        No rows means no NWPS gauge in the box, not that nothing is flooding.
+
+    Raises:
+        ValueError: For a malformed ``bbox``, before any request.
+        NOAAError: If the service refuses the request or cannot be reached.
 
     Example::
 
@@ -116,6 +121,10 @@ def gauges(bbox: tuple[float, float, float, float], *, flooding_only: bool = Fal
 def gauge(lid: str) -> dict[str, Any]:
     """One gauge in full: where it is, its latest stage, and its flood stages.
 
+    Args:
+        lid: The gauge's NWS location id, e.g. ``"BBST2"`` (the ``lid``
+            column of :func:`gauges`).
+
     Returns:
         A dict with ``lid``, ``usgs_id``, ``name``, ``state``, ``county``,
         ``lon``, ``lat``, ``in_service``, the latest ``stage`` (and its
@@ -123,6 +132,9 @@ def gauge(lid: str) -> dict[str, Any]:
         ``flood_stages``: the stage at which the gauge reaches each category
         (``action``, ``minor``, ``moderate``, ``major``), ``None`` where the
         NWS has not set one.
+
+    Raises:
+        NOAAError: If the gauge is unknown or the service cannot be reached.
 
     Example::
 

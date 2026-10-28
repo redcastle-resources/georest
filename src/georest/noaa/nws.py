@@ -87,11 +87,30 @@ def _alert_params(point, area, event, severity) -> dict:
 
 def alerts_geojson(point: tuple[float, float] | None = None, area: str | None = None,
                    *, event: str | None = None, severity: str | None = None) -> dict:
-    """Active alerts as the NWS's own GeoJSON FeatureCollection.
+    """Active alerts as the NWS's own GeoJSON FeatureCollection, for mapping.
 
-    Same arguments as :func:`alerts`. A feature's geometry is ``None`` when
-    the alert was issued for forecast zones rather than drawn as a polygon;
-    its ``affectedZones`` property lists them.
+    Args:
+        point: ``(lon, lat)``; every alert returned is in effect there.
+        area: A state or marine area code (``"TX"``, ``"GM"``). Neither
+            ``point`` nor ``area`` means the whole country.
+        event: An event name, e.g. ``"Flood Warning"``.
+        severity: ``"Extreme"``, ``"Severe"``, ``"Moderate"``, ``"Minor"``.
+
+    Returns:
+        The NWS's FeatureCollection, unchanged. A feature's geometry is
+        ``None`` when the alert was issued for forecast zones rather than
+        drawn as a polygon; its ``affectedZones`` property lists them, so a
+        map of the polygons alone is not every alert.
+
+    Raises:
+        NOAAError: If the NWS API refuses the request or cannot be reached.
+
+    Example::
+
+        from georest.noaa import nws
+
+        fc = nws.alerts_geojson(area="TX")
+        drawn = [f for f in fc["features"] if f["geometry"]]
     """
     return fetch_json(f"{API_URL}/alerts/active",
                       _alert_params(point, area, event, severity), accept=_GEO)
@@ -307,9 +326,21 @@ def _read_observation(props: dict, u: str, now: datetime) -> dict:
 def stations(lon: float, lat: float) -> Any:
     """The NWS observation stations for a point's forecast grid, nearest first.
 
+    Args:
+        lon, lat: The point, in decimal degrees.
+
     Returns:
         A DataFrame with ``station``, ``name``, ``lon``, ``lat``,
         ``distance_km`` (from the point) and ``elevation_m``.
+
+    Raises:
+        NotCovered: Outside the NWS's forecast area.
+
+    Example::
+
+        from georest.noaa import nws
+
+        nws.stations(-95.37, 29.76).head(3)[["station", "name", "distance_km"]]
     """
     lon, lat = check_point(lon, lat)
     url = _point_meta(lon, lat).get("observationStations")
@@ -335,6 +366,12 @@ def stations(lon: float, lat: float) -> Any:
 def latest_observation(station: str, *, units: str = "us") -> dict[str, Any]:
     """A station's latest observation, in one unit system.
 
+    Args:
+        station: The station's identifier, e.g. ``"KHOU"`` (from
+            :func:`stations`).
+        units: ``"us"`` (degrees F, mph, inHg, miles; the default) or
+            ``"si"`` (degrees C, km/h, hPa, km). The unit is in each key.
+
     Returns:
         A dict with ``station``, ``observed_at``, ``age_min`` (negative
         means the station's clock runs ahead), ``conditions``, the readings
@@ -342,7 +379,17 @@ def latest_observation(station: str, *, units: str = "us") -> dict[str, Any]:
         ``qc``: the readings the NWS has not validated (``"Z"`` = no
         quality control applied) or whose unit was not recognized - a
         reading with an unrecognized unit is left ``None`` rather than
-        mislabelled.
+        mislabelled. Check ``age_min``: "latest" can be hours old.
+
+    Raises:
+        NOAAError: If the station is unknown or the NWS cannot be reached.
+
+    Example::
+
+        from georest.noaa import nws
+
+        obs = nws.latest_observation("KHOU")
+        obs["temperature_f"], obs["age_min"]
     """
     u = _units(units)
     data = fetch_json(f"{API_URL}/stations/{station}/observations/latest", accept=_GEO)
@@ -368,6 +415,16 @@ def observations(lon: float, lat: float, *, n: int = 3, units: str = "us",
         ``conditions``, the readings and ``qc``. ``df.attrs`` records
         ``dropped_stale`` and ``failed`` (stations that did not answer), so
         a short table can be told apart from a quiet one.
+
+    Raises:
+        NotCovered: Outside the NWS's forecast area.
+
+    Example::
+
+        from georest.noaa import nws
+
+        df = nws.observations(-95.37, 29.76)
+        df[["station", "distance_km", "age_min", "temperature_f", "wind_mph"]]
     """
     u = _units(units)
     near = stations(lon, lat)
