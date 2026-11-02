@@ -75,6 +75,9 @@ dev = [
 ee = [
     "earthengine-api>=1.0",           # usfs.lcms_ee: LCMS over any geometry
 ]
+mcp = [
+    "mcp>=1.2,<2",                    # georest-mcp: the data clients as agent tools (FastMCP, 1.x API)
+]
 examples = [
     "jupyterlab>=4.0",
     "ipython>=8.0",
@@ -92,6 +95,7 @@ Documentation = "https://georest.io"
 [project.scripts]
 georest-check-themes = "georest.esri.cli.check_themes:main"
 georest-login = "georest.esri.cli.login:main"
+georest-mcp = "georest.mcp.server:main"
 
 
 # ---------------------------------------------------------------------------
@@ -176,6 +180,9 @@ ignore = [
 "tests/*" = ["B011"]
 "src/georest/__init__.py" = ["F401"]  # TYPE_CHECKING re-exports
 "tests/support.py" = ["F401"]         # back-compat re-exports from edw
+# FastMCP evaluates tool signatures at runtime to build their schemas, and
+# `X | None` does not evaluate on Python 3.9 (requires-python), so Optional stays.
+"src/georest/mcp/server.py" = ["UP045"]
 
 
 # ---------------------------------------------------------------------------
