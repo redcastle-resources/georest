@@ -44,24 +44,7 @@ import xml.etree.ElementTree as ET
 from typing import Any
 
 from ._geojson import _convert_query_geometry, _geometry_type_for
-from ._http import fetch_json, fetch_text, post_json
-
-
-def _error_text(err: Any) -> str:
-    """An ArcGIS error object as text.
-
-    Its ``message`` is often empty, with the cause in ``details``: a
-    polygon sent as the wrong geometry type comes back as
-    ``{"code": 400, "message": "", "details": ["Invalid geometry."]}``,
-    which reported as "EDW query error: " with nothing after it.
-    """
-    if not isinstance(err, dict):
-        return str(err)
-    message = str(err.get("message") or "").strip()
-    details = "; ".join(str(d) for d in (err.get("details") or []) if d)
-    text = "; ".join(t for t in (message, details) if t) or json.dumps(err)
-    code = err.get("code")
-    return f"{text} (code {code})" if code else text
+from ._http import fetch_json, fetch_text, format_esri_error, post_json
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -473,7 +456,7 @@ def get_service_info(service_name: str) -> dict[str, Any]:
     data = fetch_json(url, {"f": "pjson"})
 
     if "error" in data:
-        raise RuntimeError(f"EDW service error: {_error_text(data['error'])}")
+        raise RuntimeError(f"EDW service error: {format_esri_error(data['error'])}")
 
     layers = []
     for lyr in data.get("layers", []):
@@ -579,7 +562,7 @@ def get_layer_roles(service_name: str) -> list[dict[str, Any]]:
     data = fetch_json(url, {"f": "pjson"})
 
     if "error" in data:
-        raise RuntimeError(f"EDW service error: {_error_text(data['error'])}")
+        raise RuntimeError(f"EDW service error: {format_esri_error(data['error'])}")
 
     raw_layers = data.get("layers")
     if not raw_layers:
@@ -689,7 +672,7 @@ def get_layer_info(service_name: str, layer_id: int) -> dict[str, Any]:
     data = fetch_json(url, {"f": "pjson"})
 
     if "error" in data:
-        raise RuntimeError(f"EDW layer error: {_error_text(data['error'])}")
+        raise RuntimeError(f"EDW layer error: {format_esri_error(data['error'])}")
 
     fields = []
     for f in data.get("fields", []):
@@ -966,7 +949,7 @@ def query_features(
     data = post_json(url, params)
 
     if "error" in data:
-        raise RuntimeError(f"EDW query error: {_error_text(data['error'])}")
+        raise RuntimeError(f"EDW query error: {format_esri_error(data['error'])}")
 
     if return_count_only:
         return {"count": data.get("count", 0)}
@@ -1015,7 +998,7 @@ def _query_object_ids(
     }
     data = post_json(url, params)
     if "error" in data:
-        raise RuntimeError(f"EDW query error: {_error_text(data['error'])}")
+        raise RuntimeError(f"EDW query error: {format_esri_error(data['error'])}")
     return data.get("objectIdFieldName", "OBJECTID"), data.get("objectIds") or []
 
 
@@ -1236,7 +1219,7 @@ def query_features_analytic(
     data = post_json(url, params)
 
     if "error" in data:
-        raise RuntimeError(f"EDW queryAnalytic error: {_error_text(data['error'])}")
+        raise RuntimeError(f"EDW queryAnalytic error: {format_esri_error(data['error'])}")
 
     return _sanitize_geojson(_esri_json_to_geojson(data))
 
@@ -1415,7 +1398,7 @@ def query_features_with_pagination(
         data = post_json(url, params)
 
         if "error" in data:
-            raise RuntimeError(f"EDW query error: {_error_text(data['error'])}")
+            raise RuntimeError(f"EDW query error: {format_esri_error(data['error'])}")
 
         features = data.get("features", [])
         if not features:

@@ -215,7 +215,10 @@ def format_esri_error(err: dict) -> str:
     Lives here rather than in `services.py` so `portal.py` can use it too:
     `services` imports from `portal`, so the reverse import would be a cycle.
     """
-    msg = f"{err.get('code')} - {err.get('message', str(err))}"
+    # The message can be empty, with everything in details: say nothing
+    # rather than leave a dangling " - ".
+    message = str(err.get("message") or "").strip()
+    msg = f"{err.get('code')} - {message}" if message else str(err.get("code"))
     details = err.get("details")
     if details:
         msg += f" ({'; '.join(str(d) for d in details)})"
