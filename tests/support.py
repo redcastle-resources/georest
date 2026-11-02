@@ -64,6 +64,15 @@ requires_live_usgs = unittest.skipUnless(
 LIVE_FIA = os.environ.get("FIA_LIVE", "").lower() in _TRUTHY or LIVE
 LIVE_LCMS = os.environ.get("LCMS_LIVE", "").lower() in _TRUTHY or LIVE
 
+#: `fema` talks to hazards.fema.gov, which resets connections at random, so
+#: its live tests are gated on their own flag too.
+LIVE_FEMA = os.environ.get("FEMA_LIVE", "").lower() in _TRUTHY or LIVE
+
+requires_live_fema = unittest.skipUnless(
+    LIVE_FEMA,
+    "network test; set FEMA_LIVE=1 (or EDW_LIVE=1) to enable",
+)
+
 #: Earth Engine examples need credentials and `pip install "georest[ee]"`,
 #: so EDW_LIVE does not turn them on.
 LIVE_EE = os.environ.get("EE_LIVE", "").lower() in _TRUTHY
