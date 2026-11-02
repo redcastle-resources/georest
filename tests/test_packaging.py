@@ -128,6 +128,14 @@ class TestNoThirdPartyImports(unittest.TestCase):
     USGS_EXTRA = {"pandas"}
 
     def _allowed_for(self, path):
+        # georest.frames turns esri's GeoJSON into DataFrames; it is the one
+        # module outside usgs/usfs that may import pandas (inside to_frame).
+        if path.name == "frames.py" and path.parent.name == "georest":
+            return self.ALLOWED | {"pandas"}
+        # georest.mcp is the optional MCP server ("georest[mcp]"): it may use
+        # the mcp SDK, and pandas through the clients it wraps.
+        if "mcp" in path.parts:
+            return self.ALLOWED | {"mcp", "pandas", "functools", "ipaddress", "socket"}
         if "usfs" in path.parts:
             return self.ALLOWED | self.USFS_EXTRA
         if "usgs" in path.parts:

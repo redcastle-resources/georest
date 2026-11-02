@@ -55,8 +55,8 @@ class DailyValuesTests(WaterdataCase):
         random.Random(7).shuffle(obs)
         server = FakeOgcServer(obs, page_cap=6)
         with patched_ogc(fetch_json_with_headers=server):
-            fc = waterdata.get_daily_values("09380000", max_items=None)
-        times = [f["properties"]["time"] for f in fc["features"]]
+            df = waterdata.get_daily_values("09380000", max_items=None)
+        times = list(df["time"])
         self.assertEqual(times, sorted(times))
         self.assertEqual(len(times), 20)
 
@@ -66,8 +66,8 @@ class DailyValuesTests(WaterdataCase):
                observation(2, time="2024-01-03", series="a")]
         server = FakeOgcServer(obs)
         with patched_ogc(fetch_json_with_headers=server):
-            fc = waterdata.get_daily_values(["09380000", "09402500"])
-        got = [(f["properties"]["time_series_id"], f["properties"]["time"]) for f in fc["features"]]
+            df = waterdata.get_daily_values(["09380000", "09402500"])
+        got = list(zip(df["time_series_id"], df["time"]))
         self.assertEqual(got, [("a", "2024-01-03"), ("b", "2024-01-01"), ("b", "2024-01-02")])
 
     def test_continuous_timestamps_with_mixed_offsets_sort_by_instant(self):
@@ -76,8 +76,8 @@ class DailyValuesTests(WaterdataCase):
                observation(2, time="2024-03-10T09:00:00+00:00")]   # 09:00Z
         server = FakeOgcServer(obs)
         with patched_ogc(fetch_json_with_headers=server):
-            fc = waterdata.get_continuous_values("09380000")
-        got = [f["properties"]["time"] for f in fc["features"]]
+            df = waterdata.get_continuous_values("09380000")
+        got = list(df["time"])
         self.assertEqual(got, ["2024-03-10T07:30:00Z", "2024-03-10T01:00:00-07:00",
                                "2024-03-10T09:00:00+00:00"])
 
@@ -86,8 +86,8 @@ class DailyValuesTests(WaterdataCase):
                observation(2, time=None), observation(3, time="2024-01-01")]
         server = FakeOgcServer(obs)
         with patched_ogc(fetch_json_with_headers=server):
-            fc = waterdata.get_daily_values("09380000")
-        got = [f["properties"]["time"] for f in fc["features"]]
+            df = waterdata.get_daily_values("09380000")
+        got = [None if not isinstance(x, str) else x for x in df["time"]]  # missing is NaN in a frame
         self.assertEqual(got, ["2024-01-01", "2024-01-02", "sometime", None])
 
     def test_properties_trim_keeps_the_series_essentials(self):
@@ -134,10 +134,10 @@ class DailyValuesTests(WaterdataCase):
     def test_truncated_and_rate_limit_pass_through(self):
         server = FakeOgcServer([observation(i) for i in range(5)], page_cap=2, rate_limit=(1000, 998))
         with patched_ogc(fetch_json_with_headers=server):
-            fc = waterdata.get_daily_values("09380000", max_items=3)
-        self.assertTrue(fc["truncated"])
-        self.assertEqual(fc["rate_limit"], {"limit": 1000, "remaining": 998})
-        self.assertEqual(len(fc["features"]), 3)
+            df = waterdata.get_daily_values("09380000", max_items=3)
+        self.assertTrue(df.attrs["truncated"])
+        self.assertEqual(df.attrs["rate_limit"], {"limit": 1000, "remaining": 998})
+        self.assertEqual(len(df), 3)
 
     def test_extra_filters_and_reserved_names(self):
         server = FakeOgcServer([observation(0)])
@@ -230,7 +230,7 @@ class MonitoringLocationTests(WaterdataCase):
     def test_search_maps_named_filters_to_direct_params(self):
         server = FakeOgcServer([observation(0)])
         with patched_ogc(fetch_json_with_headers=server):
-            fc = waterdata.search_monitoring_locations(
+            df = waterdata.search_monitoring_locations(
                 bbox=(-111.7, 36.8, -111.5, 37.0), state_code="49", site_type_code="ST",
                 hydrologic_unit_code="1407", agency_code="USGS")
         q = server.query()
@@ -242,7 +242,7 @@ class MonitoringLocationTests(WaterdataCase):
         self.assertEqual(q["agency_code"], "USGS")
         self.assertEqual(q["limit"], "1000")
         self.assertNotIn("skipGeometry", q)
-        self.assertEqual(len(fc["features"]), 1)
+        self.assertEqual(len(df), 1)
 
     def test_search_site_type_list_and_ids(self):
         server = FakeOgcServer([observation(0)])
@@ -259,7 +259,9 @@ class MonitoringLocationTests(WaterdataCase):
         server = FakeOgcServer([feat])
         with patched_ogc(fetch_json_with_headers=server):
             got = waterdata.get_monitoring_location("09380000")
-        self.assertIs(got, feat)
+        self.assertEqual(got["id"], "USGS-09380000")
+        for key, value in feat["properties"].items():
+            self.assertEqual(got[key], value)
         self.assertEqual(server.urls[0],
                          f"{waterdata.BASE_URL}/collections/monitoring-locations/items/USGS-09380000?f=json")
 
@@ -359,3 +361,50 @@ class ModuleShapeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DataFrameShapeTests(WaterdataCase):
+    """What every helper hands back: one row per Feature, numbers as numbers."""
+
+    def test_values_are_numbers_and_qualifier_text_becomes_nan(self):
+        obs = [observation(0, time="2024-01-01"), observation(1, time="2024-01-02")]
+        obs[0]["properties"]["value"] = "12.5"
+        obs[1]["properties"]["value"] = "Ice"
+        server = FakeOgcServer(obs)
+        with patched_ogc(fetch_json_with_headers=server):
+            df = waterdata.get_daily_values("09380000")
+        self.assertEqual(df["value"].iloc[0], 12.5)
+        self.assertTrue(df["value"].isna().iloc[1], "a qualifier passed off as a number")
+        self.assertEqual(str(df["value"].dtype), "float64")
+
+    def test_sites_carry_lon_lat_and_id(self):
+        site = observation(0)
+        site["id"] = "USGS-09380000"
+        site["geometry"] = {"type": "Point", "coordinates": [-111.59, 36.86]}
+        server = FakeOgcServer([site])
+        with patched_ogc(fetch_json_with_headers=server):
+            df = waterdata.search_monitoring_locations(state_code="04")
+        self.assertEqual(df["id"].iloc[0], "USGS-09380000")
+        self.assertEqual((df["lon"].iloc[0], df["lat"].iloc[0]), (-111.59, 36.86))
+
+    def test_a_pull_without_geometry_gets_no_empty_lon_lat(self):
+        obs = observation(0)
+        obs["geometry"] = None  # what skipGeometry=true sends
+        server = FakeOgcServer([obs])
+        with patched_ogc(fetch_json_with_headers=server):
+            df = waterdata.get_daily_values("09380000")
+        self.assertNotIn("lon", df.columns)
+
+    def test_nothing_found_is_an_empty_frame_not_truncated(self):
+        server = FakeOgcServer([])
+        with patched_ogc(fetch_json_with_headers=server):
+            df = waterdata.get_peaks("09380000")
+        self.assertTrue(df.empty)
+        self.assertFalse(df.attrs["truncated"])
+
+    def test_get_items_stays_raw_geojson(self):
+        server = FakeOgcServer([observation(0)])
+        with patched_ogc(fetch_json_with_headers=server):
+            fc = waterdata.get_items("daily")
+        self.assertEqual(fc["type"], "FeatureCollection")
+        self.assertEqual(fc["features"][0]["properties"]["value"], observation(0)["properties"]["value"])

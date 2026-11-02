@@ -51,7 +51,7 @@ from typing import TYPE_CHECKING
 __version__ = "0.5.0.dev0"
 
 __all__ = ["esri", "edw", "portal", "services", "usgs", "waterdata",
-           "usfs", "fia", "lcms", "__version__"]
+           "usfs", "fia", "lcms", "to_frame", "__version__"]
 
 if TYPE_CHECKING:  # so IDEs, mypy and pyright resolve the re-exports statically
     from . import esri, usfs, usgs
@@ -78,6 +78,21 @@ _LAZY = {
     "restesri": ".restesri",
     "restusgs": ".restusgs",
 }
+
+
+def to_frame(data, *, geometry: bool = False):
+    """A pandas DataFrame of any georest result: a FeatureCollection, a list
+    of Features, or a list of records. See :func:`georest.frames.to_frame`.
+
+    Example::
+
+        import georest
+        from georest.esri import edw
+
+        georest.to_frame(edw.search_edw_services("fire"))
+    """
+    from .frames import to_frame as _to_frame
+    return _to_frame(data, geometry=geometry)
 
 
 def __getattr__(name: str):

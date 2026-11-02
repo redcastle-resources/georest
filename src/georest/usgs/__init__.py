@@ -32,9 +32,9 @@ Quick start::
 
     from georest.usgs import nldi, waterdata
 
-    fc = waterdata.get_daily_values("USGS-09380000", "00060",
-                                    start="2024-01-01", end="2024-01-31")
-    rows = waterdata.to_rows(fc)
+    flow = waterdata.get_daily_values("USGS-09380000", "00060",
+                                      start="2024-01-01", end="2024-01-31")
+    flow[["time", "value"]]          # a DataFrame, like every usgs result
 
     upstream_gages = nldi.sites_along("nwissite", "USGS-09380000",
                                       "upstream_tributaries", distance_km=100)

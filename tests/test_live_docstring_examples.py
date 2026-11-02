@@ -25,6 +25,7 @@ MODULES = {
     "georest.esri.services": LIVE_SERVICES,
     "georest.esri.portal": LIVE_SERVICES,
     "georest.esri.edw": LIVE,
+    "georest.frames": LIVE,
     "georest.usgs.waterdata": LIVE_USGS,
     "georest.usgs.nldi": LIVE_USGS,
     "georest.usgs.nationalmap": LIVE_USGS,

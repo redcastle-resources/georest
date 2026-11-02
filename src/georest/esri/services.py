@@ -396,11 +396,12 @@ def getLayerInfo(url_or_result: str | dict, token: str | None = None, timeout: i
 
     Example::
 
+        import georest
         from georest.esri import services
 
         quakes = "https://sampleserver6.arcgisonline.com/arcgis/rest/services/Earthquakes_Since1970/FeatureServer/0"
         info = services.getLayerInfo(quakes)
-        info["geometryType"], [f["name"] for f in info["fields"]]
+        georest.to_frame(info["fields"])   # name, type and alias of each field
     """
     url = _resolve_url(url_or_result)
     params = build_params({"f": "pjson"}, token)
@@ -1007,11 +1008,12 @@ def getSamples(
 
     Example::
 
+        import georest
         from georest.esri import services
 
         lcms = "https://imagery.geoplatform.gov/iipp/rest/services/Vegetation/USFS_EDW_LCMS_AnnualChange_CONUS/ImageServer"
         points = [(-105.75, 40.62), (-105.70, 40.60), (-105.65, 40.58)]
-        [s["value"] for s in services.getSamples(lcms, points)]
+        georest.to_frame(services.getSamples(lcms, points))
     """
     url = _resolve_url(url_or_result)
 

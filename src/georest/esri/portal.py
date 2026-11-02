@@ -413,12 +413,12 @@ def searchPortal(
 
     Example::
 
+        import georest
         from georest.esri import portal
 
         # Search IIPP for NAIP imagery (default portal)
         results = portal.searchPortal("naip 2023", limit=10)
-        for r in results:
-            print(r["title"], r["type"], r["url"])
+        georest.to_frame(results)[["title", "type", "url"]]
 
         # ArcGIS Online
         results = portal.searchPortal("wildfire perimeter", portal="agol")

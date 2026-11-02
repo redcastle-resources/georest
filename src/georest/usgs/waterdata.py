@@ -1,11 +1,14 @@
 """
 USGS Water Data OGC API client - the modern replacement for NWIS Water Services.
 
-Base URL ``https://api.waterdata.usgs.gov/ogcapi/v1``. Every function returns a
-GeoJSON ``FeatureCollection`` dict (one Feature per *observation* for the
-time-series collections, one per site for ``monitoring-locations``), matching
-the rest of georest. :func:`to_rows` flattens one into plain dicts for CSV,
-pandas, or plotting.
+Base URL ``https://api.waterdata.usgs.gov/ogcapi/v1``. The helpers return a
+pandas DataFrame, like the rest of georest.usgs: one row per *observation*
+for the time-series collections, one per site for ``monitoring-locations``,
+every property a column, ``value`` a number, and a site's point as ``lon`` and
+``lat``. ``df.attrs["truncated"]`` is ``True`` when ``max_items`` stopped the
+fetch early, and ``df.attrs["rate_limit"]`` carries the API's rate-limit
+headers. :func:`get_items` is the raw escape hatch and returns the GeoJSON
+``FeatureCollection`` as sent; :func:`to_rows` flattens one into dicts.
 
 Legacy NWIS endpoint → collection (from the USGS migration guide)::
 
@@ -20,10 +23,11 @@ Things verified against the live API (2026-09-14) that shape this module:
 
 - The API does not sort. The time-series functions sort their output by
   ``(time_series_id, time)`` client-side.
-- ``value`` is a string (precision). The FeatureCollection is returned as
-  sent; :func:`to_rows` converts to ``float``.
-- There is no ``numberMatched``. ``max_items`` bounds every fetch and a
-  ``truncated: True`` member says when it bit; ``max_items=None`` means
+- ``value`` is a string (precision). The DataFrames convert it to a float
+  (``NaN`` where a qualifier such as ``"Ice"`` stands in for a number);
+  :func:`get_items` returns it as sent.
+- There is no ``numberMatched``. ``max_items`` bounds every fetch and
+  ``df.attrs["truncated"]`` says when it bit; ``max_items=None`` means
   unlimited. Fifteen-minute ``continuous`` data is roughly 35 000 rows per
   year per parameter, so the default of 10 000 covers about 100 days.
 - Anonymous use works but is rate limited to "a few queries per hour". Get a
@@ -257,6 +261,43 @@ def _series_properties(properties: str | Iterable[str] | None) -> list[str] | No
     return given
 
 
+def _frame(fc: dict, numeric: Iterable[str] = ("value",)):
+    """A FeatureCollection as the DataFrame the helpers return.
+
+    One row per Feature: its ``properties``, its ``id`` when the properties
+    lack one, ``numeric`` columns as floats, and a Point as ``lon``/``lat``
+    (only when some Feature has geometry, so a ``skip_geometry`` pull gets
+    no empty columns). Row order is the FeatureCollection's, which the
+    series functions have already sorted. ``truncated`` and ``rate_limit``
+    move to ``df.attrs``.
+    """
+    import pandas as pd
+
+    from ._frames import point_coordinates
+
+    features = (fc or {}).get("features") or []
+    with_points = any(isinstance(f.get("geometry"), dict) for f in features)
+    rows = []
+    for feature in features:
+        row = dict(feature.get("properties") or {})
+        if "id" not in row and feature.get("id") is not None:
+            row["id"] = feature["id"]
+        for key in numeric:
+            if key in row:
+                row[key] = _to_float(row[key])
+        if with_points:
+            row["lon"], row["lat"] = point_coordinates(feature.get("geometry"))
+        rows.append(row)
+    df = pd.DataFrame(rows)
+    for key in numeric:
+        if key in df.columns:
+            df[key] = pd.to_numeric(df[key], errors="coerce")
+    df.attrs["truncated"] = bool((fc or {}).get("truncated", False))
+    if (fc or {}).get("rate_limit") is not None:
+        df.attrs["rate_limit"] = fc["rate_limit"]
+    return df
+
+
 # ---------------------------------------------------------------------------
 # Catalog
 # ---------------------------------------------------------------------------
@@ -407,7 +448,7 @@ def search_monitoring_locations(
     api_key: str | None = None,
     timeout: int | None = None,
     **filters: object,
-) -> dict:
+):
     """Find sites in the ``monitoring-locations`` collection.
 
     Every filter is optional and they combine with AND. Common ones:
@@ -427,8 +468,10 @@ def search_monitoring_locations(
             As for :func:`get_items`. ``max_items`` defaults to 1 000 here.
 
     Returns:
-        A FeatureCollection of site Points; each Feature's ``id`` is the
-        ``monitoring_location_id`` (``"USGS-09380000"``).
+        ``pandas.DataFrame``, one row per site: ``id`` (the
+        ``monitoring_location_id``, ``"USGS-09380000"``), every site property
+        (name, site type, state, county, HUC, drainage area, ...), and ``lon``
+        and ``lat``.
 
     Example::
 
@@ -437,7 +480,7 @@ def search_monitoring_locations(
         # Stream gages in a box (west, south, east, north) around Lees Ferry, Arizona
         sites = waterdata.search_monitoring_locations(bbox=(-111.7, 36.8, -111.5, 37.0),
                                                       site_type_code="ST")
-        [(f["id"], f["properties"]["monitoring_location_name"]) for f in sites["features"]]
+        sites[["id", "monitoring_location_name", "lon", "lat"]]
     """
     site, site_clause = _eq_or_in("monitoring_location_id", monitoring_location_id, _site_id)
     kind, kind_clause = _eq_or_in("site_type_code", site_type_code)
@@ -449,7 +492,7 @@ def search_monitoring_locations(
         "monitoring_location_id": site,
         "agency_code": agency_code,
     }
-    return get_items(
+    return _frame(get_items(
         "monitoring-locations",
         bbox=bbox,
         properties=properties,
@@ -460,13 +503,13 @@ def search_monitoring_locations(
         timeout=timeout,
         **{k: v for k, v in direct.items() if v is not None},
         **filters,
-    )
+    ), numeric=())
 
 
 def get_monitoring_location(
     monitoring_location_id: str | int, *, api_key: str | None = None, timeout: int | None = None
 ) -> dict:
-    """One site as a single GeoJSON Feature (not a collection).
+    """One site as a flat record: ``id``, every site property, ``lon`` and ``lat``.
 
     ``monitoring_location_id`` may be bare (``"09380000"``) or prefixed
     (``"USGS-09380000"``).
@@ -480,15 +523,20 @@ def get_monitoring_location(
         from georest.usgs import waterdata
 
         site = waterdata.get_monitoring_location("USGS-09380000")
-        site["properties"]["monitoring_location_name"], site["geometry"]["coordinates"]
+        site["monitoring_location_name"], site["lon"], site["lat"]
     """
-    return _ogc.get_item(
+    from ._frames import point_coordinates
+
+    feature = _ogc.get_item(
         BASE_URL,
         "monitoring-locations",
         _site_id(monitoring_location_id),
         headers=_headers(api_key),
         timeout=timeout,
     )
+    record = {"id": feature.get("id"), **(feature.get("properties") or {})}
+    record["lon"], record["lat"] = point_coordinates(feature.get("geometry"))
+    return record
 
 
 def get_time_series_metadata(
@@ -504,7 +552,7 @@ def get_time_series_metadata(
     api_key: str | None = None,
     timeout: int | None = None,
     **filters: object,
-) -> dict:
+):
     """What time series exist - the ``time-series-metadata`` collection
     (the old ``/nwis/site?seriesCatalogOutput=true``).
 
@@ -519,7 +567,7 @@ def get_time_series_metadata(
 
         # What this gage measures, and over which dates
         series = waterdata.get_time_series_metadata(monitoring_location_id="USGS-09380000")
-        sorted({f["properties"]["parameter_name"] for f in series["features"]})
+        series[["parameter_code", "parameter_name", "statistic_id", "begin", "end"]]
     """
     site, site_clause = _eq_or_in("monitoring_location_id", monitoring_location_id, _site_id)
     param, param_clause = _eq_or_in("parameter_code", parameter_code)
@@ -528,7 +576,7 @@ def get_time_series_metadata(
         "parameter_code": param,
         "statistic_id": statistic_id,
     }
-    return get_items(
+    return _frame(get_items(
         "time-series-metadata",
         bbox=bbox,
         properties=properties,
@@ -540,7 +588,7 @@ def get_time_series_metadata(
         timeout=timeout,
         **{k: v for k, v in direct.items() if v is not None},
         **filters,
-    )
+    ), numeric=())
 
 
 # ---------------------------------------------------------------------------
@@ -603,11 +651,13 @@ def get_daily_values(
     api_key: str | None = None,
     timeout: int | None = None,
     **filters: object,
-) -> dict:
+):
     """Daily statistics for a site - the ``daily`` collection (old ``/nwis/dv``).
 
-    One Feature per day, sorted by ``(time_series_id, time)``. ``time`` is a
-    ``YYYY-MM-DD`` string; ``value`` is a string - see :func:`to_rows`.
+    ``pandas.DataFrame``, one row per day, sorted by ``(time_series_id,
+    time)``: ``time`` (``YYYY-MM-DD``), ``value`` (a number),
+    ``unit_of_measure``, ``approval_status``, ``qualifier``,
+    ``time_series_id`` and the rest.
 
     Args:
         monitoring_location_id: ``"09380000"`` or ``"USGS-09380000"``; a list
@@ -620,18 +670,19 @@ def get_daily_values(
         properties: Trim the response; ``time_series_id``, ``monitoring_location_id``,
             ``time`` and ``value`` are always kept.
         max_items: Default 10 000 (~27 years of one daily series). ``None``
-            for unlimited; ``truncated: True`` in the result when it bit.
+            for unlimited; ``df.attrs["truncated"]`` is ``True`` when it bit.
         filter, page_size, api_key, timeout, **filters: As for :func:`get_items`.
 
     Example::
 
         from georest.usgs import waterdata
 
-        fc = waterdata.get_daily_values("USGS-09380000", "00060",
-                                        start="2024-01-01", end="2024-01-31")
-        rows = waterdata.to_rows(fc)   # [{"time": "2024-01-01", "value": 9870.0, ...}, ...]
+        # Daily mean discharge (ft3/s) at Lees Ferry for January 2024
+        flow = waterdata.get_daily_values("USGS-09380000", "00060",
+                                          start="2024-01-01", end="2024-01-31")
+        flow[["time", "value", "unit_of_measure", "approval_status"]]
     """
-    return _series(
+    return _frame(_series(
         "daily",
         monitoring_location_id=monitoring_location_id,
         parameter_code=parameter_code,
@@ -646,7 +697,7 @@ def get_daily_values(
         api_key=api_key,
         timeout=timeout,
         **filters,
-    )
+    ))
 
 
 def get_continuous_values(
@@ -663,7 +714,7 @@ def get_continuous_values(
     api_key: str | None = None,
     timeout: int | None = None,
     **filters: object,
-) -> dict:
+):
     """Sensor readings, typically every 15 minutes - the ``continuous``
     collection (old ``/nwis/iv``, "instantaneous values").
 
@@ -681,12 +732,11 @@ def get_continuous_values(
         from georest.usgs import waterdata
 
         # Fifteen-minute discharge readings for one day
-        fc = waterdata.get_continuous_values("USGS-09380000", "00060",
-                                             start="2024-06-01", end="2024-06-02")
-        rows = waterdata.to_rows(fc)
-        len(rows), rows[0]["time"], rows[0]["value"]
+        readings = waterdata.get_continuous_values("USGS-09380000", "00060",
+                                                   start="2024-06-01", end="2024-06-02")
+        readings[["time", "value"]]
     """
-    return _series(
+    return _frame(_series(
         "continuous",
         monitoring_location_id=monitoring_location_id,
         parameter_code=parameter_code,
@@ -700,7 +750,7 @@ def get_continuous_values(
         api_key=api_key,
         timeout=timeout,
         **filters,
-    )
+    ))
 
 
 def get_latest_values(
@@ -718,7 +768,7 @@ def get_latest_values(
     api_key: str | None = None,
     timeout: int | None = None,
     **filters: object,
-) -> dict:
+):
     """The most recent observation per time series - ``latest-daily`` or
     ``latest-continuous`` (``source="daily"`` / ``"continuous"``).
 
@@ -733,8 +783,8 @@ def get_latest_values(
 
         from georest.usgs import waterdata
 
-        latest = waterdata.to_rows(waterdata.get_latest_values("USGS-09380000", "00060"))
-        latest[0]["time"], latest[0]["value"], latest[0]["unit_of_measure"]
+        latest = waterdata.get_latest_values("USGS-09380000", "00060")
+        latest[["time", "value", "unit_of_measure"]]
     """
     try:
         collection = _LATEST_SOURCES[source]
@@ -742,7 +792,7 @@ def get_latest_values(
         raise ValueError(
             f"source must be one of {sorted(_LATEST_SOURCES)}, got {source!r}"
         ) from None
-    return _series(
+    return _frame(_series(
         collection,
         monitoring_location_id=monitoring_location_id,
         parameter_code=parameter_code,
@@ -756,7 +806,7 @@ def get_latest_values(
         api_key=api_key,
         timeout=timeout,
         **filters,
-    )
+    ))
 
 
 def get_field_measurements(
@@ -774,7 +824,7 @@ def get_field_measurements(
     api_key: str | None = None,
     timeout: int | None = None,
     **filters: object,
-) -> dict:
+):
     """Manually collected site-visit readings - the ``field-measurements``
     collection (old ``/nwis/gwlevels`` and ``/measurements``): groundwater
     levels, gage height and discharge measurements used to calibrate the
@@ -789,11 +839,11 @@ def get_field_measurements(
         from georest.usgs import waterdata
 
         # Discharge measured in the river by USGS hydrographers
-        visits = waterdata.to_rows(waterdata.get_field_measurements(
-            "USGS-09380000", "00060", start="2024-01-01", end="2024-12-31"))
-        [(v["time"], v["value"], v["observing_procedure"]) for v in visits]
+        visits = waterdata.get_field_measurements(
+            "USGS-09380000", "00060", start="2024-01-01", end="2024-12-31")
+        visits[["time", "value", "observing_procedure"]]
     """
-    return _series(
+    return _frame(_series(
         "field-measurements",
         monitoring_location_id=monitoring_location_id,
         parameter_code=parameter_code,
@@ -808,7 +858,7 @@ def get_field_measurements(
         api_key=api_key,
         timeout=timeout,
         **filters,
-    )
+    ))
 
 
 def get_peaks(
@@ -824,10 +874,10 @@ def get_peaks(
     api_key: str | None = None,
     timeout: int | None = None,
     **filters: object,
-) -> dict:
+):
     """Annual peak streamflow - the ``peaks`` collection (old ``/nwis/peak``).
 
-    One Feature per water year with the peak ``value`` (ft³/s), its date in
+    One row per water year with the peak ``value`` (ft³/s), its date in
     ``time``, ``water_year``, and a ``qualifier`` list (e.g. ``["REGULATED"]``).
     Sorted by time.
 
@@ -840,10 +890,10 @@ def get_peaks(
         from georest.usgs import waterdata
 
         # The largest flow of each year since 2000
-        peaks = waterdata.to_rows(waterdata.get_peaks("USGS-09380000", start="2000-01-01"))
-        max(peaks, key=lambda p: p["value"] or 0)
+        peaks = waterdata.get_peaks("USGS-09380000", start="2000-01-01")
+        peaks.nlargest(5, "value")[["water_year", "time", "value", "qualifier"]]
     """
-    return _series(
+    return _frame(_series(
         "peaks",
         monitoring_location_id=monitoring_location_id,
         parameter_code=None,
@@ -855,7 +905,7 @@ def get_peaks(
         api_key=api_key,
         timeout=timeout,
         **filters,
-    )
+    ))
 
 
 # ---------------------------------------------------------------------------
@@ -882,20 +932,16 @@ def to_rows(fc: dict, numeric: Iterable[str] = ("value",)) -> list[dict]:
     string, and a qualifier such as ``"Ice"`` can stand in for a number).
     Rows are sorted by ``(time_series_id, time)`` like the series functions.
 
-    A flat list of dicts feeds ``csv.DictWriter``, ``pandas.DataFrame(rows)``
-    and plotting directly, and keeps ``qualifier`` / ``approval_status``
-    alongside the value. Group by ``time_series_id`` with
-    ``itertools.groupby`` if a per-series shape is wanted.
+    For the raw output of :func:`get_items`; the named helpers already
+    return DataFrames.
 
     Example::
 
-        import pandas as pd
         from georest.usgs import waterdata
 
-        fc = waterdata.get_daily_values("USGS-09380000", "00060",
-                                        start="2024-01-01", end="2024-01-31")
-        flow = pd.DataFrame(waterdata.to_rows(fc))   # one row per day, values as numbers
-        flow[["time", "value"]]
+        # Peak flows straight from the collection, then flattened
+        fc = waterdata.get_items("peaks", monitoring_location_id="USGS-09380000", max_items=5)
+        waterdata.to_rows(fc)
     """
     numeric = tuple(numeric)
     rows: list[dict] = []

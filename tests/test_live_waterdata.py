@@ -33,26 +33,25 @@ class LiveWaterdataTests(unittest.TestCase):
         self.assertIn("/ogcapi/v1/", hrefs)
 
     def test_bbox_site_search(self):
-        fc = retry(lambda: waterdata.search_monitoring_locations(
+        df = retry(lambda: waterdata.search_monitoring_locations(
             bbox=LEES_FERRY_BBOX, site_type_code="ST"))
-        self.assertTrue(fc["features"])
-        ids = [f["id"] for f in fc["features"]]
+        self.assertFalse(df.empty)
+        ids = list(df["id"])
         self.assertTrue(all(i.startswith("USGS-") for i in ids), ids)
         self.assertIn(SITE, ids)
-        self.assertEqual(fc["features"][0]["geometry"]["type"], "Point")
+        self.assertTrue(df["lon"].notna().all() and df["lat"].notna().all())
 
     def test_daily_discharge_window(self):
-        fc = retry(lambda: waterdata.get_daily_values(
+        df = retry(lambda: waterdata.get_daily_values(
             SITE, "00060", start="2024-01-01", end="2024-01-31"))
-        self.assertGreaterEqual(len(fc["features"]), 28)
-        self.assertNotIn("truncated", fc)
-        times = [f["properties"]["time"] for f in fc["features"]]
+        self.assertGreaterEqual(len(df), 28)
+        self.assertFalse(df.attrs["truncated"])
+        times = list(df["time"])
         self.assertEqual(times, sorted(times), "must be sorted client-side")
-        self.assertTrue(all(t.startswith("2024-01-") for t in times), times[:3])
-        self.assertIsNone(fc["features"][0]["geometry"], "skip_geometry default")
-        rows = waterdata.to_rows(fc)
-        self.assertIsInstance(rows[0]["value"], float)
-        self.assertEqual(rows[0]["monitoring_location_id"], SITE)
+        self.assertTrue(all(t.startswith("2024-01-") for t in times), times)
+        self.assertNotIn("lon", df.columns, "skip_geometry default")
+        self.assertEqual(str(df["value"].dtype), "float64")
+        self.assertEqual(df["monitoring_location_id"].iloc[0], SITE)
 
     def test_queryables(self):
         props = retry(lambda: waterdata.get_queryables("daily"))
@@ -62,19 +61,18 @@ class LiveWaterdataTests(unittest.TestCase):
     def test_peaks_and_field_measurements_carry_time_and_value(self):
         peaks = retry(lambda: waterdata.get_peaks(SITE, max_items=3))
         fm = retry(lambda: waterdata.get_field_measurements(SITE, max_items=3))
-        for fc in (peaks, fm):
-            self.assertTrue(fc["features"])
-            props = fc["features"][0]["properties"]
-            self.assertIn("time", props)
-            self.assertIn("value", props)
+        for df in (peaks, fm):
+            self.assertFalse(df.empty)
+            self.assertIn("time", df.columns)
+            self.assertIn("value", df.columns)
 
     def test_max_page_size_is_still_accepted(self):
         """Guards `MAX_LIMIT`: the schema says 10 000 but 50 000 works live."""
-        fc = retry(lambda: waterdata.get_daily_values(
+        df = retry(lambda: waterdata.get_daily_values(
             SITE, "00060", start="2019-01-01", end="2019-01-10",
             page_size=_ogc.MAX_LIMIT, properties="time,value"))
-        self.assertGreaterEqual(len(fc["features"]), 9)
-        self.assertLessEqual(set(fc["features"][0]["properties"]),
+        self.assertGreaterEqual(len(df), 9)
+        self.assertLessEqual(set(df.columns) - {"id"},
                              {"time", "value", "time_series_id", "monitoring_location_id"})
 
     def test_bad_datetime_surfaces_the_api_description(self):
