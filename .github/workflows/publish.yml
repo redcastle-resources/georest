@@ -23,6 +23,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,6 +37,15 @@ jobs:
       - run: python -m pip install build "twine>=6.1"
       - run: python -m build
       - run: python -m twine check --strict dist/*
+
+      - name: Read __version__
+        id: version
+        run: |
+          python - >> "$GITHUB_OUTPUT" <<'PY'
+          import pathlib, re
+          src = pathlib.Path("src/georest/__init__.py").read_text(encoding="utf-8")
+          print("version=" + re.search(r'^__version__\s*=\s*"([^"]+)"', src, re.M).group(1))
+          PY
 
       - name: The git tag must match __version__
         if: github.event_name == 'release'
@@ -74,7 +85,7 @@ jobs:
 
   verify-testpypi:
     name: Install from TestPyPI and smoke test
-    needs: testpypi
+    needs: [build, testpypi]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/setup-python@v5
@@ -82,14 +93,23 @@ jobs:
           python-version: "3.12"
 
       - name: Install from TestPyPI
-        # No --extra-index-url needed: georest has zero dependencies, so
-        # TestPyPI alone satisfies the whole install. The retry loop is not
-        # optional — the index takes 10-60s to serve a freshly uploaded file.
+        # georest from TestPyPI, its dependencies (pandas) from PyPI: since
+        # 0.5.0 georest depends on pandas, and TestPyPI does not carry the
+        # real pandas releases. The version is pinned so that, with two
+        # indexes, pip cannot quietly install the last PyPI release instead
+        # of the file just uploaded. The retry loop is not optional: the
+        # index takes 10-60s to serve a fresh upload.
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
         run: |
           for i in 1 2 3 4 5; do
-            python -m pip install --index-url https://test.pypi.org/simple/ georest && break
+            python -m pip install --no-cache-dir \
+              --index-url https://test.pypi.org/simple/ \
+              --extra-index-url https://pypi.org/simple/ \
+              "georest==$VERSION" && break
             echo "index not caught up yet; retrying in 20s"; sleep 20
           done
+          python -c "import georest, os; assert georest.__version__ == os.environ['VERSION'], georest.__version__"
 
       - name: Smoke test
         run: |
