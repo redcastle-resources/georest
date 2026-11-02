@@ -54,7 +54,7 @@ from __future__ import annotations
 import importlib
 from typing import TYPE_CHECKING
 
-__version__ = "0.5.0.dev0"
+__version__ = "0.5.0"
 
 __all__ = ["esri", "edw", "portal", "services", "usgs", "waterdata",
            "usfs", "fia", "lcms", "fema", "nfhl", "noaa", "nws", "nwps", "coops",
