@@ -13,6 +13,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Hazard Layer, and `map_dates(lon, lat)` says when that map took effect, with any
   later Letter of Map Revision and new maps that are pending or preliminary. A failed
   query raises, or is named in `unchecked`, rather than reading as "no zone".
+- `georest.fema.openfema`: disaster declarations from OpenFEMA. `declarations(...)` returns
+  FEMA's rows, one per declared county, complete past the 10,000-row page limit;
+  `disasters(...)` groups them one row per disaster, so rows are never counted as
+  disasters (Texas since 2025: 100 rows, 16 disasters).
 
 - `georest.usfs`, the USDA Forest Service provider, moved here from geeViz's
   `fsInsights`:
