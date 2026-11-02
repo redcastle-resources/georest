@@ -464,8 +464,9 @@ def search_monitoring_locations(
         monitoring_location_id: One id or a list; bare numbers get the
             ``USGS-`` prefix.
         agency_code: ``"USGS"``, ``"USEPA"``, …
-        properties, filter, max_items, page_size, api_key, timeout, **filters:
-            As for :func:`get_items`. ``max_items`` defaults to 1 000 here.
+        properties, filter, max_items, page_size, api_key, timeout, filters:
+            As for :func:`get_items` (``filters`` being any other keyword
+            arguments). ``max_items`` defaults to 1 000 here.
 
     Returns:
         ``pandas.DataFrame``, one row per site: ``id`` (the
@@ -671,7 +672,8 @@ def get_daily_values(
             ``time`` and ``value`` are always kept.
         max_items: Default 10 000 (~27 years of one daily series). ``None``
             for unlimited; ``df.attrs["truncated"]`` is ``True`` when it bit.
-        filter, page_size, api_key, timeout, **filters: As for :func:`get_items`.
+        filter, page_size, api_key, timeout, filters: As for :func:`get_items`
+            (``filters`` being any other keyword arguments).
 
     Example::
 

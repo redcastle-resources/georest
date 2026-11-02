@@ -279,14 +279,14 @@ def theme_drift(services) -> dict[str, list[str]]:
     nothing to categorise; those are reported under "non_mapserver" for
     visibility rather than counted as drift.
 
-    Takes the list of dicts from search_edw_services. Returns:
+    Takes the list of dicts from search_edw_services. Returns a dict of lists:
 
-        untyped  - live MapServer services with no theme entry. They still
-                   appear in search results, but as theme "uncategorized"
-                   and with no description to match keywords against.
-        orphaned - theme entries whose service is gone from the catalog.
-        bad_theme / missing_desc - malformed entries.
-        non_mapserver - informational; not drift.
+    * ``untyped`` - live MapServer services with no theme entry. They still
+      appear in search results, but as theme "uncategorized" and with no
+      description to match keywords against.
+    * ``orphaned`` - theme entries whose service is gone from the catalog.
+    * ``bad_theme`` / ``missing_desc`` - malformed entries.
+    * ``non_mapserver`` - informational; not drift.
 
     Example::
 
@@ -518,17 +518,19 @@ def get_layer_roles(service_name: str) -> list[dict[str, Any]]:
     entry tagged, so a mis-grouping is visible instead of silently losing a
     layer. Each dict is get_service_info()['layers'] shape plus:
 
-        type, parentLayerId - as reported by the server
-        role - one of:
-            "group"      a Group Layer container. Has no /query endpoint,
-                         so it is never directly queryable.
-            "detail"     the full-resolution member of a coarse/detail split
-            "coarse"     a small-scale sibling superseded by a "detail"
-                         layer in the same group
-            "standalone" no split applies to its group; use it as-is
-        groupKey - the ("parent", id) or ("name", base) key its siblings
-                   were matched on (None for group layers), so you can audit
-                   why two layers were treated as versions of each other
+    * ``type``, ``parentLayerId`` - as reported by the server.
+    * ``role`` - one of:
+
+      * ``"group"`` - a Group Layer container. Has no /query endpoint, so it
+        is never directly queryable.
+      * ``"detail"`` - the full-resolution member of a coarse/detail split.
+      * ``"coarse"`` - a small-scale sibling superseded by a ``"detail"``
+        layer in the same group.
+      * ``"standalone"`` - no split applies to its group; use it as-is.
+
+    * ``groupKey`` - the ``("parent", id)`` or ``("name", base)`` key its
+      siblings were matched on (None for group layers), so you can audit
+      why two layers were treated as versions of each other.
 
     Role criteria, within one group: a member is coarse if maxScale > 0
     (i.e. it stops drawing past some scale), and detail if minScale > 0 and
@@ -743,18 +745,22 @@ def get_layer_metadata(
 
     Returns:
         Dict with keys:
-            title, abstract, purpose, credit (str, "" if not present)
-            keywords (sorted list of theme keywords)
-            attributes: list of {name, alias, type, definition,
-                definition_source} per field. `definition` is "" for
-                fields the data provider didn't document (e.g. OBJECTID
-                clones, raw thresholds). If `include_domains` is True, each
-                entry also has `domain`: None, or a dict with either/both:
-                    - "coded_values": [{"value", "definition",
-                      "definition_source"}, ...] for enumerated domains
-                    - "range": {"min", "max"} for numeric range domains
-                A field can have both (e.g. a numeric field using -9999 as
-                a documented "no data" sentinel alongside its real range).
+
+        * ``title``, ``abstract``, ``purpose``, ``credit`` (str, "" if not
+          present).
+        * ``keywords`` (sorted list of theme keywords).
+        * ``attributes``: list of ``{name, alias, type, definition,
+          definition_source}`` per field. ``definition`` is "" for fields the
+          data provider didn't document (e.g. OBJECTID clones, raw
+          thresholds). If ``include_domains`` is True, each entry also has
+          ``domain``: None, or a dict with either or both of:
+
+          * ``"coded_values"``: ``[{"value", "definition",
+            "definition_source"}, ...]`` for enumerated domains.
+          * ``"range"``: ``{"min", "max"}`` for numeric range domains.
+
+          A field can have both (e.g. a numeric field using -9999 as a
+          documented "no data" sentinel alongside its real range).
 
     Raises:
         RuntimeError: If the request fails or the response isn't valid XML
@@ -1128,6 +1134,7 @@ def query_features_analytic(
         service_name: Short service name, e.g. "EDW_TimberHarvest_01".
         layer_id: Layer ID within the service.
         out_analytics: List of analytic definitions, each a dict with:
+
             - type (str): Esri analytic type, e.g. "RANK", "SUM", "LAG",
               "ROW_NUMBER", "PERCENTILE_CONT".
             - field (str, optional): Input field the analytic operates on

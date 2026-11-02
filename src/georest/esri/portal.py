@@ -351,17 +351,19 @@ def searchPortal(
             ``POST <portal>/sharing/rest/generateToken``.
         org_scoped (bool | None, optional): Restrict results to the portal's
             own organization by injecting an ``orgid:`` clause.
+
             - ``None`` (default) - auto. Scopes only for a canonical
               ``<org>.maps.arcgis.com`` URL, and only when ``raw_q`` is not
               supplied. That includes the built-in ``portal="nasa"``
               (``nasa.maps.arcgis.com``), which searches only NASA's own
               items; pass ``False`` to search all of ArcGIS Online, as
-              ``portal="nasa"`` did in 0.1.0.
-              Global AGOL (``portal="agol"``), Enterprise portals, and custom
-              vanity domains are NOT auto-scoped; pass ``True`` for those.
+              ``portal="nasa"`` did in 0.1.0. Global AGOL
+              (``portal="agol"``), Enterprise portals, and custom vanity
+              domains are NOT auto-scoped; pass ``True`` for those.
             - ``True`` - always scope, wrapping ``raw_q`` if present.
-            - ``False`` - never scope (pre-fix behaviour), and the escape hatch
+            - ``False`` - never scope (pre-fix behavior), and the escape hatch
               if the organization id cannot be resolved.
+
             Scoping costs one extra ``/sharing/rest/portals/self`` request the
             first time a portal is seen; successful lookups are cached for the
             process. If the id cannot be resolved this raises ``RuntimeError``
