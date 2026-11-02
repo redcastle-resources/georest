@@ -14,6 +14,9 @@ usfs
 fema
     FEMA APIs: the flood zone at a point from the National Flood Hazard
     Layer, and when that map took effect, with new maps coming.
+noaa
+    NOAA APIs: NWS alerts, forecasts and observations, river forecast
+    gauges (NWPS), tides (CO-OPS) and active hurricanes (NHC).
 
 Quick start::
 
@@ -54,12 +57,14 @@ from typing import TYPE_CHECKING
 __version__ = "0.5.0.dev0"
 
 __all__ = ["esri", "edw", "portal", "services", "usgs", "waterdata",
-           "usfs", "fia", "lcms", "fema", "nfhl", "to_frame", "__version__"]
+           "usfs", "fia", "lcms", "fema", "nfhl", "noaa", "nws", "nwps", "coops",
+           "nhc", "to_frame", "__version__"]
 
 if TYPE_CHECKING:  # so IDEs, mypy and pyright resolve the re-exports statically
-    from . import esri, fema, usfs, usgs
+    from . import esri, fema, noaa, usfs, usgs
     from .esri import edw, portal, services
     from .fema import nfhl
+    from .noaa import coops, nhc, nwps, nws
     from .usfs import fia, lcms
     from .usgs import waterdata
 
@@ -80,6 +85,11 @@ _LAZY = {
     "lcms": ".usfs.lcms",
     "fema": ".fema",
     "nfhl": ".fema.nfhl",
+    "noaa": ".noaa",
+    "nws": ".noaa.nws",
+    "nwps": ".noaa.nwps",
+    "coops": ".noaa.coops",
+    "nhc": ".noaa.nhc",
     # Pre-0.5 names, kept importable (with a DeprecationWarning); not in __all__.
     "restesri": ".restesri",
     "restusgs": ".restusgs",

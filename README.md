@@ -71,9 +71,11 @@ almost nothing.
 | `georest.usfs` | Forest Service FIA estimates (EVALIDator) with sampling errors, LCMS land cover/use/change summaries, and the two side by side |
 | `georest.fema.nfhl` | FEMA's National Flood Hazard Layer: the flood zone at a point, when that map took effect, and new maps that are pending or preliminary |
 | `georest.fema.openfema` | OpenFEMA disaster declarations: by declared county, or one row per disaster |
+| `georest.noaa` | NWS alerts, forecasts and observations (one unit system per call), NWPS river gauges with flood stages, CO-OPS tides, NHC active storms |
 
 `esri` is the Esri/ArcGIS provider, `usgs` the USGS provider, `usfs` the
-USDA Forest Service provider, and `fema` the FEMA provider. Each sits under
+USDA Forest Service provider, `fema` the FEMA provider, and `noaa` the NOAA
+provider. Each sits under
 `georest` as a subpackage so providers can be added alongside one another without a
 namespace collision, and each is self-contained - its private `_http` (and, for
 usgs, `_ogc`) module is its own.

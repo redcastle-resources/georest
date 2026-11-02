@@ -111,8 +111,8 @@ class TestCliHelp(unittest.TestCase):
 
 
 class TestNoThirdPartyImports(unittest.TestCase):
-    """esri uses only the standard library; usgs and usfs may add pandas,
-    and usfs Earth Engine, only inside functions."""
+    """esri uses only the standard library; usgs, usfs and noaa may add
+    pandas, and usfs Earth Engine, only inside functions."""
 
     ALLOWED = {
         "__future__", "argparse", "ast", "base64", "collections", "contextlib",
@@ -128,6 +128,8 @@ class TestNoThirdPartyImports(unittest.TestCase):
     USGS_EXTRA = {"pandas"}
     #: fema.openfema returns DataFrames; fema.nfhl stays stdlib-only.
     FEMA_EXTRA = {"pandas"}
+    #: noaa returns DataFrames, with no Earth Engine path.
+    NOAA_EXTRA = {"pandas"}
 
     def _allowed_for(self, path):
         # georest.frames turns esri's GeoJSON into DataFrames; it is the one
@@ -144,6 +146,8 @@ class TestNoThirdPartyImports(unittest.TestCase):
             return self.ALLOWED | self.USGS_EXTRA
         if "fema" in path.parts:
             return self.ALLOWED | self.FEMA_EXTRA
+        if "noaa" in path.parts:
+            return self.ALLOWED | self.NOAA_EXTRA
         return self.ALLOWED
 
     def test_package_imports_only_stdlib(self):

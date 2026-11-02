@@ -73,6 +73,15 @@ requires_live_fema = unittest.skipUnless(
     "network test; set FEMA_LIVE=1 (or EDW_LIVE=1) to enable",
 )
 
+#: `noaa` talks to four NOAA servers (api.weather.gov, api.water.noaa.gov,
+#: api.tidesandcurrents.noaa.gov, www.nhc.noaa.gov), gated together.
+LIVE_NOAA = os.environ.get("NOAA_LIVE", "").lower() in _TRUTHY or LIVE
+
+requires_live_noaa = unittest.skipUnless(
+    LIVE_NOAA,
+    "network test; set NOAA_LIVE=1 (or EDW_LIVE=1) to enable",
+)
+
 #: Earth Engine examples need credentials and `pip install "georest[ee]"`,
 #: so EDW_LIVE does not turn them on.
 LIVE_EE = os.environ.get("EE_LIVE", "").lower() in _TRUTHY
