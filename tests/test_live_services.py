@@ -178,7 +178,11 @@ class ImageServiceTests(unittest.TestCase):
         feature = fc["features"][0]
         self.assertEqual(feature["geometry"]["type"], "Polygon")
         self.assertEqual(feature["properties"]["year"], 2020)
-        self.assertEqual(feature["id"], "0", "the fallback path renumbers ids positionally")
+        # The id is the server's object id when it sends one (this service
+        # started including objectid unasked by 2026-10-28), else positional;
+        # tests/test_geometry.py covers the positional case offline.
+        oid = feature["properties"].get("objectid")
+        self.assertEqual(feature["id"], str(oid) if oid is not None else "0")
 
     def test_export_image_returns_a_tiff(self):
         raw = retry(lambda: S.exportImage(IMG, bbox=AOI, size=(64, 64),

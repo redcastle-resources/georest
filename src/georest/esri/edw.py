@@ -45,6 +45,23 @@ from typing import Any
 
 from ._http import fetch_json, fetch_text, post_json
 
+
+def _error_text(err: Any) -> str:
+    """An ArcGIS error object as text.
+
+    Its ``message`` is often empty, with the cause in ``details``: a
+    polygon sent as the wrong geometry type comes back as
+    ``{"code": 400, "message": "", "details": ["Invalid geometry."]}``,
+    which reported as "EDW query error: " with nothing after it.
+    """
+    if not isinstance(err, dict):
+        return str(err)
+    message = str(err.get("message") or "").strip()
+    details = "; ".join(str(d) for d in (err.get("details") or []) if d)
+    text = "; ".join(t for t in (message, details) if t) or json.dumps(err)
+    code = err.get("code")
+    return f"{text} (code {code})" if code else text
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -148,9 +165,8 @@ _SERVICE_THEMES: dict[str, dict[str, str]] = {
     "EDW_EPANonAttainmentAreaPM25_01": {"theme": "environment", "desc": "A map service on the www showing areas in the U.S."},
     "EDW_Ecomap2025_01": {"theme": "environment", "desc": "The Ecomap 2025 contains a feature class for five different levels of the National Hierarchical Framework of Ecological Units (the Hierarchy."},
     "EDW_FireOccurrenceCurrentEdition_01": {"theme": "environment", "desc": "EDW_FireOccurrenceCurrentEdition_01 provides the current edition of Karen C. Short’s Spatial wildfire occurrence data for the United States (FPA FOD).…"},
-    "EDW_FireOccurrence6thEdition_01": {"theme": "environment", "desc": "This data publication contains a spatial database of wildfires that occurred in the United States from 1992 to 2020."},
     # NOTE: FS's datasets.php files this under "structure" -- inconsistent
-    # with every other fire dataset (MTBS, FireOccurrence6thEdition,
+    # with every other fire dataset (MTBS, FireOccurrenceCurrentEdition,
     # FireshedRegistry), which it puts under "environment". Corrected here.
     "EDW_FireOccurrenceAndPerimeter_01": {"theme": "environment", "desc": "The FirePerimeterFinal polygon layer represents final mapped wildland fire perimeters."},
     "EDW_FireOccurrenceFIRESTAT_YRLY_01": {"theme": "environment", "desc": "The FIRESTAT (Fire Statistics System) Fire Occurrence point layer represents ignition points, or points of origin, from which individual wildland…"},
@@ -350,12 +366,11 @@ def search_edw_services(query: str = "", theme: str = "") -> list[dict[str, str]
 
     Example::
 
+        import georest
         from georest.esri import edw
 
-        for s in edw.search_edw_services("fire"):          # by keyword
-            print(s["name"], "-", s["description"])
-
-        edw.search_edw_services(theme="recreation")         # or by theme
+        georest.to_frame(edw.search_edw_services("fire"))               # by keyword
+        georest.to_frame(edw.search_edw_services(theme="recreation"))   # or by theme
     """
     data = fetch_json(EDW_BASE_URL, {"f": "pjson"})
     services = data.get("services", [])
@@ -447,16 +462,17 @@ def get_service_info(service_name: str) -> dict[str, Any]:
 
     Example::
 
+        import georest
         from georest.esri import edw
 
         info = edw.get_service_info("EDW_MTBS_01")
-        [(layer["id"], layer["name"]) for layer in info["layers"]]
+        georest.to_frame(info["layers"])   # one row per layer
     """
     url = f"{EDW_BASE_URL}/{service_name}/MapServer"
     data = fetch_json(url, {"f": "pjson"})
 
     if "error" in data:
-        raise RuntimeError(f"EDW service error: {data['error'].get('message', data['error'])}")
+        raise RuntimeError(f"EDW service error: {_error_text(data['error'])}")
 
     layers = []
     for lyr in data.get("layers", []):
@@ -553,16 +569,16 @@ def get_layer_roles(service_name: str) -> list[dict[str, Any]]:
 
     Example::
 
+        import georest
         from georest.esri import edw
 
-        for layer in edw.get_layer_roles("EDW_ForestSystemBoundaries_01"):
-            print(layer["id"], layer["role"], layer["name"])
+        georest.to_frame(edw.get_layer_roles("EDW_ForestSystemBoundaries_01"))
     """
     url = f"{EDW_BASE_URL}/{service_name}/MapServer"
     data = fetch_json(url, {"f": "pjson"})
 
     if "error" in data:
-        raise RuntimeError(f"EDW service error: {data['error'].get('message', data['error'])}")
+        raise RuntimeError(f"EDW service error: {_error_text(data['error'])}")
 
     raw_layers = data.get("layers")
     if not raw_layers:
@@ -662,16 +678,17 @@ def get_layer_info(service_name: str, layer_id: int) -> dict[str, Any]:
 
     Example::
 
+        import georest
         from georest.esri import edw
 
         layer = edw.get_layer_info("EDW_MTBS_01", 63)   # Burned Area Boundaries (All Years)
-        [f["name"] for f in layer["fields"]]
+        georest.to_frame(layer["fields"])               # name, type and alias of each field
     """
     url = f"{EDW_BASE_URL}/{service_name}/MapServer/{layer_id}"
     data = fetch_json(url, {"f": "pjson"})
 
     if "error" in data:
-        raise RuntimeError(f"EDW layer error: {data['error'].get('message', data['error'])}")
+        raise RuntimeError(f"EDW layer error: {_error_text(data['error'])}")
 
     fields = []
     for f in data.get("fields", []):
@@ -848,6 +865,7 @@ def query_features(
     out_sr: int = 4326,
     return_count_only: bool = False,
     in_sr: int | None = None,
+    max_allowable_offset: float | None = None,
 ) -> dict:
     """Query features from an EDW layer, optionally filtered by spatial intersection.
 
@@ -876,6 +894,11 @@ def query_features(
             convention. This is deliberately independent of `out_sr` -
             asking for output in another projection must not change how the
             input geometry is read.
+        max_allowable_offset: Simplify each returned geometry on the server so
+            no vertex moves more than this, in the units of ``out_sr``
+            (degrees for the default 4326; 0.001 is about 100 m). For maps:
+            a national forest boundary drops from megabytes to kilobytes.
+            ``None`` (the default) returns full detail.
 
     Returns:
         GeoJSON FeatureCollection dict, or {"count": N} if return_count_only.
@@ -894,6 +917,7 @@ def query_features(
 
     Example::
 
+        import georest
         from georest.esri import edw
 
         # One fire's perimeter, as GeoJSON
@@ -904,7 +928,7 @@ def query_features(
         # Every MTBS fire inside a bounding box (west, south, east, north)
         box = edw.query_features("EDW_MTBS_01", 63, geometry="-106.0,40.4,-105.4,40.9",
                                  out_fields="fire_name,year,acres")
-        len(box["features"])
+        georest.to_frame(box)   # the attribute table; box itself keeps the shapes
 
         # Just the count
         edw.query_features("EDW_MTBS_01", 63, where="year = 2020", return_count_only=True)
@@ -927,6 +951,9 @@ def query_features(
         params["returnCountOnly"] = "true"
         params["f"] = "json"
 
+    if max_allowable_offset is not None:
+        params["maxAllowableOffset"] = str(float(max_allowable_offset))
+
     if geometry is not None:
         geom_str = _convert_geometry(geometry, geometry_type)
         params["geometry"] = geom_str
@@ -938,7 +965,7 @@ def query_features(
     data = post_json(url, params)
 
     if "error" in data:
-        raise RuntimeError(f"EDW query error: {data['error'].get('message', data['error'])}")
+        raise RuntimeError(f"EDW query error: {_error_text(data['error'])}")
 
     if return_count_only:
         return {"count": data.get("count", 0)}
@@ -950,7 +977,8 @@ def query_features(
         )
         if ids:
             return _fetch_features_by_ids(
-                service_name, layer_id, id_field, ids, out_fields, out_sr, max_features
+                service_name, layer_id, id_field, ids, out_fields, out_sr, max_features,
+                max_allowable_offset=max_allowable_offset,
             )
 
     return _sanitize_geojson(data)
@@ -985,7 +1013,7 @@ def _query_object_ids(
     }
     data = post_json(url, params)
     if "error" in data:
-        raise RuntimeError(f"EDW query error: {data['error'].get('message', data['error'])}")
+        raise RuntimeError(f"EDW query error: {_error_text(data['error'])}")
     return data.get("objectIdFieldName", "OBJECTID"), data.get("objectIds") or []
 
 
@@ -998,6 +1026,7 @@ def _fetch_features_by_ids(
     out_sr: int,
     max_features: int,
     chunk_size: int | None = None,
+    max_allowable_offset: float | None = None,
 ) -> dict:
     """Fetch features for a known list of object IDs, in chunks.
 
@@ -1025,6 +1054,7 @@ def _fetch_features_by_ids(
             out_fields=out_fields,
             max_features=chunk_size,
             out_sr=out_sr,
+            max_allowable_offset=max_allowable_offset,
         )
         features = result.get("features", [])
         # Every ID came from this same layer via returnIdsOnly and the filter
@@ -1147,6 +1177,7 @@ def query_features_analytic(
 
     Example::
 
+        import georest
         from georest.esri.edw import query_features_analytic
 
         # Largest timber harvest per ranger district on one forest
@@ -1165,6 +1196,7 @@ def query_features_analytic(
                   " AND gis_acres IS NOT NULL",
             out_fields="sale_name,admin_district_name,gis_acres",
         )
+        georest.to_frame(result)
     """
     url = f"{EDW_BASE_URL}/{service_name}/MapServer/{layer_id}/queryAnalytic"
 
@@ -1202,7 +1234,7 @@ def query_features_analytic(
     data = post_json(url, params)
 
     if "error" in data:
-        raise RuntimeError(f"EDW queryAnalytic error: {data['error'].get('message', data['error'])}")
+        raise RuntimeError(f"EDW queryAnalytic error: {_error_text(data['error'])}")
 
     return _sanitize_geojson(_esri_json_to_geojson(data))
 
@@ -1255,6 +1287,7 @@ def top_n_per_group(
 
     Example::
 
+        import georest
         from georest.esri.edw import top_n_per_group
 
         # Largest timber harvest per ranger district on one forest
@@ -1266,6 +1299,7 @@ def top_n_per_group(
                   " AND gis_acres IS NOT NULL",
             out_fields="sale_name,admin_district_name,gis_acres",
         )
+        georest.to_frame(result)
     """
     direction = "DESC" if descending else "ASC"
     return query_features_analytic(
@@ -1383,6 +1417,7 @@ def query_features_with_pagination(
 
     Example::
 
+        import georest
         from georest.esri import edw
 
         # More than the server's 2,000-record page: 4,000 MTBS fire locations
@@ -1390,7 +1425,7 @@ def query_features_with_pagination(
         fires = edw.query_features_with_pagination("EDW_MTBS_01", 62,
                                                    out_fields="fire_name,ig_date,acres",
                                                    max_features=4000)
-        len(fires["features"])   # 4000
+        georest.to_frame(fires)   # 4,000 rows, with lon and lat
     """
     all_features = []
     offset = 0
@@ -1422,7 +1457,7 @@ def query_features_with_pagination(
         data = post_json(url, params)
 
         if "error" in data:
-            raise RuntimeError(f"EDW query error: {data['error'].get('message', data['error'])}")
+            raise RuntimeError(f"EDW query error: {_error_text(data['error'])}")
 
         features = data.get("features", [])
         if not features:
