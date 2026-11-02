@@ -11,6 +11,7 @@ summarizing LCMS over your own polygon.
 ```bash
 pip install georest
 pip install "georest[ee]"      # adds Earth Engine for usfs.lcms_ee
+pip install "georest[mcp]"     # adds georest-mcp, the MCP server for LLM agents
 ```
 
 Documentation: **[georest.io](https://georest.io)**.
@@ -42,9 +43,9 @@ from georest.usgs import waterdata
 
 gages = waterdata.search_monitoring_locations(bbox=(-111.7, 36.8, -111.5, 37.0),
                                               site_type_code="ST")
-fc = waterdata.get_daily_values("USGS-09380000", "00060",
-                                start="2024-01-01", end="2024-01-31")
-rows = waterdata.to_rows(fc)   # [{"time": "2024-01-01", "value": 9870.0, ...}, ...]
+flow = waterdata.get_daily_values("USGS-09380000", "00060",
+                                  start="2024-01-01", end="2024-01-31")
+flow[["time", "value"]]   # a DataFrame, value as a number
 
 # Forest Service: FIA estimates always come with their sampling error
 from georest.usfs import fia, lcms
@@ -78,6 +79,20 @@ usgs, `_ogc`) module is its own.
 Full per-function reference: **[docs/api.md](docs/api.md)**.
 Runnable notebooks: **[examples/](examples/)**. The `guide_*` notebooks each answer one question
 with interactive charts and maps; the others walk through one module function by function.
+
+## An MCP server for LLM agents
+
+`georest-mcp` serves georest's data clients as Model Context Protocol tools over stdio:
+FIA estimates and LCMS summaries, USGS water data, the river network, elevation,
+earthquakes, ScienceBase and water quality, and EDW, portal and Feature Service queries. It
+has 18 read-only tools and no code execution. Register it with your client, e.g. for Claude Code:
+
+```json
+{"mcpServers": {"georest": {"command": "georest-mcp"}}}
+```
+
+See [docs/api.md](docs/api.md#using-georest-from-an-mcp-server) for what the tools return
+and the rules they follow.
 
 ## Signing in to ArcGIS Online / Portal
 

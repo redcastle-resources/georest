@@ -59,6 +59,27 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `guide_streamflow` (USGS Water Data). `pip install "georest[examples]"` adds Plotly and
   Folium. `tests/test_example_guides.py` checks they are saved clean.
 
+- `georest.to_frame()` (in `georest.frames`): any georest result as a DataFrame. A
+  FeatureCollection (an esri query), a list of Features, or a list of records (an EDW
+  service search, a portal search) becomes one row each, with `lon`/`lat` for points and
+  `geometry=True` to keep the shapes. The esri docstring examples now end in it.
+- `edw.query_features(max_allowable_offset=...)`: simplified geometry from the server, for
+  maps (a national forest boundary drops from megabytes to kilobytes). Kept on the
+  complex-area fallback that re-fetches features by id.
+- `georest.mcp`, an MCP server of georest's data clients for LLM agents (`pip install
+  "georest[mcp]"`, then `georest-mcp`): 18 read-only tools covering FIA estimates and
+  search, LCMS summaries, USGS water data, the river network, elevation, earthquakes,
+  ScienceBase, the Water Quality Portal, EDW, portal search and Feature Service queries.
+  Every tool returns every row it got; API limits are parameters and are labeled when they
+  bite, and earthquake searches count first and refuse more than `max_events`. Failures
+  come back as `{"error": ...}` with a hint. Tools that take a URL accept only https
+  addresses that resolve to public IPs. The FIA sampling-error rules ride in the server's
+  instructions. Data tools only; no code execution.
+- The example notebooks show DataFrames throughout. The EDW, services and waterdata
+  walkthroughs gained context, a map of the fires in a national forest, an LCMS
+  acres-by-class chart read from the service's own class table, a month of flow and a map of
+  current discharge.
+
 ### Changed
 
 - The provider subpackages drop their `rest` prefix: `georest.restesri` is now
@@ -67,8 +88,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `DeprecationWarning`, and will be removed in a later release.
 - `georest.usgs` returns pandas DataFrames, like `georest.usfs`; `georest.esri` still uses
   only the standard library.
-- pandas is now a dependency, for `usfs`, which returns DataFrames. `esri` and
-  `usgs` still use only the standard library, and the packaging tests hold them to it.
+- **Breaking: `waterdata`'s helpers return DataFrames.** `search_monitoring_locations`,
+  `get_time_series_metadata`, `get_daily_values`, `get_continuous_values`,
+  `get_latest_values`, `get_field_measurements` and `get_peaks` return one row per feature,
+  every property a column, `value` a float (NaN where a qualifier such as "Ice" stands in
+  for a number), and a site's point as `lon`/`lat`. `truncated` and `rate_limit` move from
+  the FeatureCollection to `df.attrs`. `get_monitoring_location` returns one flat record.
+  `get_items` still returns the raw GeoJSON, and `to_rows` still flattens it. To migrate,
+  drop `to_rows(...)` around a helper's result and read `df["value"]` directly.
+- pandas is now a dependency, for `usfs` and `usgs`, which return DataFrames, and for
+  `georest.to_frame`. `esri` still uses only the standard library, and the packaging tests
+  hold it to that.
 - Compared with geeViz's `fsInsights`: the transport uses `urllib` instead of `requests`;
   `find_attributes`, `find_groupings` and `find_evaluations` return every match, best
   first, instead of the first 25 (`limit=` is still accepted); long `strFilter` values are

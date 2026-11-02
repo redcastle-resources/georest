@@ -120,14 +120,17 @@ OGC API - Features client) are its own, not shared with `esri`.
 
 ### `waterdata.py` - USGS Water Data OGC API client
 
-Every function returns a GeoJSON `FeatureCollection` dict - one Feature per **observation**
-for the time-series collections (not one per series, as NWIS returned), one per site for
-`monitoring-locations`. `value` arrives as a string (precision); `to_rows` converts it.
+The helpers return a pandas DataFrame - one row per **observation** for the time-series
+collections (not one per series, as NWIS returned), one per site for
+`monitoring-locations` - with every property a column, `value` a float (`NaN` where a
+qualifier such as `"Ice"` stands in for a number) and a site's point as `lon`/`lat`.
+`df.attrs["truncated"]` and `df.attrs["rate_limit"]` carry what the API said about the fetch.
+`get_items` is the raw escape hatch: it returns the GeoJSON `FeatureCollection` as sent.
 
 Facts about the API that shape the module (all verified live, 2026-09-14): it does **not**
 sort, so the time-series functions sort their output by `(time_series_id, time)`; it reports
-no `numberMatched`, so every fetch is bounded by `max_items` and flags `truncated: True`
-when the server had more; pagination is cursor-based via `rel="next"` links; any queryable
+no `numberMatched`, so every fetch is bounded by `max_items` and sets
+`df.attrs["truncated"]` when the server had more; pagination is cursor-based via `rel="next"` links; any queryable
 property name works as a direct equality filter; CQL2 text goes in `filter`.
 
 Constants: `BASE_URL`, `COLLECTIONS` (the 14 data collections; `list_collections()` is the
@@ -138,19 +141,19 @@ live, authoritative list), `PARAMETER_CODES` (`00060` discharge, `00065` gage he
 - `list_collections(api_key=None, timeout=None)` - the live collection catalog.
 - `get_queryables(collection, ...)` - `{property_name: json_schema}`; every key is a valid direct filter for that collection (`daily` alone has ~55, including every site attribute).
 - `get_items(collection, bbox=None, start=None, end=None, properties=None, skip_geometry=False, filter=None, max_items=10_000, page_size=1_000, api_key=None, timeout=None, **filters)` - the generic fetch under everything below; use it for a collection without a helper (`channel-measurements`, `time-series-methods`, the code tables) or a filter the helpers don't spell out. `start`/`end` accept strings, `date` or `datetime` objects and may be open on either side; `start` may also be a ready interval (`"2020-01-01/2020-01-31"`, `"../2020-12-31"`) or an ISO 8601 duration meaning "the last …" (`"P7D"`, `"PT6H"`, `"P2W"`). The server rejects durations in every form despite its docs, so they are resolved client-side to `<now minus duration>/..`; years and months raise `ValueError` (no fixed length). `properties` trims the response to exactly those keys (this generic path does **not** add the time-series essentials back - the helpers do). `**filters` are direct equality filters (`state_code="49"`); passing `f`, `limit`, `cursor` or `offset` raises `TypeError`.
-- `search_monitoring_locations(bbox=None, state_code=None, county_code=None, site_type_code=None, hydrologic_unit_code=None, monitoring_location_id=None, agency_code=None, ..., max_items=1_000)` - find sites. `site_type_code` (`"ST"` stream, `"LK"` lake, `"GW"` well, …) and `monitoring_location_id` accept a list (becomes a CQL2 `IN`); `hydrologic_unit_code` prefix-matches. Each Feature's `id` is the `monitoring_location_id`.
-- `get_monitoring_location(monitoring_location_id, ...)` - one site as a single Feature. Bare ids (`"09380000"`) get the `USGS-` prefix everywhere; ids with another agency prefix (`"USEPA-…"`) pass through.
+- `search_monitoring_locations(bbox=None, state_code=None, county_code=None, site_type_code=None, hydrologic_unit_code=None, monitoring_location_id=None, agency_code=None, ..., max_items=1_000)` - find sites. `site_type_code` (`"ST"` stream, `"LK"` lake, `"GW"` well, …) and `monitoring_location_id` accept a list (becomes a CQL2 `IN`); `hydrologic_unit_code` prefix-matches. Each row's `id` is the `monitoring_location_id`.
+- `get_monitoring_location(monitoring_location_id, ...)` - one site as a flat record (a dict): `id`, every site property, `lon` and `lat`. Bare ids (`"09380000"`) get the `USGS-` prefix everywhere; ids with another agency prefix (`"USEPA-…"`) pass through.
 - `get_time_series_metadata(monitoring_location_id=None, parameter_code=None, statistic_id=None, bbox=None, ...)` - which series exist at a site (the old `seriesCatalogOutput=true`), with begin/end dates and `time_series_id`; check this before pulling values.
 - `get_daily_values(monitoring_location_id, parameter_code="00060", statistic_id="00003", start=None, end=None, *, skip_geometry=True, max_items=10_000, ...)` - daily statistics (old `/nwis/dv`), sorted. `time` is `YYYY-MM-DD`. 10 000 rows ≈ 27 years of one daily series.
 - `get_continuous_values(monitoring_location_id, parameter_code="00060", start=None, end=None, ...)` - sensor readings, typically every 15 minutes (old `/nwis/iv`), sorted. **Volume warning:** ~35 000 rows per year per parameter, so the default `max_items` covers roughly 100 days; narrow the window, or pass `max_items=None` with an API key. `start="P7D"` is the last week.
 - `get_latest_values(monitoring_location_id=None, parameter_code=None, *, source="daily", bbox=None, skip_geometry=False, ...)` - the most recent observation per series from `latest-daily` or `latest-continuous`. No site is required: `bbox` + `parameter_code="00060"` is "current discharge at every gage in this area", which is why geometry is kept by default here. Any other `source` raises `ValueError`.
 - `get_field_measurements(monitoring_location_id=None, parameter_code=None, start=None, end=None, *, bbox=None, ...)` - manual site-visit readings (old `/nwis/gwlevels` and `/measurements`): groundwater levels, gage height and discharge measurements. Sorted by `(monitoring_location_id, time)`.
-- `get_peaks(monitoring_location_id, start=None, end=None, ...)` - annual peak streamflow (old `/nwis/peak`): one Feature per water year with `value`, `time`, `water_year` and a `qualifier` list. The `peaks` collection rejects the `datetime` parameter, so `start`/`end` are sent as a CQL2 `time` filter (ANDed with any `filter` you pass). Beware the same on `get_items("peaks", start=...)` or `get_items("time-series-metadata", start=...)`: those collections answer 400 "datetime query not supported" - use `filter` instead.
-- `to_rows(fc, numeric=("value",))` - flatten a FeatureCollection into one plain dict per Feature: the Feature's `properties`, plus its `id` when the properties carry none, with every key in `numeric` converted by `float()` (`None` when missing or non-numeric - a qualifier such as `"Ice"` can stand in for a number). Sorted like the series functions. A flat row list feeds `csv.DictWriter`, `pandas.DataFrame(rows)` and plotting directly; group by `time_series_id` with `itertools.groupby` for a per-series shape.
+- `get_peaks(monitoring_location_id, start=None, end=None, ...)` - annual peak streamflow (old `/nwis/peak`): one row per water year with `value`, `time`, `water_year` and a `qualifier` list. The `peaks` collection rejects the `datetime` parameter, so `start`/`end` are sent as a CQL2 `time` filter (ANDed with any `filter` you pass). Beware the same on `get_items("peaks", start=...)` or `get_items("time-series-metadata", start=...)`: those collections answer 400 "datetime query not supported" - use `filter` instead.
+- `to_rows(fc, numeric=("value",))` - flatten a FeatureCollection from `get_items` into one plain dict per Feature: the Feature's `properties`, plus its `id` when the properties carry none, with every key in `numeric` converted by `float()` (`None` when missing or non-numeric - a qualifier such as `"Ice"` can stand in for a number). Sorted like the series functions. A flat row list feeds `csv.DictWriter`, `pandas.DataFrame(rows)` and plotting directly; group by `time_series_id` with `itertools.groupby` for a per-series shape.
 - `set_api_key(key)` - set the process-wide API key (e.g. from a secret store at server start); `None` clears it.
 - `RateLimitError` - re-exported from `_http` (below) so callers can catch it by name.
 
-**Foreign members on results.** Besides `type`/`features`, a FeatureCollection may carry `truncated: True` (the fetch stopped at `max_items` while the server still had more - the API reports no total, so this is the only signal) and `rate_limit: {"limit": n, "remaining": m}` (from the last page's `X-RateLimit-*` headers, when present). Both are plain keys; GeoJSON consumers ignore them.
+**What the API said about a fetch.** A helper's DataFrame carries `df.attrs["truncated"]` (`True` when the fetch stopped at `max_items` while the server still had more - the API reports no total, so this is the only signal) and, when the server sent `X-RateLimit-*` headers, `df.attrs["rate_limit"]` (`{"limit": n, "remaining": m}`). `get_items` returns the same two as plain members of its FeatureCollection; GeoJSON consumers ignore them.
 
 **API key resolution**, per call: an explicit `api_key=` argument wins (`""` forces anonymous); else the value given to `set_api_key`; else the first non-empty of `USGS_API_KEY` / `USGS_WATERDATA_API_KEY` in the environment; else anonymous. Anonymous use works, rate-limited to "a few queries per hour" - get a key at <https://api.waterdata.usgs.gov/signup/>. The key is sent only as the `X-Api-Key` header, never as a query parameter, so it cannot appear in a URL, an error message, or a server log. Reading a `.env` file is the application's job, not the library's.
 
@@ -191,16 +194,41 @@ caught locally before it was sent (`fia.FIAValidationError`).
 
 ## Using georest from an MCP server
 
-georest is built to be wrapped as tools for an LLM agent (the geeViz MCP server does this
-for `esri`; it lives in its own repository). The library side of that contract:
+georest ships its own MCP server, `georest.mcp` (`pip install "georest[mcp]"`, then run
+`georest-mcp`; it speaks MCP over stdio). Register it with a client the usual way, e.g. for
+Claude Code:
+
+```json
+{"mcpServers": {"georest": {"command": "georest-mcp"}}}
+```
+
+It has 18 read-only data tools, and no code execution:
+
+| Provider | Tools |
+|---|---|
+| Forest Service | `search_fia`, `describe_fia_grouping`, `fia_estimate`, `lcms_summary` |
+| USGS | `water_sites`, `water_series`, `water_values`, `river_sites`, `elevation`, `earthquakes`, `sciencebase_search`, `sciencebase_files`, `water_quality` |
+| ArcGIS | `edw_search`, `edw_layers`, `edw_query`, `portal_search`, `feature_service_query` |
+
+Every tool returns every row it got, as JSON. Where an API can return a great deal, its own
+limit is a tool parameter and the result says when it stopped the fetch early;
+`earthquakes` counts first and refuses a search larger than `max_events`. Failures come back
+as `{"error": ..., "hint": ...}`. Tools that take a URL accept only https addresses that
+resolve to public IP addresses. The server's instructions carry the FIA rules: never an
+estimate without its sampling error, never a row flagged `unreliable`, and totals from FIA,
+not from adding rows.
+
+To wrap georest in a server of your own, the library side of the contract:
 
 - **Set the key once, at startup, and keep `api_key` out of every tool schema.** Read it
   from the server's secret store into `USGS_API_KEY` (or call `waterdata.set_api_key`) the
   way geeViz's server loads its `.env`. A tool parameter named `api_key` invites the model
   to ask users for keys and paste them into the conversation.
-- **Keep results bounded and compact.** Leave `max_items` finite, prefer `to_rows`,
-  `properties=` and `skip_geometry=True` (the series functions default to it), and relay
-  `truncated` and `rate_limit` to the model verbatim so it can narrow a query or back off.
+- **Bound results at the source, then return them whole.** Leave `max_items` finite and
+  use `properties=` and `skip_geometry=True` (the series functions default to it), and relay
+  `df.attrs["truncated"]` and `df.attrs["rate_limit"]` to the model verbatim so it can
+  narrow a query or back off. `georest.mcp.server.records()` turns a DataFrame into
+  JSON-safe rows (missing values as `null`).
 - **Relay rate limits instead of waiting them out.** Catch `waterdata.RateLimitError` and
   surface `.retry_after`; the library never sleeps more than a few seconds inside a call.
 - **Error messages are safe to return to the model.** A `RuntimeError` carries the request
