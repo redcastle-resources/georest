@@ -18,10 +18,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `df.attrs["truncated"]` says when `max_items` stopped the fetch and `df.attrs["matched"]`
   how many the server found. Paging follows both POST and GET next links, cloud cover is
   checked again here for servers that ignore the filter, and an `intersects` that is
-  projected or too detailed is refused with the fix.
+  projected or too detailed is refused with the fix. Repeated vertices are removed, and a
+  polygon that simplification collapsed to a point is dropped rather than sent (Earth Search
+  rejects it).
 - `stac.assets(catalog, collection, item)` lists one scene's files, `stac.footprints(scenes)`
   returns the scenes' outlines as GeoJSON, and `stac.sign(href, collection)` adds Planetary
   Computer's short-lived read token to a file link.
+- The MCP server gains `stac_collections`, `stac_search` and `stac_assets`, for finding
+  imagery and gridded data over a place. They return links and metadata, never pixels, and
+  never a signed link. `stac_search` takes a `bbox`, or the EDW service, layer and filter of
+  a fire perimeter, which it fetches and simplifies itself so no shape passes through the
+  model; a filter matching no feature, or 20 or more, is refused with what to change.
 
 ## [0.5.0] - 2026-11-02
 

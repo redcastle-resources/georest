@@ -46,6 +46,17 @@ CALLS = [
     ("edw_query", {"service_name": "EDW_MTBS_01", "layer_id": 63, "where": "year = 2020",
                    "count_only": True}, "count"),
     ("portal_search", {"query": "naip 2023", "limit": 3}, "rows"),
+    ("stac_collections", {}, "rows"),
+    ("stac_collections", {"catalog": "earth-search", "query": "sentinel"}, "rows"),
+    ("stac_search", {"catalog": "earth-search", "collections": ["sentinel-2-l2a"],
+                     "bbox": [-114.2, 46.8, -113.8, 47.1], "datetime": "2024-07-01/2024-07-31",
+                     "max_items": 3}, "rows"),
+    ("stac_search", {"catalog": "earth-search", "collections": ["sentinel-2-l2a"],
+                     "perimeter_service": "EDW_MTBS_01", "perimeter_layer": 63,
+                     "perimeter_where": "fire_name = 'CAMERON PEAK'",
+                     "datetime": "2020-10-20/2020-10-31", "max_items": 3}, "rows"),
+    ("stac_assets", {"catalog": "earth-search", "collection": "sentinel-2-l2a",
+                     "item": "S2B_11TQM_20240731_0_L2A"}, "rows"),
     ("feature_service_query", {"url": "https://sampleserver6.arcgisonline.com/arcgis/rest/services/"
                                       "Earthquakes_Since1970/FeatureServer/0",
                                "where": "magnitude >= 8.5", "out_fields": "name,magnitude"}, "rows"),
@@ -79,7 +90,7 @@ class LiveMcpServer(unittest.TestCase):
     def test_the_server_introduces_itself(self):
         self.assertEqual(self.r["_server"], "georest")
         self.assertIn("se_pct", self.r["_instructions"])
-        self.assertEqual(len(self.r["_tools"]), 18)
+        self.assertEqual(len(self.r["_tools"]), 21)
 
     def test_every_tool_answers_with_data(self):
         for i, (name, args, key) in enumerate(CALLS):

@@ -348,8 +348,52 @@ def _geometry_of(value: Any) -> dict:
                      f"Feature or FeatureCollection")
 
 
+def _tidy_ring(ring: Any) -> list | None:
+    """``ring`` without repeated vertices, or None if fewer than three places remain."""
+    if not isinstance(ring, (list, tuple)):
+        return ring
+    kept: list = []
+    for pos in ring:
+        if not kept or list(pos[:2]) != list(kept[-1][:2]):
+            kept.append(pos)
+    return kept if len({tuple(p[:2]) for p in kept}) >= 3 else None
+
+
+def _tidy_polygons(geometry: dict) -> dict:
+    """Drop what simplification leaves that servers reject as invalid shapes.
+
+    A small polygon simplified by ``max_allowable_offset`` can collapse to one
+    repeated point (Earth Search answers 400 "invalid_shape_exception"). Repeated
+    vertices are removed, and a ring left with fewer than three places is
+    dropped, with its polygon if it was the outer ring.
+    """
+    kind = geometry.get("type")
+    if kind == "GeometryCollection":
+        parts = [_tidy_polygons(g) for g in geometry.get("geometries") or []]
+        return {"type": kind, "geometries": [g for g in parts if g is not None]}
+    if kind not in ("Polygon", "MultiPolygon"):
+        return geometry
+    polygons = [geometry["coordinates"]] if kind == "Polygon" else list(geometry["coordinates"])
+    kept = []
+    for rings in polygons:
+        if not isinstance(rings, (list, tuple)) or not rings:
+            continue
+        outer = _tidy_ring(rings[0])
+        if outer is None:
+            continue
+        kept.append([outer] + [r for r in (_tidy_ring(h) for h in rings[1:]) if r is not None])
+    if not kept and polygons and any(polygons):
+        raise ValueError("intersects collapsed to nothing: every polygon is a point or a line "
+                         "at this precision. Request it with a smaller max_allowable_offset "
+                         "on the EDW queries, or search with its bbox")
+    if kind == "Polygon":
+        return {"type": kind, "coordinates": kept[0]} if kept else geometry
+    return {"type": kind, "coordinates": kept} if kept else geometry
+
+
 def _check_geometry(geometry: dict) -> dict:
     """Refuse a geometry a STAC server would reject or choke on, saying why."""
+    geometry = _tidy_polygons(geometry)
     count = 0
     stack = [geometry]
     while stack:

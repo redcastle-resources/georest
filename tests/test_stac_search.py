@@ -477,6 +477,26 @@ class TestIntersects(unittest.TestCase):
         ring = [[-114 + i * 1e-6, 46.0] for i in range(stac._MAX_VERTICES)]
         stac._check_geometry({"type": "Polygon", "coordinates": [ring]})
 
+    def test_a_polygon_simplified_to_a_point_is_dropped_not_sent(self):
+        """Earth Search 400s on it: 'Cannot determine orientation: edges coincide'
+        (seen with a small MTBS fire at max_allowable_offset=0.001)."""
+        dot = [[-105.5717, 40.7411]] * 4
+        multi = {"type": "MultiPolygon",
+                 "coordinates": [square(-114, 46)["coordinates"], [dot]]}
+        got = self.sent(multi)
+        self.assertEqual(got["coordinates"], [square(-114, 46)["coordinates"]])
+
+    def test_repeated_vertices_are_removed(self):
+        ring = [[-114, 46], [-114, 46], [-113, 46], [-113, 47], [-114, 46]]
+        got = self.sent({"type": "Polygon", "coordinates": [ring]})
+        self.assertEqual(got["coordinates"][0], [[-114, 46], [-113, 46], [-113, 47], [-114, 46]])
+
+    def test_a_geometry_that_collapses_entirely_is_refused_with_the_fix(self):
+        dot = {"type": "Polygon", "coordinates": [[[-105.5717, 40.7411]] * 4]}
+        with patched_stac(post_json_body=lambda *a, **k: self.fail("requested")):
+            with self.assertRaisesRegex(ValueError, "collapsed.*bbox"):
+                stac.search(ROOT, "c", intersects=dot)
+
     def test_the_geometry_is_not_edited_for_the_caller(self):
         fc = {"type": "FeatureCollection", "features": [
             {"type": "Feature", "geometry": square(-114, 46)},

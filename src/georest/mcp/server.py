@@ -54,6 +54,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 import georest
+from georest.cloud import stac
 from georest.esri import edw, services
 from georest.esri import portal as esri_portal
 from georest.usfs import fia, lcms
@@ -81,6 +82,21 @@ Rules for FIA (fia_estimate):
 
 LCMS areas are from a classified map; FIA areas are from a sample. Report
 them separately and say which is which; do not equate them.
+
+Imagery and gridded data (STAC): stac_collections finds a catalog's
+collections (leave catalog blank to list the catalogs), stac_search finds the
+scenes over a place and a time, and stac_assets lists one scene's files.
+These return links and metadata, never pixels; a worker that can read
+rasters opens the links. To find imagery over a fire, give stac_search the
+same service, layer and where you used with edw_query (perimeter_service,
+perimeter_layer, perimeter_where); it fetches the shape itself, so do not
+look for one. Anywhere else, give a bbox. If truncated is true there were
+more scenes than max_items. An empty result usually means a wrong collection
+id, a too-narrow date range or too strict a max_cloud_cover: check ids with
+stac_collections. Each file has an access value: "open" links can be read
+as is; "sign" links need georest.cloud.stac.sign in the worker that reads
+them; "earthdata" and "requester-pays" links need that worker's own
+credentials. Never ask a user for a token.
 
 Tools return every row as JSON. When a result is too large, narrow the query
 (a smaller area, a shorter time window, fewer parameters) rather than asking
@@ -640,6 +656,156 @@ def feature_service_query(url: str, where: str = "1=1", bbox: Optional[list[floa
     fc = services.queryFeatureService(public_https_url(url), where=where, geometry=geometry,
                                       out_fields=out_fields, max_features=max_features)
     return answer(records(georest.to_frame(fc)))
+
+
+# ── Cloud-native data: STAC discovery ──────────────────────────────────
+# Links and metadata only. Reading the pixels is for the caller's own
+# rasterio, odc-stac or zarr; signing is not offered, because a signed link
+# carries a live read token.
+
+_MAX_SCENES = 500  # a scene row is ~400 bytes; this keeps one reply in the tens of KB
+_MAX_PERIMETER_FEATURES = 20
+
+
+def _stac_catalog(catalog: str) -> str:
+    """A registry name as is; a STAC root URL only if it is public https."""
+    catalog = (catalog or "").strip()
+    if catalog.lower().startswith(("http://", "https://")):
+        return public_https_url(catalog)
+    return catalog
+
+
+@tool
+def stac_collections(catalog: str = "", query: str = "", max_items: int = 200) -> str:
+    """Find STAC catalogs, or the collections (datasets) in one.
+
+    Leave catalog blank to list the catalogs georest knows (Earth Search,
+    Planetary Computer, USGS LandsatLook, NASA), with how their files are
+    read. Name a catalog to list its collections, those that matter for
+    forest and land work first. Use the ids it returns in stac_search.
+
+    Args:
+        catalog: A catalog name from the blank-catalog listing, or the root
+            https URL of any STAC API. Blank lists the catalogs.
+        query: Words to filter collections by ("landsat", "canopy").
+        max_items: The most collections to return.
+
+    Returns:
+        JSON rows. For collections: catalog, id, title, summary, license,
+        start, end and more; truncated=true says there were more.
+    """
+
+    if not (catalog or "").strip():
+        return answer(records(stac.catalogs()))
+    df = stac.collections(_stac_catalog(catalog), query, max_items=int(max_items))
+    return answer(records(df), truncated=bool(df.attrs.get("truncated")),
+                  catalog=df.attrs.get("catalog", catalog))
+
+
+@tool
+def stac_search(catalog: str, collections: list[str], bbox: Optional[list[float]] = None,
+                perimeter_service: str = "", perimeter_layer: Optional[int] = None,
+                perimeter_where: str = "1=1", datetime: str = "",
+                max_cloud_cover: Optional[float] = None, max_items: int = 50) -> str:
+    """Find satellite or aerial scenes (STAC items) over a place and a time.
+
+    Returns links and metadata, never pixels: one row per scene, newest
+    first. Use stac_assets for a scene's files.
+
+    Give the place as a bbox, or as a perimeter in an EDW layer (the same
+    service, layer and where you would use with edw_query, such as a fire
+    from EDW_MTBS_01); the shape is fetched here, simplified, and the
+    search covers it. Not both. A where matching no feature, or more than
+    20, is refused: narrow it.
+
+    An empty result usually means a wrong collection id, a too-narrow
+    datetime or too strict a max_cloud_cover; check ids with
+    stac_collections.
+
+    Args:
+        catalog: A name from stac_collections ("earth-search",
+            "planetary-computer"), or the root https URL of a STAC API.
+        collections: Collection ids, e.g. ["sentinel-2-l2a"].
+        bbox: [west, south, east, north] in decimal degrees.
+        perimeter_service: EDW service_name, e.g. "EDW_MTBS_01".
+        perimeter_layer: The layer id from edw_layers.
+        perimeter_where: SQL filter selecting the perimeter, e.g.
+            "fire_name = 'CAMERON PEAK'".
+        datetime: When captured: "2024-06-01/2024-09-30", or one day
+            "2024-07-15". Blank for any time.
+        max_cloud_cover: Most cloud cover to accept, percent.
+        max_items: The most scenes to return (at most 500).
+
+    Returns:
+        JSON rows: catalog, collection, id, datetime, cloud_cover, platform,
+        assets (how files are read), thumbnail, bbox. truncated=true says
+        there were more scenes than max_items; matched is how many the
+        server counted, when it says.
+    """
+
+    has_shape = bool(perimeter_service) or perimeter_layer is not None
+    if bbox is not None and has_shape:
+        raise ValueError("give a bbox or a perimeter (perimeter_service, perimeter_layer, "
+                         "perimeter_where), not both")
+    if bbox is None and not has_shape:
+        raise ValueError("give a bbox, or a perimeter (perimeter_service and perimeter_layer)")
+    if not isinstance(collections, (list, tuple)) or not collections:
+        raise ValueError('collections is a list of collection ids, e.g. ["sentinel-2-l2a"]; '
+                         "find ids with stac_collections")
+    place: dict[str, Any] = {}
+    meta: dict[str, Any] = {}
+    if bbox is not None:
+        place["bbox"] = _bbox(bbox)
+    else:
+        if not perimeter_service or perimeter_layer is None:
+            raise ValueError("a perimeter needs both perimeter_service and perimeter_layer")
+        fc = edw.query_features(perimeter_service, int(perimeter_layer),
+                                where=perimeter_where or "1=1", out_fields="objectid",
+                                max_features=_MAX_PERIMETER_FEATURES, max_allowable_offset=0.001)
+        found = len(fc.get("features") or [])
+        if found == 0:
+            raise ValueError(f"perimeter_where matched no feature in {perimeter_service} layer "
+                             f"{perimeter_layer}; check the filter with edw_query")
+        if found >= _MAX_PERIMETER_FEATURES or fc.get("exceededTransferLimit"):
+            raise ValueError(f"perimeter_where matched {_MAX_PERIMETER_FEATURES} or more "
+                             f"features; use a narrower perimeter_where (one fire, one year)")
+        place["intersects"] = fc
+        meta["perimeter_features"] = found
+    limit = max(1, int(max_items))
+    if limit > _MAX_SCENES:
+        meta["note"] = f"max_items was lowered from {limit} to {_MAX_SCENES}; narrow the search instead"
+        limit = _MAX_SCENES
+    df = stac.search(_stac_catalog(catalog), list(collections), datetime=datetime or None,
+                     max_cloud_cover=max_cloud_cover, max_items=limit, **place)
+    attrs = dict(df.attrs)
+    rows = records(df.drop(columns=["geometry"], errors="ignore"))
+    if not rows:
+        meta["hint"] = ("No scenes. Check the collection ids with stac_collections, widen the "
+                        "datetime, or raise max_cloud_cover.")
+    return answer(rows, truncated=bool(attrs.get("truncated")), matched=attrs.get("matched"),
+                  catalog=attrs.get("catalog", catalog), **meta)
+
+
+@tool
+def stac_assets(catalog: str, collection: str, item: str) -> str:
+    """The files of one scene: bands, previews, metadata, with links.
+
+    Links are returned unsigned. Check each file's access: "open" can be
+    read as is; "sign" needs georest.cloud.stac.sign in the worker that
+    reads it; "earthdata" and "requester-pays" need that worker's own
+    credentials.
+
+    Args:
+        catalog: The catalog, as given to stac_search.
+        collection: The scene's collection (a stac_search row's collection).
+        item: The scene's id (a stac_search row's id).
+
+    Returns:
+        JSON rows: key (e.g. "B04", "visual"), title, type, roles, access, href.
+    """
+
+    return answer(records(stac.assets(_stac_catalog(catalog), collection, item, sign=False)),
+                  collection=collection, item=item)
 
 
 def main() -> None:
