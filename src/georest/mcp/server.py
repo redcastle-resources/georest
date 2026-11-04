@@ -56,6 +56,8 @@ from mcp.types import ToolAnnotations
 import georest
 from georest.esri import edw, services
 from georest.esri import portal as esri_portal
+from georest.fema import nfhl, openfema
+from georest.noaa import coops, nhc, nwps, nws
 from georest.usfs import fia, lcms
 from georest.usgs import earthquakes as usgs_earthquakes
 from georest.usgs import nationalmap, nldi, sciencebase, waterdata, wqp
@@ -68,7 +70,7 @@ data (water_sites, water_series, water_values), the river network
 (river_sites), elevation, earthquakes, ScienceBase data releases and the Water
 Quality Portal (water_quality). ArcGIS: the Forest Service Enterprise Data
 Warehouse (edw_search, edw_query), portal search, and any public Feature
-Service (feature_service_query).
+Service (feature_service_query). FEMA and NOAA: below.
 
 Rules for FIA (fia_estimate):
 - FIA is a probability sample, not a census. Never report an estimate
@@ -81,6 +83,23 @@ Rules for FIA (fia_estimate):
 
 LCMS areas are from a classified map; FIA areas are from a sample. Report
 them separately and say which is which; do not equate them.
+
+FEMA and NOAA: the flood zone at a point with its map's date (flood_zone),
+federal disaster declarations (disaster_declarations), NWS alerts, forecasts
+and current conditions (weather_alerts, weather_forecast, weather_now), river
+forecast gauges (river_gauges, river_gauge), tides (tide_stations, tides) and
+active tropical cyclones (hurricanes).
+
+Rules for hazards:
+- A FEMA flood zone is a regulatory map, not a forecast: outside the
+  floodplain is not "will not flood". Give the map's effective date, and
+  say so when FEMA has new maps pending or preliminary. mapped false means
+  FEMA has no map there, not that there is no flood hazard.
+- No alerts, no gauge at flood stage, no storm: say the source lists none
+  right now, never that there is no hazard.
+- Readings and forecasts carry their times; say how old a reading is.
+- disaster_declarations by="county" is one row per declared county: count
+  disasters with by="disaster".
 
 Tools return every row as JSON. When a result is too large, narrow the query
 (a smaller area, a shorter time window, fewer parameters) rather than asking
@@ -640,6 +659,261 @@ def feature_service_query(url: str, where: str = "1=1", bbox: Optional[list[floa
     fc = services.queryFeatureService(public_https_url(url), where=where, geometry=geometry,
                                       out_fields=out_fields, max_features=max_features)
     return answer(records(georest.to_frame(fc)))
+
+
+# ── FEMA: flood maps and disaster declarations ─────────────────────────
+
+@tool
+def flood_zone(lon: float, lat: float) -> str:
+    """The FEMA flood zone at a point, and when that flood map took effect.
+
+    From FEMA's National Flood Hazard Layer: the effective Flood Insurance
+    Rate Map, the one in force for insurance and permitting. A zone is a
+    regulatory designation, not a forecast.
+
+    Args:
+        lon, lat: The point, in decimal degrees.
+
+    Returns:
+        JSON: zone, subtype, sfha (in the 1%-annual-chance floodplain),
+        static_bfe and depth where FEMA records them, mapped (false = FEMA
+        has no digital map here, not "no hazard"), and map: the panel, the
+        date it took effect, any later revision, pending_effective (new
+        maps adopted, with their date) and preliminary_issued (new maps
+        proposed); a lookup named in map.unchecked could not be checked.
+    """
+
+    zone = nfhl.flood_zone(lon, lat)
+    dates = nfhl.map_dates(lon, lat)
+    zone["map"] = {k: v for k, v in dates.items() if k not in ("lon", "lat")}
+    return dumps(zone)
+
+
+@tool
+def disaster_declarations(state: str = "", fips: str = "", incident_type: str = "",
+                          declaration_type: str = "", since: str = "", until: str = "",
+                          by: str = "disaster", max_rows: int = 2000) -> str:
+    """Federal disaster declarations from OpenFEMA, since 1953.
+
+    Give at least one filter. Refuses a search matching more than max_rows,
+    with the count, rather than send part of it.
+
+    Args:
+        state: Two-letter state code, e.g. "TX".
+        fips: 5-digit county FIPS code, e.g. "48201" (Harris County, TX).
+        incident_type: OpenFEMA's type, exactly: "Hurricane", "Flood",
+            "Severe Storm", "Fire", ...
+        declaration_type: "DR" (major disaster), "EM" (emergency) or "FM"
+            (fire management).
+        since, until: Declaration dates, "YYYY-MM-DD", inclusive.
+        by: "disaster" (one row per disaster, with how many declared areas
+            matched) or "county" (OpenFEMA's own rows, one per declared
+            county or tribal area). One disaster covers many counties:
+            count disasters with by="disaster".
+        max_rows: The most rows to return.
+    """
+
+    filters = {"state": state or None, "fips": fips or None,
+               "incident_type": incident_type or None,
+               "declaration_type": declaration_type or None,
+               "since": since or None, "until": until or None}
+    if not any(filters.values()):
+        raise ValueError("give at least one filter: state, fips, incident_type, "
+                         "declaration_type, since or until")
+    if by == "disaster":
+        df = openfema.disasters(**filters)
+    elif by == "county":
+        df = openfema.declarations(**filters)
+    else:
+        raise ValueError('by must be "disaster" or "county"')
+    if len(df) > max_rows:
+        return dumps({"error": f"{len(df):,} rows match, more than max_rows={max_rows:,}",
+                      "count": len(df),
+                      "hint": 'Narrow the search (a state, a county, a date window, an '
+                              'incident type), use by="disaster", or raise max_rows.'})
+    return answer(records(df), by=by)
+
+
+# ── NOAA: weather, rivers, tides, hurricanes ───────────────────────────
+
+def _covered(fn, *args, **kwargs):
+    """Call an NWS function; a point outside the NWS is an argument problem."""
+    try:
+        return fn(*args, **kwargs)
+    except nws.NotCovered as exc:
+        raise LookupError(f"{exc}. The NWS covers the US, its territories and "
+                          f"nearby waters.") from None
+
+
+@tool
+def weather_alerts(lon: Optional[float] = None, lat: Optional[float] = None, state: str = "",
+                   event: str = "", severity: str = "") -> str:
+    """Active National Weather Service watches, warnings and advisories.
+
+    Args:
+        lon, lat: A point. Every alert returned is in effect there: the NWS
+            matched it to the point, whatever its area text lists.
+        state: A state or marine area code ("TX", "GM"). Neither a point
+            nor a state means the whole country.
+        event: An event name, e.g. "Flood Warning".
+        severity: "Extreme", "Severe", "Moderate" or "Minor".
+
+    Returns:
+        JSON rows: event, severity, urgency, certainty, headline, area,
+        sender, onset, expires, zones and has_polygon (false = issued for
+        forecast zones, not drawn as a polygon). No rows means the NWS
+        lists no alert there right now, not that there is no hazard.
+    """
+
+    point = None
+    if lon is not None or lat is not None:
+        if lon is None or lat is None:
+            raise ValueError("give both lon and lat, or neither")
+        point = (lon, lat)
+    df = nws.alerts(point=point, area=state or None, event=event or None,
+                    severity=severity or None)
+    scope = "point" if point else (state.upper() if state else "nationwide")
+    return answer(records(df), scope=scope)
+
+
+@tool
+def weather_forecast(lon: float, lat: float, units: str = "us", hourly: bool = False) -> str:
+    """The National Weather Service forecast at a point, one row per period.
+
+    Args:
+        lon, lat: The point, in decimal degrees.
+        units: "us" (degrees F, mph) or "si" (degrees C, km/h); the unit is
+            in each column's name.
+        hourly: Hourly periods instead of day and night.
+    """
+
+    return answer(records(_covered(nws.forecast, lon, lat, units=units, hourly=hourly)),
+                  units=units)
+
+
+@tool
+def weather_now(lon: float, lat: float, stations: int = 3, units: str = "us",
+                max_age_minutes: float = 90) -> str:
+    """Current conditions: the latest readings at the weather stations nearest a point.
+
+    Readings older than max_age_minutes are not current and are left out;
+    dropped_stale and failed name the stations left out, so a short answer
+    can be told from a quiet one.
+
+    Args:
+        lon, lat: The point, in decimal degrees.
+        stations: How many stations with a current reading.
+        units: "us" or "si", as for weather_forecast.
+        max_age_minutes: The oldest reading to count as current.
+
+    Returns:
+        JSON rows, nearest station first: station, distance_km,
+        observed_at, age_min, conditions, the readings, and qc (readings
+        the NWS has not validated).
+    """
+
+    df = _covered(nws.observations, lon, lat, n=stations, units=units,
+                  max_age_minutes=max_age_minutes)
+    return answer(records(df), units=units, dropped_stale=df.attrs.get("dropped_stale", []),
+                  failed=df.attrs.get("failed", []))
+
+
+@tool
+def river_gauges(bbox: list[float], flooding_only: bool = False) -> str:
+    """NOAA river forecast gauges in a box: the stage now, its flood category, the forecast crest.
+
+    Args:
+        bbox: [west, south, east, north].
+        flooding_only: Only gauges at a flood category now (action stage or above).
+
+    Returns:
+        JSON rows: lid (the gauge id), name, lon, lat, stage and its unit,
+        flood_category, observed_at, and forecast_stage, forecast_category
+        and forecast_at (null when the forecast is not current - never read
+        a forecast crest as the stage now). flooding_now counts gauges at a
+        flood category.
+    """
+
+    df = nwps.gauges(_bbox(bbox), flooding_only=flooding_only)
+    return answer(records(df), flooding_now=df.attrs.get("flooding_now"))
+
+
+@tool
+def river_gauge(lid: str) -> str:
+    """One NOAA river gauge in full, with the stages at which it floods.
+
+    Args:
+        lid: The gauge id, e.g. "BBST2" (the lid from river_gauges).
+
+    Returns:
+        JSON: where it is, the latest stage and forecast crest, and
+        flood_stages - the stage for action, minor, moderate and major
+        flooding (null where the NWS has not set one).
+    """
+
+    return dumps(nwps.gauge(lid))
+
+
+@tool
+def tide_stations(lon: float, lat: float, n: int = 3, max_km: float = 100) -> str:
+    """The NOAA tide stations (CO-OPS) nearest a point.
+
+    Args:
+        lon, lat: The point, in decimal degrees.
+        n: How many stations.
+        max_km: Leave out stations farther than this: a gauge far away says
+            nothing about the water at the point.
+    """
+
+    return answer(records(coops.nearest(lon, lat, n=n, max_km=max_km)))
+
+
+@tool
+def tides(station: str, kind: str = "measured", hours: int = 24, begin: str = "", end: str = "",
+          interval: str = "hilo", datum: str = "MLLW", units: str = "english") -> str:
+    """Water levels at a NOAA tide station: measured, or the tide predictions.
+
+    Args:
+        station: The CO-OPS station id, e.g. "8771450" (from tide_stations).
+        kind: "measured" (the last `hours`, oldest first) or "predicted"
+            (high and low tides between begin and end).
+        hours: For measured: how far back, up to 720.
+        begin, end: For predicted: "YYYY-MM-DD".
+        interval: For predicted: "hilo" (high and low), "h" (hourly) or minutes.
+        datum: The height reference, "MLLW" by default. A level means
+            nothing without its datum; say which.
+        units: "english" (feet) or "metric" (meters).
+
+    Returns:
+        JSON rows with time (UTC) and the level; measured readings carry
+        quality ("p" preliminary, "v" verified). Predictions are modelled
+        astronomical tides: weather can push the water well above them.
+    """
+
+    if kind == "measured":
+        df = coops.water_levels(station, hours=hours, datum=datum, units=units)
+    elif kind == "predicted":
+        if not (begin and end):
+            raise ValueError('kind="predicted" needs begin and end ("YYYY-MM-DD")')
+        df = coops.predictions(station, begin, end, interval=interval, datum=datum, units=units)
+    else:
+        raise ValueError('kind must be "measured" or "predicted"')
+    return answer(records(df), kind=kind, station=station, name=df.attrs.get("name"),
+                  datum=datum, units=units)
+
+
+@tool
+def hurricanes() -> str:
+    """The tropical cyclones the National Hurricane Center is advising on now.
+
+    Returns:
+        JSON rows: id, name, classification and its name, wind_kt,
+        pressure_mb, lon, lat, motion, updated, and links to the public
+        advisory and the forecast cone. No rows means the NHC is advising on
+        no storm right now.
+    """
+
+    return answer(records(nhc.active_storms()))
 
 
 def main() -> None:
