@@ -6,6 +6,23 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `georest.cloud`, a provider for cloud-native catalogs (standard library plus pandas), with
+  `stac`: `catalogs()` lists the STAC catalogs georest knows (Earth Search, Planetary
+  Computer, USGS LandsatLook, NASA CMR-STAC) and how each one's files are read, and
+  `collections(catalog, query)` lists a catalog's collections, with the forest and land
+  ones first.
+- `stac.search(catalog, collections, ...)` finds scenes over a bounding box or a GeoJSON
+  shape (such as an EDW fire perimeter) and a date range, one row per scene, newest first.
+  `df.attrs["truncated"]` says when `max_items` stopped the fetch and `df.attrs["matched"]`
+  how many the server found. Paging follows both POST and GET next links, cloud cover is
+  checked again here for servers that ignore the filter, and an `intersects` that is
+  projected or too detailed is refused with the fix.
+- `stac.assets(catalog, collection, item)` lists one scene's files, `stac.footprints(scenes)`
+  returns the scenes' outlines as GeoJSON, and `stac.sign(href, collection)` adds Planetary
+  Computer's short-lived read token to a file link.
+
 ## [0.5.0] - 2026-11-02
 
 ### Added

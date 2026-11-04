@@ -431,3 +431,89 @@ class FakeStacServer:
                     else f"{parsed.scheme}://{parsed.netloc}{parsed.path}?{nxt}")
             page["links"].append({"rel": "next", "href": href, "type": "application/geo+json"})
         return page
+
+
+def stac_item(iid, collection="sentinel-2-l2a", datetime="2024-07-01T18:00:00Z", cloud=5.0,
+              platform="sentinel-2a", assets=None, geometry=None):
+    """Build one STAC Item the way an API returns it from a search."""
+    return {"type": "Feature", "stac_version": "1.0.0", "id": iid, "collection": collection,
+            "bbox": [-114.2, 46.8, -113.8, 47.1],
+            "geometry": geometry or {"type": "Polygon", "coordinates": [
+                [[-114.2, 46.8], [-113.8, 46.8], [-113.8, 47.1], [-114.2, 46.8]]]},
+            "properties": {"datetime": datetime, "eo:cloud_cover": cloud, "platform": platform},
+            "assets": assets if assets is not None else {
+                "thumbnail": {"href": f"https://img.example.org/{iid}.jpg", "type": "image/jpeg",
+                              "roles": ["thumbnail"]},
+                "B04": {"href": f"https://data.example.org/{iid}/B04.tif", "title": "Red",
+                        "type": "image/tiff", "roles": ["data"]}}}
+
+
+class FakeStacSearch:
+    """A STAC API's /search and item endpoints, offline.
+
+    Stands in for both `stac.post_json_body` (search, returns parsed JSON) and
+    `stac.fetch_json` (item GETs and GET next links): pass the instance as
+    each. Serves `items` in the order given, at most `page_cap` per page
+    whatever `limit` asks for. `paging` picks how the next page is linked:
+    "post" sends a POST link with a body to merge (Earth Search, Planetary
+    Computer), "get" a GET link with an `offset` (NASA CMR-STAC). `honor_query`
+    False makes the server ignore `query`, as some do. `matched_in` puts the
+    total in `numberMatched` or in `context.matched`. Records every request in
+    `calls` as (method, url, body-or-None).
+    """
+
+    def __init__(self, items=(), page_cap=50, paging="post", honor_query=True,
+                 matched_in="numberMatched"):
+        self.items = list(items)
+        self.page_cap = page_cap
+        self.paging = paging
+        self.honor_query = honor_query
+        self.matched_in = matched_in
+        self.calls: list[tuple[str, str, dict | None]] = []
+
+    # -- search ----------------------------------------------------------
+    def post_json_body(self, url, body, timeout=None, **kwargs):
+        self.calls.append(("POST", url, json.loads(json.dumps(body))))
+        return self._page(url, body, int(body.get("offset", 0)))
+
+    def _page(self, url, body, offset):
+        pool = self.items
+        cap = (body.get("query") or {}).get("eo:cloud_cover", {}).get("lte")
+        if cap is not None and self.honor_query:
+            pool = [i for i in pool if i["properties"].get("eo:cloud_cover", 0) <= cap]
+        size = max(1, min(int(body.get("limit", self.page_cap)), self.page_cap))
+        batch = pool[offset: offset + size]
+        page = {"type": "FeatureCollection", "features": batch, "links": []}
+        if self.matched_in == "numberMatched":
+            page["numberMatched"] = len(pool)
+        elif self.matched_in == "context":
+            page["context"] = {"matched": len(pool), "returned": len(batch)}
+        if offset + len(batch) < len(pool):
+            if self.paging == "post":
+                page["links"].append({"rel": "next", "method": "POST", "href": url,
+                                      "merge": True, "body": {"offset": offset + len(batch)}})
+            else:
+                page["links"].append({"rel": "next", "href": f"{url}?offset={offset + len(batch)}"})
+        return page
+
+    # -- GET: next links and items ----------------------------------------
+    def fetch_json(self, url, params=None, timeout=None, **kwargs):
+        from georest.cloud._http import CloudError
+        if params:
+            url = url + "?" + urllib.parse.urlencode(params)
+        self.calls.append(("GET", url, None))
+        parsed = urllib.parse.urlsplit(url)
+        if parsed.path.endswith("/search"):
+            offset = int(dict(urllib.parse.parse_qsl(parsed.query)).get("offset", 0))
+            first = next((c[2] for c in self.calls if c[0] == "POST"), {})
+            return self._page(f"{parsed.scheme}://{parsed.netloc}{parsed.path}", first, offset)
+        if "/items/" in parsed.path:
+            iid = urllib.parse.unquote(parsed.path.rsplit("/items/", 1)[1])
+            for item in self.items:
+                if item["id"] == iid:
+                    return item
+        raise CloudError(f"Request failed (404): {url}", status=404)
+
+    def bodies(self):
+        """The JSON bodies of every POST made."""
+        return [c[2] for c in self.calls if c[0] == "POST"]
