@@ -8,7 +8,7 @@ this one checks that every example in every module runs.
 
 Each module's examples run only when its server's switch is on (see
 ``support.py``): ``SERVICES_LIVE``, ``EDW_LIVE``, ``USGS_LIVE``, ``FIA_LIVE``,
-``LCMS_LIVE``, ``FEMA_LIVE``, ``NOAA_LIVE``, or ``EDW_LIVE`` for all of them. Examples that sign in through
+``LCMS_LIVE``, ``FEMA_LIVE``, ``NOAA_LIVE``, ``STAC_LIVE``, or ``EDW_LIVE`` for all of them. Examples that sign in through
 a browser never run unattended, and Earth Engine ones need ``EE_LIVE``.
 """
 
@@ -26,6 +26,7 @@ from .support import (
     LIVE_LCMS,
     LIVE_NOAA,
     LIVE_SERVICES,
+    LIVE_STAC,
     LIVE_USGS,
     retry,
 )
@@ -53,6 +54,7 @@ MODULES = {
     "georest.noaa.nwps": LIVE_NOAA,
     "georest.noaa.coops": LIVE_NOAA,
     "georest.noaa.nhc": LIVE_NOAA,
+    "georest.cloud.stac": LIVE_STAC,
     "georest.esri.auth": False,   # signs in through a browser
 }
 

@@ -15,6 +15,7 @@ import unittest
 import urllib.parse
 from pathlib import Path
 
+from georest.cloud import stac
 from georest.esri import edw, services
 
 # VALID_THEMES and theme_drift now live in edw itself, so the shipped
@@ -80,6 +81,15 @@ LIVE_NOAA = os.environ.get("NOAA_LIVE", "").lower() in _TRUTHY or LIVE
 requires_live_noaa = unittest.skipUnless(
     LIVE_NOAA,
     "network test; set NOAA_LIVE=1 (or EDW_LIVE=1) to enable",
+)
+
+#: `cloud` talks to several STAC servers (Earth Search, Planetary Computer,
+#: LandsatLook, NASA CMR-STAC), gated together.
+LIVE_STAC = os.environ.get("STAC_LIVE", "").lower() in _TRUTHY or LIVE
+
+requires_live_stac = unittest.skipUnless(
+    LIVE_STAC,
+    "network test; set STAC_LIVE=1 (or EDW_LIVE=1) to enable",
 )
 
 #: Earth Engine examples need credentials and `pip install "georest[ee]"`,
@@ -217,6 +227,12 @@ def patched_services(**attrs):
     """
     with patched_module(services, **attrs):
         yield
+
+
+def patched_stac(**attrs):
+    """`patched_module` for `georest.cloud.stac`, which binds `fetch_json`
+    into its own namespace; swap it (usually for a :class:`FakeStacServer`)."""
+    return patched_module(stac, **attrs)
 
 
 def patched_ogc(**attrs):
@@ -368,3 +384,50 @@ class FakeOgcServer:
     @property
     def last_query(self) -> dict:
         return self.query(-1)
+
+
+def stac_collection(cid, title=None, description="A collection.", start="2015-01-01T00:00:00Z",
+                    end=None, license="proprietary", keywords=()):
+    """Build one STAC Collection the way an API lists it."""
+    return {"type": "Collection", "id": cid, "title": title, "description": description,
+            "license": license, "keywords": list(keywords),
+            "extent": {"spatial": {"bbox": [[-180, -90, 180, 90]]},
+                       "temporal": {"interval": [[start, end]]}}}
+
+
+class FakeStacServer:
+    """A STAC API's collection list, offline, with the paging real servers do.
+
+    Stands in for `stac.fetch_json` (GET, returns the parsed JSON).
+    `/collections` serves at most `page_cap` collections per page whatever
+    `limit` asks for - NASA's CMR-STAC sends 20 - and emits a `rel="next"` GET
+    link carrying a `cursor`, as CMR does. `relative_links=True` makes that
+    link relative, which some servers send. Anything else is a 404. Records
+    every URL (query string included) in `urls`.
+    """
+
+    def __init__(self, collections=(), page_cap=100, relative_links=False):
+        self.collections = list(collections)
+        self.page_cap = page_cap
+        self.relative_links = relative_links
+        self.urls: list[str] = []
+
+    def __call__(self, url, params=None, timeout=None, headers=None, **kwargs):
+        from georest.cloud._http import CloudError
+        if params:
+            url = url + "?" + urllib.parse.urlencode(params)
+        self.urls.append(url)
+        parsed = urllib.parse.urlsplit(url)
+        if not parsed.path.endswith("/collections"):
+            raise CloudError(f"Request failed (404): {url}", status=404)
+        query = dict(urllib.parse.parse_qsl(parsed.query))
+        offset = int(query.get("cursor", 0))
+        size = max(1, min(int(query.get("limit", self.page_cap)), self.page_cap))
+        batch = self.collections[offset: offset + size]
+        page = {"collections": batch, "links": [{"rel": "root", "href": "/"}]}
+        if offset + len(batch) < len(self.collections):
+            nxt = urllib.parse.urlencode({"cursor": offset + len(batch)})
+            href = (f"{parsed.path}?{nxt}" if self.relative_links
+                    else f"{parsed.scheme}://{parsed.netloc}{parsed.path}?{nxt}")
+            page["links"].append({"rel": "next", "href": href, "type": "application/geo+json"})
+        return page

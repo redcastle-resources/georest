@@ -73,6 +73,11 @@ class TestReExports(unittest.TestCase):
         from georest import cloud
         self.assertIs(cloud, georest.cloud)
         self.assertEqual(cloud.__name__, "georest.cloud")
+        # tests patch `fetch_json` by setattr on the module that calls it, so
+        # the top-level alias must be that very module object.
+        from georest.cloud import stac
+        self.assertIs(georest.stac, stac)
+        self.assertIs(cloud.stac, stac)
         for private in ("_http", "_frames"):
             self.assertNotIn(private, cloud.__all__)
             self.assertNotIn(private, georest._LAZY)
