@@ -17,6 +17,9 @@ fema
 noaa
     NOAA APIs: NWS alerts, forecasts and observations, river forecast
     gauges (NWPS), tides (CO-OPS) and active hurricanes (NHC).
+cloud
+    Cloud-native catalogs: STAC search for imagery and gridded data over a
+    place, returned as links rather than pixels.
 
 Quick start::
 
@@ -58,10 +61,10 @@ __version__ = "0.5.0"
 
 __all__ = ["esri", "edw", "portal", "services", "usgs", "waterdata",
            "usfs", "fia", "lcms", "fema", "nfhl", "noaa", "nws", "nwps", "coops",
-           "nhc", "to_frame", "__version__"]
+           "nhc", "cloud", "to_frame", "__version__"]
 
 if TYPE_CHECKING:  # so IDEs, mypy and pyright resolve the re-exports statically
-    from . import esri, fema, noaa, usfs, usgs
+    from . import cloud, esri, fema, noaa, usfs, usgs
     from .esri import edw, portal, services
     from .fema import nfhl
     from .noaa import coops, nhc, nwps, nws
@@ -90,6 +93,7 @@ _LAZY = {
     "nwps": ".noaa.nwps",
     "coops": ".noaa.coops",
     "nhc": ".noaa.nhc",
+    "cloud": ".cloud",
     # Pre-0.5 names, kept importable (with a DeprecationWarning); not in __all__.
     "restesri": ".restesri",
     "restusgs": ".restusgs",

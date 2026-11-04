@@ -67,6 +67,16 @@ class TestReExports(unittest.TestCase):
         self.assertIs(usgs, georest.usgs)
         self.assertIs(usgs.waterdata, waterdata)
 
+    def test_cloud_subpackage_is_reachable_both_ways(self):
+        """`georest.cloud` resolves lazily and is the same module object as
+        `from georest import cloud`; its transports stay private."""
+        from georest import cloud
+        self.assertIs(cloud, georest.cloud)
+        self.assertEqual(cloud.__name__, "georest.cloud")
+        for private in ("_http", "_frames"):
+            self.assertNotIn(private, cloud.__all__)
+            self.assertNotIn(private, georest._LAZY)
+
     def test_version_is_pep440ish(self):
         self.assertRegex(georest.__version__, r"^\d+\.\d+\.\d+")
 
@@ -79,6 +89,8 @@ class TestUserAgent(unittest.TestCase):
         from georest.usgs import _http as usgs_http
         self.assertIn(f"georest/{georest.__version__}", _http._USER_AGENT)
         self.assertEqual(usgs_http._USER_AGENT, _http._USER_AGENT)
+        from georest.cloud import _http as cloud_http
+        self.assertEqual(cloud_http._USER_AGENT, _http._USER_AGENT)
 
 
 class TestAttribution(unittest.TestCase):
@@ -130,6 +142,8 @@ class TestNoThirdPartyImports(unittest.TestCase):
     FEMA_EXTRA = {"pandas"}
     #: noaa returns DataFrames, with no Earth Engine path.
     NOAA_EXTRA = {"pandas"}
+    #: cloud returns DataFrames; pandas is imported inside functions.
+    CLOUD_EXTRA = {"pandas"}
 
     def _allowed_for(self, path):
         # georest.frames turns esri's GeoJSON into DataFrames; it is the one
@@ -148,6 +162,8 @@ class TestNoThirdPartyImports(unittest.TestCase):
             return self.ALLOWED | self.FEMA_EXTRA
         if "noaa" in path.parts:
             return self.ALLOWED | self.NOAA_EXTRA
+        if "cloud" in path.parts:
+            return self.ALLOWED | self.CLOUD_EXTRA
         return self.ALLOWED
 
     def test_package_imports_only_stdlib(self):
