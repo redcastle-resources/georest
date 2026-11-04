@@ -26,6 +26,8 @@ class ToolCatalog(unittest.TestCase):
         "water_sites", "water_series", "water_values", "river_sites",
         "elevation", "earthquakes", "sciencebase_search", "sciencebase_files", "water_quality",
         "edw_search", "edw_layers", "edw_query", "portal_search", "feature_service_query",
+        "flood_zone", "disaster_declarations", "weather_alerts", "weather_forecast",
+        "weather_now", "river_gauges", "river_gauge", "tide_stations", "tides", "hurricanes",
     }
 
     def setUp(self):
@@ -51,6 +53,13 @@ class ToolCatalog(unittest.TestCase):
     def test_the_fia_rules_reach_the_model(self):
         self.assertIn("Never report an estimate", server.INSTRUCTIONS)
         self.assertIn("se_pct", self.tools["fia_estimate"].description)
+
+    def test_the_hazard_rules_reach_the_model(self):
+        self.assertIn("not a forecast", server.INSTRUCTIONS)
+        self.assertIn("never that there is no hazard", server.INSTRUCTIONS)
+        self.assertIn('by="disaster"', server.INSTRUCTIONS)
+        self.assertIn("not \"no hazard\"", self.tools["flood_zone"].description)
+        self.assertIn("not that there is no hazard", self.tools["weather_alerts"].description)
 
 
 @unittest.skipIf(server is None, 'needs the "mcp" extra')
@@ -100,6 +109,82 @@ class Results(unittest.TestCase):
             got = call("water_series", site="09380000")
         self.assertIn("503", got["error"])
         self.assertIn("hint", got)
+
+
+@unittest.skipIf(server is None, 'needs the "mcp" extra')
+class HazardTools(unittest.TestCase):
+    """FEMA and NOAA: each tool calls its georest function and says what matters."""
+
+    def test_flood_zone_carries_the_maps_date(self):
+        from datetime import date
+
+        zone = {"lon": -80.13, "lat": 25.79, "zone": "AE", "sfha": True, "mapped": True}
+        dates = {"lon": -80.13, "lat": 25.79, "panel": "12086C0317L",
+                 "effective": date(2009, 9, 11), "pending_effective": date(2027, 2, 19),
+                 "unchecked": []}
+        with mock.patch("georest.fema.nfhl.flood_zone", return_value=dict(zone)), \
+             mock.patch("georest.fema.nfhl.map_dates", return_value=dates):
+            got = call("flood_zone", lon=-80.13, lat=25.79)
+        self.assertEqual(got["zone"], "AE")
+        self.assertEqual(got["map"]["effective"], "2009-09-11")
+        self.assertEqual(got["map"]["pending_effective"], "2027-02-19")
+        self.assertNotIn("lon", got["map"])
+
+    def test_declarations_need_a_filter_and_count_disasters_by_default(self):
+        import pandas as pd
+
+        got = call("disaster_declarations")
+        self.assertIn("at least one filter", got["error"])
+        df = pd.DataFrame({"disaster_number": [4332], "areas": [53]})
+        with mock.patch("georest.fema.openfema.disasters", return_value=df) as disasters, \
+             mock.patch("georest.fema.openfema.declarations") as declarations:
+            got = call("disaster_declarations", state="TX")
+        disasters.assert_called_once()
+        declarations.assert_not_called()
+        self.assertEqual((got["by"], got["count"]), ("disaster", 1))
+
+    def test_a_large_declaration_search_is_refused_with_its_count(self):
+        import pandas as pd
+
+        df = pd.DataFrame({"disaster_number": range(5450)})
+        with mock.patch("georest.fema.openfema.declarations", return_value=df):
+            got = call("disaster_declarations", state="TX", by="county", max_rows=2000)
+        self.assertIn("error", got)
+        self.assertEqual(got["count"], 5450)
+
+    def test_alerts_at_a_point_need_both_coordinates(self):
+        got = call("weather_alerts", lon=-95.37)
+        self.assertIn("both lon and lat", got["error"])
+
+    def test_alerts_scope_is_said(self):
+        import pandas as pd
+
+        with mock.patch("georest.noaa.nws.alerts", return_value=pd.DataFrame()) as alerts:
+            got = call("weather_alerts", state="tx")
+        self.assertEqual((got["scope"], got["count"]), ("TX", 0))
+        self.assertEqual(alerts.call_args.kwargs["area"], "tx")
+
+    def test_outside_the_nws_is_an_argument_answer_not_an_outage(self):
+        from georest.noaa import nws
+
+        with mock.patch("georest.noaa.nws.forecast",
+                        side_effect=nws.NotCovered("the NWS has no forecast grid", status=404)):
+            got = call("weather_forecast", lon=-40.0, lat=30.0)
+        self.assertIn("covers the US", got["error"])
+        self.assertIn("Check the arguments", got["hint"])
+
+    def test_weather_now_names_what_it_left_out(self):
+        import pandas as pd
+
+        df = pd.DataFrame({"station": ["KHOU"], "age_min": [25.0]})
+        df.attrs.update(dropped_stale=["KEFD"], failed=[])
+        with mock.patch("georest.noaa.nws.observations", return_value=df):
+            got = call("weather_now", lon=-95.37, lat=29.76)
+        self.assertEqual(got["dropped_stale"], ["KEFD"])
+
+    def test_predicted_tides_need_dates(self):
+        got = call("tides", station="8771450", kind="predicted")
+        self.assertIn("needs begin and end", got["error"])
 
 
 @unittest.skipIf(server is None, 'needs the "mcp" extra')
