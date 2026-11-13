@@ -256,13 +256,15 @@ Claude Code:
 {"mcpServers": {"georest": {"command": "georest-mcp"}}}
 ```
 
-It has 18 read-only data tools, and no code execution:
+It has 28 read-only data tools, and no code execution:
 
 | Provider | Tools |
 |---|---|
 | Forest Service | `search_fia`, `describe_fia_grouping`, `fia_estimate`, `lcms_summary` |
 | USGS | `water_sites`, `water_series`, `water_values`, `river_sites`, `elevation`, `earthquakes`, `sciencebase_search`, `sciencebase_files`, `water_quality` |
 | ArcGIS | `edw_search`, `edw_layers`, `edw_query`, `portal_search`, `feature_service_query` |
+| FEMA | `flood_zone` (with the map's effective date and new maps coming), `disaster_declarations` |
+| NOAA | `weather_alerts`, `weather_forecast`, `weather_now`, `river_gauges`, `river_gauge`, `tide_stations`, `tides`, `hurricanes` |
 
 Every tool returns every row it got, as JSON. Where an API can return a great deal, its own
 limit is a tool parameter and the result says when it stopped the fetch early;
@@ -270,7 +272,10 @@ limit is a tool parameter and the result says when it stopped the fetch early;
 as `{"error": ..., "hint": ...}`. Tools that take a URL accept only https addresses that
 resolve to public IP addresses. The server's instructions carry the FIA rules: never an
 estimate without its sampling error, never a row flagged `unreliable`, and totals from FIA,
-not from adding rows.
+not from adding rows. They carry the hazard rules too: a flood zone is a regulatory map,
+not a forecast, given with its map's date; "none listed right now" is never "no hazard";
+and disasters are counted by disaster, not by declared county.
+`disaster_declarations` refuses a search larger than `max_rows`, like `earthquakes`.
 
 To wrap georest in a server of your own, the library side of the contract:
 

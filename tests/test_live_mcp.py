@@ -49,6 +49,16 @@ CALLS = [
     ("feature_service_query", {"url": "https://sampleserver6.arcgisonline.com/arcgis/rest/services/"
                                       "Earthquakes_Since1970/FeatureServer/0",
                                "where": "magnitude >= 8.5", "out_fields": "name,magnitude"}, "rows"),
+    ("flood_zone", {"lon": -80.1300, "lat": 25.7907}, "map"),
+    ("disaster_declarations", {"fips": "48201", "since": "2017-01-01"}, "rows"),
+    ("weather_alerts", {"state": "TX"}, "scope"),
+    ("weather_forecast", {"lon": -95.37, "lat": 29.76}, "rows"),
+    ("weather_now", {"lon": -95.37, "lat": 29.76}, "rows"),
+    ("river_gauges", {"bbox": [-95.9, 29.4, -95.0, 30.2]}, "rows"),
+    ("river_gauge", {"lid": "BBST2"}, "flood_stages"),
+    ("tide_stations", {"lon": -94.7933, "lat": 29.31}, "rows"),
+    ("tides", {"station": "8771450", "hours": 6}, "rows"),
+    ("hurricanes", {}, "count"),
 ]
 
 
@@ -79,7 +89,7 @@ class LiveMcpServer(unittest.TestCase):
     def test_the_server_introduces_itself(self):
         self.assertEqual(self.r["_server"], "georest")
         self.assertIn("se_pct", self.r["_instructions"])
-        self.assertEqual(len(self.r["_tools"]), 18)
+        self.assertEqual(len(self.r["_tools"]), 28)
 
     def test_every_tool_answers_with_data(self):
         for i, (name, args, key) in enumerate(CALLS):

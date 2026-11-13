@@ -6,6 +6,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `georest-mcp` tools for the FEMA and NOAA providers, ten in all: `flood_zone` (the zone
+  with its map's effective date, revisions, and new maps pending or preliminary),
+  `disaster_declarations` (by disaster or by county, refusing more than `max_rows`),
+  `weather_alerts`, `weather_forecast`, `weather_now`, `river_gauges`, `river_gauge`,
+  `tide_stations`, `tides` and `hurricanes`. The server's instructions carry the hazard
+  rules alongside the FIA ones.
+
 ## [0.5.0] - 2026-11-02
 
 ### Added
