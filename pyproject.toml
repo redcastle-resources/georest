@@ -12,7 +12,7 @@ build-backend = "hatchling.build"
 [project]
 name = "georest"
 dynamic = ["version"]
-description = "Python clients for public geospatial REST APIs: ArcGIS Image, Map and Feature Services and Portal search; the USFS Enterprise Data Warehouse, FIA estimates and LCMS summaries; USGS water, river network, elevation, earthquake, ScienceBase and water-quality services; FEMA flood maps and disaster declarations; and NOAA weather, river, tide and hurricane services."
+description = "Python clients for public geospatial REST APIs: ArcGIS Image, Map and Feature Services and Portal search; the USFS Enterprise Data Warehouse, FIA estimates and LCMS summaries; USGS water, river network, elevation, earthquake, ScienceBase and water-quality services; FEMA flood maps and disaster declarations; NOAA weather, river, tide and hurricane services; and STAC catalogs of satellite imagery and gridded data (find scenes over a place and return links, never pixels)."
 readme = "README.md"
 requires-python = ">=3.9"
 
@@ -37,6 +37,7 @@ keywords = [
     "usgs", "nwis", "water-data", "ogc-api", "ogc-api-features", "hydrology", "streamflow",
     "nldi", "elevation", "3dep", "earthquakes", "sciencebase", "water-quality",
     "fema", "flood", "nfhl", "disasters", "noaa", "nws", "weather", "tides", "hurricanes",
+    "stac", "cloud-native", "earthdata", "satellite-imagery", "sentinel-2",
     "mcp",
 ]
 
@@ -86,6 +87,7 @@ examples = [
     "ipython>=8.0",
     "plotly>=5.0",                    # the guides' interactive charts
     "folium>=0.15",                   # and maps
+    "rasterio>=1.3",                  # guide_fire_imagery reads one COG window; georest itself never reads pixels
 ]
 
 [project.urls]

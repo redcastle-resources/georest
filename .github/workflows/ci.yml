@@ -92,6 +92,8 @@ jobs:
           assert "georest/esri/edw.py" in names
           assert "georest/usgs/waterdata.py" in names
           assert "georest/usgs/_ogc.py" in names
+          assert "georest/cloud/stac.py" in names
+          assert "georest/cloud/catalogs.py" in names
           assert "georest/py.typed" in names
           stray = [n for n in names if not n.startswith(("georest/", "georest-"))]
           assert not stray, f"unexpected files in the wheel: {stray}"
@@ -113,12 +115,15 @@ jobs:
           import georest
           from georest.esri import edw, portal, services
           from georest.usgs import waterdata
+          from georest.cloud import stac
           assert georest.edw is edw
+          assert georest.stac is stac
           assert georest.waterdata is waterdata
           print('version', georest.__version__)
           print('themes', len(edw._SERVICE_THEMES))
           print('portals', sorted(portal.PORTALS))
           print('collections', len(waterdata.COLLECTIONS))
+          print('stac catalogs', len(stac.catalogs()))
           # usfs ships its FIA catalogs as package data; a wheel missing
           # them would only fail when a user first searched.
           from georest.usfs import fia

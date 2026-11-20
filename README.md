@@ -2,9 +2,9 @@
 
 Python clients for geospatial REST APIs: ArcGIS Image, Map and Feature Services, ArcGIS
 Portal search, the USFS Enterprise Data Warehouse (EDW), Forest Service FIA estimates and
-LCMS summaries, and the USGS Water Data OGC API.
+LCMS summaries, the USGS Water Data OGC API, and STAC catalogs of satellite imagery.
 
-**One dependency: pandas**, used by the USGS and Forest Service clients, which return
+**One dependency: pandas**, used by the USGS, Forest Service and STAC clients, which return
 DataFrames. The Esri clients use only the standard library. Earth Engine is optional, for
 summarizing LCMS over your own polygon.
 
@@ -54,6 +54,14 @@ fia.find_attributes("carbon")                      # what can be estimated
 wc = fia.find_evaluations("Oregon")["wc"].iloc[0]  # which inventory
 df = fia.estimate(wc, 2, rselected="County code and name")   # se_pct, plots, unreliable
 lcms.lcms_summary("Land_Cover", state="Oregon", county="Crook")
+
+# Cloud-native catalogs: find satellite scenes over a place (links only, no pixels)
+from georest.cloud import stac
+
+scenes = stac.search("earth-search", "sentinel-2-l2a", bbox=(-105.9, 40.5, -105.4, 40.8),
+                     datetime="2020-08-13/2020-11-11", max_cloud_cover=30)
+first = scenes.iloc[0]
+stac.assets(first["catalog"], first["collection"], first["id"])   # one row per file, with its link
 ```
 
 The provider modules are also re-exported at the top level, so `from georest import edw`
@@ -71,11 +79,12 @@ almost nothing.
 | `georest.usfs` | Forest Service FIA estimates (EVALIDator) with sampling errors, LCMS land cover/use/change summaries, and the two side by side |
 | `georest.fema.nfhl` | FEMA's National Flood Hazard Layer: the flood zone at a point, when that map took effect, and new maps that are pending or preliminary |
 | `georest.fema.openfema` | OpenFEMA disaster declarations: by declared county, or one row per disaster |
+| `georest.cloud.stac` | STAC (SpatioTemporal Asset Catalog) APIs, the standard cloud imagery catalogs use: the catalogs georest knows, their collections, scenes over a place and dates, a scene's file links and footprints. Finds data and returns links; it never reads pixels |
 | `georest.noaa` | NWS alerts, forecasts and observations (one unit system per call), NWPS river gauges with flood stages, CO-OPS tides, NHC active storms |
 
 `esri` is the Esri/ArcGIS provider, `usgs` the USGS provider, `usfs` the
-USDA Forest Service provider, `fema` the FEMA provider, and `noaa` the NOAA
-provider. Each sits under
+USDA Forest Service provider, `fema` the FEMA provider, `noaa` the NOAA
+provider, and `cloud` the cloud-native provider. Each sits under
 `georest` as a subpackage so providers can be added alongside one another without a
 namespace collision, and each is self-contained - its private `_http` (and, for
 usgs, `_ogc`) module is its own.
@@ -88,8 +97,9 @@ with interactive charts and maps; the others walk through one module function by
 
 `georest-mcp` serves georest's data clients as Model Context Protocol tools over stdio:
 FIA estimates and LCMS summaries, USGS water data, the river network, elevation,
-earthquakes, ScienceBase and water quality, and EDW, portal and Feature Service queries. It
-has 18 read-only tools and no code execution. Register it with your client, e.g. for Claude Code:
+earthquakes, ScienceBase and water quality, EDW, portal and Feature Service queries, and
+satellite-scene search (STAC). It
+has 21 read-only tools and no code execution. Register it with your client, e.g. for Claude Code:
 
 ```json
 {"mcpServers": {"georest": {"command": "georest-mcp"}}}

@@ -29,6 +29,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   never a signed link. `stac_search` takes a `bbox`, or the EDW service, layer and filter of
   a fire perimeter, which it fetches and simplifies itself so no shape passes through the
   model; a filter matching no feature, or 20 or more, is refused with what to change.
+- `examples/guide_fire_imagery.ipynb`, "What imagery exists over this fire?": finds the
+  Sentinel-2 scenes over the 2020 Cameron Peak fire with `stac`, charts when they were taken,
+  maps their footprints, and hands one image file to `rasterio` to read. `rasterio` joins the
+  `examples` extra.
 
 ## [0.5.0] - 2026-11-02
 

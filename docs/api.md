@@ -2,8 +2,9 @@
 
 Python clients for geospatial REST APIs, one provider subpackage per API family:
 `georest.esri` (ArcGIS Image/Map/Feature Services, the USFS EDW, Portal search),
-`georest.usgs` (the USGS Water Data OGC API), and `georest.usfs` (Forest Service
-FIA estimates and LCMS summaries). The full generated reference is at
+`georest.usgs` (the USGS Water Data OGC API), `georest.usfs` (Forest Service
+FIA estimates and LCMS summaries), `georest.fema`, `georest.noaa`, and `georest.cloud`
+(STAC catalogs of satellite imagery and gridded data). The full generated reference is at
 [georest.io](https://georest.io).
 
 Contribution guidelines live in [CONTRIBUTING.md](../CONTRIBUTING.md); installation and
@@ -12,6 +13,9 @@ a quick start are in the [README](../README.md).
 - [georest.esri](#georestesri) - `services`, `edw`, `portal`, `_http`
 - [georest.usgs](#georestusgs) - `waterdata`, `_ogc`, `_http`
 - [georest.usfs](#georestusfs) - `fia`, `vocab`, `lcms`, `lcms_ee`, `align`
+- [georest.fema](#georestfema) - `nfhl`, `openfema`
+- [georest.noaa](#georestnoaa) - `nws`, `nwps`, `coops`, `nhc`
+- [georest.cloud](#georestcloud) - `stac`, `catalogs`, `_http`, `_frames`
 - [Using georest from an MCP server](#using-georest-from-an-mcp-server)
 - [Tests](#tests)
 
@@ -246,6 +250,54 @@ CO-OPS error under HTTP 200 is raised as one too.
 dropped connections: 3 attempts, 1 then 2 s. The problem-detail of an NWS error is kept
 in the message.
 
+## georest.cloud
+
+The cloud-native provider. Its one public module so far, `stac`, searches **STAC** (SpatioTemporal
+Asset Catalog) APIs, the standard that cloud-hosted imagery catalogs use to list their data. A
+catalog holds **collections** (one kind of data, such as Sentinel-2 surface reflectance); a
+collection holds **items**, called **scenes** here (one image of one place on one day); a scene
+holds **assets** (its files, such as one per color band). `stac` finds scenes and returns their
+links. **It never reads pixels**: opening a COG (Cloud Optimized GeoTIFF, an image laid out so a
+program can read just part of it over the internet), a Zarr store or a GeoParquet file is left to
+`rasterio`, `xarray`, `geopandas` and the like, and the guide shows the hand-off. It returns pandas
+DataFrames.
+
+```python
+from georest.cloud import stac
+from georest import stac                     # equivalent top-level re-export
+```
+
+`cloud` is self-contained: its private `_http.py` (transport) and `_frames.py` (DataFrame
+helpers) are its own. The catalogs georest knows, with the forest and land collections that matter
+in each, are a curated registry in `catalogs.py`; any other STAC API works by passing its root URL
+where a catalog name goes.
+
+| Function | What it does |
+|---|---|
+| `stac.catalogs()` | The catalogs georest knows (Earth Search, Planetary Computer, USGS LandsatLook, two NASA CMR-STAC endpoints) and how each one's files are read: `open` (plain https), `sign` (needs a short-lived token, see `stac.sign`), `earthdata` (needs a NASA Earthdata login), `requester-pays` (the reader pays the storage provider) |
+| `stac.collections(catalog, query="")` | A catalog's collections, optionally filtered by a word, with the forest and land ones first and `featured` marked; `df.attrs["truncated"]` says if the listing was cut |
+| `stac.search(catalog, collections, bbox=, intersects=, datetime=, max_cloud_cover=, query=, max_items=100)` | Scenes over a bounding box or a GeoJSON shape (such as an EDW fire perimeter) and a date range, one row per scene, newest first. `df.attrs["truncated"]` is `True` when `max_items` stopped the fetch and `df.attrs["matched"]` is how many the server found. A projected or over-detailed shape (more than 10,000 vertices) is refused with the fix |
+| `stac.assets(catalog, collection, item, sign=False)` | One scene's files, one row per file: `key`, `type`, `roles`, `access` and `href`. `s3://` links are returned as given, since they need an S3 reader |
+| `stac.footprints(scenes)` | The scenes' outlines as a GeoJSON FeatureCollection, for a map or the Esri tools |
+| `stac.sign(href, collection)` | Adds Planetary Computer's read token to a file link. The link carries a live token that expires, so do not save it |
+
+Transport: a 502, 503 or 504 is retried with a short backoff; a 429 (too many requests) is
+retried only if the server asks for 5 seconds or less, otherwise it is raised with `retry_after`
+set; the start of an error body is kept in the message. Searches fetch 50 scenes a page, because
+NASA's CMR-STAC answers 502 at 100. Failures raise `CloudError` (a `RuntimeError`).
+
+georest sends no credentials. Links in an `earthdata` catalog need a NASA Earthdata login token,
+which you give to the library that downloads the file; georest does not read or pass it. A runnable
+example is in [examples/guide_fire_imagery.ipynb](../examples/guide_fire_imagery.ipynb).
+
+The MCP tools `stac_collections`, `stac_search` and `stac_assets` wrap the same functions and
+return links and metadata only: they never return a signed link, so `stac.sign` and
+`assets(sign=True)` are not exposed. `stac_collections` with a blank catalog lists the catalogs.
+`stac_search` takes a `bbox`, or the EDW service, layer and filter of a fire perimeter, which it
+fetches and simplifies itself so no shape passes through the model (not both; a filter matching
+none, or 20 or more, features is refused). It returns `count`, `rows`, `truncated`, `matched`
+and `catalog`, clamps `max_items` to 500, and fails as `{"error": ..., "hint": ...}`.
+
 ## Using georest from an MCP server
 
 georest ships its own MCP server, `georest.mcp` (`pip install "georest[mcp]"`, then run
@@ -256,13 +308,14 @@ Claude Code:
 {"mcpServers": {"georest": {"command": "georest-mcp"}}}
 ```
 
-It has 18 read-only data tools, and no code execution:
+It has 21 read-only data tools, and no code execution:
 
 | Provider | Tools |
 |---|---|
 | Forest Service | `search_fia`, `describe_fia_grouping`, `fia_estimate`, `lcms_summary` |
 | USGS | `water_sites`, `water_series`, `water_values`, `river_sites`, `elevation`, `earthquakes`, `sciencebase_search`, `sciencebase_files`, `water_quality` |
 | ArcGIS | `edw_search`, `edw_layers`, `edw_query`, `portal_search`, `feature_service_query` |
+| Cloud | `stac_collections`, `stac_search`, `stac_assets` |
 
 Every tool returns every row it got, as JSON. Where an API can return a great deal, its own
 limit is a tool parameter and the result says when it stopped the fetch early;
@@ -298,6 +351,6 @@ To wrap georest in a server of your own, the library side of the contract:
 
 ## Tests
 
-`pip install -e ".[dev]"` first - this is a `src/` layout, so the package is not importable from the repository root without it. Then `python -m pytest`, or `python -m unittest discover -s tests -t .` for the stdlib runner; the tests are `unittest.TestCase` classes either way. Offline and deterministic by default; set `EDW_LIVE=1` to include tests that hit the real EDW server, `SERVICES_LIVE=1` for the `services.py` tests that hit public ArcGIS hosts, and `USGS_LIVE=1` for the `waterdata` tests against api.waterdata.usgs.gov. See [tests/README.md](../tests/README.md).
+`pip install -e ".[dev]"` first - this is a `src/` layout, so the package is not importable from the repository root without it. Then `python -m pytest`, or `python -m unittest discover -s tests -t .` for the stdlib runner; the tests are `unittest.TestCase` classes either way. Offline and deterministic by default; set `EDW_LIVE=1` to include tests that hit the real EDW server, `SERVICES_LIVE=1` for the `services.py` tests that hit public ArcGIS hosts, `USGS_LIVE=1` for the `waterdata` tests against api.waterdata.usgs.gov, and `STAC_LIVE=1` for the `cloud` tests against the STAC catalogs. See [tests/README.md](../tests/README.md).
 
 `georest-check-themes` reports drift between the live catalog and the hand-curated `_SERVICE_THEMES` table in `edw.py` (`--emit` prints paste-ready entries).

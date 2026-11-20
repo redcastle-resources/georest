@@ -34,14 +34,16 @@ later - so network tests are opt-in:
 EDW_LIVE=1 python -m unittest discover -s tests -t .        # everything live
 SERVICES_LIVE=1 python -m unittest tests.test_live_services # services.py only
 USGS_LIVE=1 python -m unittest tests.test_live_waterdata    # usgs only
+STAC_LIVE=1 python -m unittest tests.test_live_stac         # cloud (STAC) only
 ```
 
-Three flags, because the live suites hit different servers: `EDW_LIVE`
+Four flags, because the live suites hit different servers: `EDW_LIVE`
 covers EDW, `SERVICES_LIVE` covers the public ArcGIS hosts
 (`imagery.geoplatform.gov`, `sampleserver6.arcgisonline.com`,
 `services.arcgisonline.com`) that `services.py` is exercised against, and
-`USGS_LIVE` covers `api.waterdata.usgs.gov`. `EDW_LIVE` also enables the
-other two, so one flag still turns on the whole network suite. The USGS API
+`USGS_LIVE` covers `api.waterdata.usgs.gov`, and `STAC_LIVE` covers the STAC servers
+(Earth Search, Planetary Computer, LandsatLook, NASA CMR-STAC). `EDW_LIVE` also enables the
+other three, so one flag still turns on the whole network suite. The USGS API
 rate-limits anonymous callers to a few queries per hour; set `USGS_API_KEY`
 to keep repeated live runs off the limit.
 
@@ -70,6 +72,11 @@ page served with status 200 looks like).
 | `test_usgs_ogc.py` | `usgs/_ogc.py`: cursor paging, `max_items`/`truncated`, `rate_limit`, parameter builders |
 | `test_waterdata.py` | `usgs/waterdata.py`: parameter mapping, client-side sorting, `to_rows`, API-key resolution |
 | `test_live_waterdata.py` | **Live**: `waterdata` against api.waterdata.usgs.gov (`USGS_LIVE=1`) |
+| `test_cloud_catalogs.py` | `cloud/catalogs.py`: registry shape, name and URL resolution |
+| `test_cloud_http.py` | `cloud/_http.py`: retry/backoff, `Retry-After`, error bodies, POST - against a fake `urlopen` and clock |
+| `test_stac.py` | `cloud/stac.py` catalogs and collections: paging, word filter, featured order, cap |
+| `test_stac_search.py` | `cloud/stac.py` search, assets, footprints, sign: request bodies, paging, truncation, argument checks |
+| `test_live_stac.py` | **Live**: every registered collection still exists (`STAC_LIVE=1`) |
 
 ## Fixtures
 
@@ -141,6 +148,14 @@ server, answers the `collections`/`queryables`/single-item endpoints, and
 records every URL and header set. `support.observation(i, ...)` builds one
 USGS observation Feature. `usgs/_http.py` is tested one level lower, by
 binding a fake `urlopen` and a fake `sleep` onto the module.
+
+For `cloud`, two fakes stand in for the STAC transport. `support.FakeStacServer(collections,
+page_cap=, relative_links=)` replaces `stac.fetch_json` for collection listings and pages the
+way real servers do (NASA's CMR-STAC sends 20 at a time with a GET `next` link carrying a
+cursor). `support.FakeStacSearch(items, page_cap=, paging=, honor_query=, matched_in=)`
+replaces both `stac.post_json_body` and `stac.fetch_json` for search, item lookups and next
+links (`paging="post"` for Earth Search and Planetary Computer, `"get"` for NASA), and
+records every request in `calls`.
 
 ## What the services tests pin down
 
