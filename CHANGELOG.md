@@ -6,6 +6,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-20
+
+### Added
+
+- `georest.nifc.perimeters`: wildfire perimeters from the National
+  Interagency Fire Center by fire name. `find_fires(name, year=...)` lists
+  the matches, and `fire_perimeter(name, year=...)` returns the official
+  interagency perimeter as GeoJSON with its acres and its discovery,
+  containment and fire-out dates. geeViz's `fireLib.burn` builds its
+  before/after windows from those dates.
+
 ## [0.5.0] - 2026-11-02
 
 ### Added
@@ -300,7 +311,8 @@ on `sys.path`.
 - All five `sys.path.insert(...)` bootstraps (two CLIs, three notebooks), made
   unnecessary by the `src/` layout plus an editable install.
 
-[Unreleased]: https://github.com/redcastle-resources/georest/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/redcastle-resources/georest/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/redcastle-resources/georest/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/redcastle-resources/georest/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/redcastle-resources/georest/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/redcastle-resources/georest/compare/v0.2.0...v0.3.0
