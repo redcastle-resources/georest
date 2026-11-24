@@ -1,6 +1,6 @@
 """Esri JSON -> GeoJSON conversion, shared by every module that reads f=json.
 
-Lived in ``edw.py`` alone until the ``services.py`` f=json fallback was found
+Lived in EDW's module alone until the ``services.py`` f=json fallback was found
 using its own simpler copy, which handed Esri's flat ring list straight to one
 GeoJSON Polygon (so a multipart polygon's other parts became holes in its
 first part) and overwrote every feature id with its position. One

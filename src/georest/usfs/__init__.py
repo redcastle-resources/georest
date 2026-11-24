@@ -1,7 +1,8 @@
 """georest.usfs - clients for USDA Forest Service data APIs.
 
 Two public Forest Service APIs that answer complementary halves of the
-same question and look nothing alike:
+same question and look nothing alike, and the Forest Service's catalog of
+map services:
 
 **FIA** (Forest Inventory and Analysis): a probability sample of forest
 plots going back to 1984. Answers *what is in the forest, and how much,
@@ -11,6 +12,10 @@ grouping variables and 1,143 evaluations through one endpoint.
 **LCMS** (Landscape Change Monitoring System): wall-to-wall 30 m maps of
 land cover, land use, and change from 1985 to 2025. Answers *what
 changed, and where*.
+
+**EDW** (Enterprise Data Warehouse): the Forest Service's ArcGIS map
+services, from forest and district boundaries to fire perimeters, timber
+harvests and roads. Answers *where are the Forest Service's own features*.
 
 Modules
 -------
@@ -27,6 +32,10 @@ align
     LCMS treed area beside FIA forest-land area, kept apart and labelled.
 vocab
     The cached FIA catalogs behind ``fia``'s searches, and their refresh.
+edw
+    The Enterprise Data Warehouse: catalog search by keyword or theme,
+    layer roles, FGDC/ISO metadata, and feature and analytic queries
+    (``georest.esri.services`` on EDW's layers). Standard library only.
 
 Quick start::
 
@@ -37,6 +46,10 @@ Quick start::
     fia.estimate(wc, 2, rselected="County code and name")
 
     lcms.lcms_summary("Land_Cover", state="Oregon", county="Crook")
+
+    from georest.usfs import edw
+
+    edw.search_edw_services("fire")                   # which EDW services
 
 Two things worth knowing before trusting a number out of here:
 
@@ -67,10 +80,10 @@ You may obtain a copy of the License at
 
 from __future__ import annotations
 
-from . import align, fia, lcms, lcms_ee, vocab
+from . import align, edw, fia, lcms, lcms_ee, vocab
 from ._http import UpstreamError, UpstreamUnavailable, USFSError
 
 __all__ = [
-    "fia", "lcms", "lcms_ee", "align", "vocab",
+    "fia", "lcms", "lcms_ee", "align", "vocab", "edw",
     "USFSError", "UpstreamError", "UpstreamUnavailable",
 ]

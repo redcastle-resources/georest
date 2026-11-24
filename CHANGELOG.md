@@ -6,6 +6,45 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-11-24
+
+### Changed
+
+- EDW moved to `georest.usfs.edw`, beside FIA and LCMS: georest files a data
+  source under the agency that publishes it, as `georest.fema.nfhl` and
+  `georest.nifc.perimeters` already were. `from georest import edw` gives the new
+  module. `georest.esri.edw` (and 0.4's `georest.restesri.edw`) still import that
+  same module, with a `DeprecationWarning`; importing `georest.esri` alone no
+  longer loads EDW.
+- EDW is built on `georest.esri`. Its queries are
+  `services.queryFeatureService`, `services.queryAnalytic` and
+  `services.topNPerGroup` on the EDW layer, `get_layer_info` is
+  `services.getLayerInfo`, and the catalog and service details come from
+  `portal.getServiceMetadata`. What stays EDW's own is the catalog search with
+  its themes, layer roles and the FGDC/ISO metadata. The function names,
+  arguments and results are unchanged; `get_layer_info` on a group layer now
+  raises `ValueError` naming its sub-layers, as `services.getLayerInfo` does,
+  rather than returning an empty layer.
+- An Esri error object in a 200 answer is raised as `EsriServiceError`
+  (from `georest.esri`), both a `ValueError`, which `services` and `portal`
+  raised, and a `RuntimeError`, which EDW raised, so either `except` keeps
+  catching it.
+- `services.queryFeatureServiceCount` POSTs a spatial count, since a polygon
+  can be longer than a URL may be.
+
+### Added
+
+- `services.queryFeatureService(..., if_more=)`: `"raise"` (the default, as
+  before), `"truncate"` (one request, keeping what the server returns, with the
+  workaround for servers that answer a complex area with zero features) or
+  `"page"` (a page of the layer's own `maxRecordCount` at a time). Also
+  `in_sr` and `max_allowable_offset`. Paging and that workaround were EDW's
+  alone; now any ArcGIS layer has them, FEMA's and NIFC's included.
+- `services.queryAnalytic` and `services.topNPerGroup`: server-side window
+  functions on any ArcGIS layer that supports `queryAnalytic`.
+- `edw.service_url` and `edw.layer_url`: the full URL of an EDW service or
+  layer, for any `georest.esri` call.
+
 ## [0.5.1] - 2026-11-20
 
 ### Added

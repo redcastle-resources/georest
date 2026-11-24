@@ -49,7 +49,7 @@ import urllib.parse
 from typing import Any
 
 from . import auth
-from ._http import build_params, fetch_json, format_esri_error
+from ._http import build_params, esri_error, fetch_json
 
 # ---------------------------------------------------------------------------
 # Known public portals
@@ -329,7 +329,7 @@ def searchPortal(
     Online, IIPP, and any ArcGIS Enterprise install. This is a raw portal
     search - it has no theme/keyword-alias matching. To search the USFS EDW
     catalog specifically (a separate, non-portal REST endpoint), use
-    ``georest.esri.edw.search_edw_services(query, theme=...)`` instead.
+    ``georest.usfs.edw.search_edw_services(query, theme=...)`` instead.
 
     Args:
         query (str): Free-text search query (e.g. ``"naip 2023"``,
@@ -508,10 +508,7 @@ def searchPortal(
     # matched nothing, so a caller with a bad token is told "no data" rather
     # than "your token is invalid". Surface it instead.
     if "error" in data:
-        raise ValueError(
-            f"Portal search at {search_url!r} returned an error: "
-            f"{format_esri_error(data['error'])}"
-        )
+        raise esri_error(f"Portal search at {search_url!r} returned an error", data["error"])
 
     items = data.get("results", [])
     parsed = []
@@ -605,10 +602,7 @@ def getServiceMetadata(url: str, token: str | None = None) -> dict[str, Any]:
     # notice, and every caller has to remember to check - so raise instead,
     # matching how `services.py` treats the same response shape.
     if "error" in meta:
-        raise ValueError(
-            f"Service at {clean_url!r} returned an error: "
-            f"{format_esri_error(meta['error'])}"
-        )
+        raise esri_error(f"Service at {clean_url!r} returned an error", meta["error"])
     return meta
 
 

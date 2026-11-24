@@ -58,7 +58,7 @@ def to_frame(data: Any, *, geometry: bool = False) -> Any:
     Example::
 
         import georest
-        from georest.esri import edw
+        from georest.usfs import edw
 
         fires = edw.query_features("EDW_MTBS_01", 63, where="fire_name = 'CAMERON PEAK'",
                                    out_fields="fire_name,ig_date,acres")

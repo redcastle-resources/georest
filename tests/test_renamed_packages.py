@@ -25,7 +25,7 @@ class RenamedPackagesTest(unittest.TestCase):
         r = _run("""
             import warnings
             warnings.simplefilter("error")
-            import georest.esri.edw, georest.esri.portal, georest.usgs.waterdata, georest.usfs.fia
+            import georest.usfs.edw, georest.esri.portal, georest.usgs.waterdata, georest.usfs.fia
         """)
         self.assertEqual(r.returncode, 0, r.stderr)
 
@@ -47,7 +47,10 @@ class RenamedPackagesTest(unittest.TestCase):
             for sub in ("edw", "_http", "cli.check_themes"):
                 assert mods["georest.restesri." + sub] is mods["georest.esri." + sub], sub
             assert mods["georest.restusgs.waterdata"] is mods["georest.usgs.waterdata"]
-            assert old_edw is mods["georest.esri.edw"]
+            # EDW moved again in 0.5.2, to georest.usfs.edw: every old name
+            # is that one module
+            assert old_edw is mods["georest.esri.edw"] is mods["georest.usfs.edw"]
+            assert georest.esri.edw is georest.usfs.edw
             assert old_http is mods["georest.esri._http"]
             assert check_themes is mods["georest.esri.cli.check_themes"]
             assert get_daily_values is mods["georest.usgs.waterdata"].get_daily_values
@@ -69,6 +72,37 @@ class RenamedPackagesTest(unittest.TestCase):
                     assert any("georest.{new}" in m for m in messages), messages
                 """)
                 self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_esri_edw_is_usfs_edw_and_warns(self):
+        # every way of reaching the old name: each must give the one module,
+        # and say where it went
+        for how in ("import georest.esri.edw as old",
+                    "from georest.esri import edw as old",
+                    "import georest.esri; old = georest.esri.edw"):
+            with self.subTest(how=how):
+                r = _run(f"""
+                    import warnings
+                    with warnings.catch_warnings(record=True) as caught:
+                        warnings.simplefilter("always")
+                        {how}
+                    import georest.usfs.edw
+                    assert old is georest.usfs.edw
+                    messages = [str(w.message) for w in caught
+                                if issubclass(w.category, DeprecationWarning)]
+                    assert any("georest.usfs.edw" in m for m in messages), messages
+                """)
+                self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_georest_esri_alone_does_not_warn(self):
+        # edw left georest.esri; importing the package must not drag the
+        # deprecated name in and warn people who never used it
+        r = _run("""
+            import warnings
+            warnings.simplefilter("error")
+            import georest.esri
+            from georest.esri import portal, services
+        """)
+        self.assertEqual(r.returncode, 0, r.stderr)
 
     def test_the_old_names_are_not_advertised(self):
         import georest

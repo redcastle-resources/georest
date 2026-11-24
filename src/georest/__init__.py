@@ -20,7 +20,8 @@ noaa
 
 Quick start::
 
-    from georest.esri import edw, portal, services
+    from georest.esri import portal, services
+    from georest.usfs import edw
     from georest.usgs import waterdata
 
     hits = edw.search_edw_services("fire")
@@ -33,7 +34,7 @@ are imported lazily (PEP 562), so ``import georest`` itself costs almost
 nothing::
 
     from georest import edw          # the same module object as
-                                     # georest.esri.edw
+                                     # georest.usfs.edw
     from georest import waterdata    # georest.usgs.waterdata
 
 ``esri`` uses only the standard library. ``usgs`` and ``usfs`` return
@@ -54,7 +55,7 @@ from __future__ import annotations
 import importlib
 from typing import TYPE_CHECKING
 
-__version__ = "0.5.1"
+__version__ = "0.5.2"
 
 __all__ = ["esri", "edw", "portal", "services", "usgs", "waterdata",
            "usfs", "fia", "lcms", "fema", "nfhl", "noaa", "nws", "nwps", "coops",
@@ -62,10 +63,10 @@ __all__ = ["esri", "edw", "portal", "services", "usgs", "waterdata",
 
 if TYPE_CHECKING:  # so IDEs, mypy and pyright resolve the re-exports statically
     from . import esri, fema, noaa, usfs, usgs
-    from .esri import edw, portal, services
+    from .esri import portal, services
     from .fema import nfhl
     from .noaa import coops, nhc, nwps, nws
-    from .usfs import fia, lcms
+    from .usfs import edw, fia, lcms
     from .usgs import waterdata
 
 #: Names resolved on first access by :func:`__getattr__`, mapped to the
@@ -75,7 +76,7 @@ if TYPE_CHECKING:  # so IDEs, mypy and pyright resolve the re-exports statically
 #: its private status stays visible at the call site.
 _LAZY = {
     "esri": ".esri",
-    "edw": ".esri.edw",
+    "edw": ".usfs.edw",
     "portal": ".esri.portal",
     "services": ".esri.services",
     "usgs": ".usgs",
@@ -103,7 +104,7 @@ def to_frame(data, *, geometry: bool = False):
     Example::
 
         import georest
-        from georest.esri import edw
+        from georest.usfs import edw
 
         georest.to_frame(edw.search_edw_services("fire"))
     """
@@ -115,7 +116,7 @@ def __getattr__(name: str):
     """PEP 562 lazy attribute access for the re-exported provider modules.
 
     ``importlib.import_module`` returns the object already registered in
-    ``sys.modules``, so ``georest.edw is georest.esri.edw``. That identity
+    ``sys.modules``, so ``georest.edw is georest.usfs.edw``. That identity
     matters: the test suite patches the network layer with
     ``setattr(edw, ...)``, which would silently stop working against one
     import path if these were distinct module objects.

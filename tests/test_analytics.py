@@ -2,11 +2,12 @@
 import json
 import unittest
 
-from georest.esri import edw
+from georest.esri import services
+from georest.usfs import edw
 
 
 def build(*analytics):
-    return json.loads(edw._build_out_analytics(list(analytics)))
+    return json.loads(services._build_out_analytics(list(analytics)))
 
 
 class EsriKeyNames(unittest.TestCase):
@@ -40,7 +41,7 @@ class FieldlessAnalytics(unittest.TestCase):
         self.assertEqual(entry["analyticParameters"]["orderBy"], "ACRES DESC")
 
     def test_every_fieldless_type_drops_its_field(self):
-        for analytic_type in edw._FIELDLESS_ANALYTICS:
+        for analytic_type in services._FIELDLESS_ANALYTICS:
             with self.subTest(analytic_type):
                 entry = build({"type": analytic_type, "field": "X",
                                "out_name": "out"})[0]
@@ -94,11 +95,11 @@ class PartitionBy(unittest.TestCase):
             self.sent.update(params)
             return {"features": []}
 
-        self._saved = edw.post_json
-        edw.post_json = capture
+        self._saved = services.post_json
+        services.post_json = capture
 
     def tearDown(self):
-        edw.post_json = self._saved
+        services.post_json = self._saved
 
     def _analytics(self, **kwargs):
         edw.query_features_analytic(
@@ -138,11 +139,11 @@ class TopNPerGroup(unittest.TestCase):
             self.sent.update(params)
             return {"features": []}
 
-        self._saved = edw.post_json
-        edw.post_json = capture
+        self._saved = services.post_json
+        services.post_json = capture
 
     def tearDown(self):
-        edw.post_json = self._saved
+        services.post_json = self._saved
 
     def test_filters_on_the_requested_output_name(self):
         # Not the "rank_expr0" the server invents when the key names are wrong.

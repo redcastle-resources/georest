@@ -17,13 +17,13 @@ from __future__ import annotations
 import json
 import unittest
 
-from georest.esri import edw
 from georest.esri import services as S
 from georest.esri._geojson import (
     _convert_query_geometry,
     _geometry_type_for,
     _ring_signed_area,
 )
+from georest.usfs import edw
 
 from .support import RecordingFetch, patched_services
 
@@ -86,20 +86,27 @@ class GeometryTypeTests(unittest.TestCase):
 
     def test_count_sends_a_polygon_as_a_polygon(self):
         fake = RecordingFetch({"count": 8})
-        with patched_services(fetch_json=fake):
+        with patched_services(fetch_json=fake, post_json=fake):
             S.queryFeatureServiceCount(FEAT, geometry=POLY)
         self.assertEqual(fake.last_params["geometryType"], "esriGeometryPolygon")
 
     def test_query_sends_a_polygon_as_a_polygon(self):
         fake = RecordingFetch({"count": 1},
                               {"type": "FeatureCollection", "features": []})
-        with patched_services(fetch_json=fake):
+        with patched_services(fetch_json=fake, post_json=fake):
             S.queryFeatureService(FEAT, geometry=POLY)
         self.assertTrue(all(p.get("geometryType") == "esriGeometryPolygon"
                             for _, p in fake.calls if "geometry" in p))
 
-    def test_edw_and_services_convert_identically(self):
-        self.assertEqual(edw._convert_geometry(POLY, ""), S._convert_geometry(POLY, ""))
+    def test_edw_sends_a_polygon_as_a_polygon_too(self):
+        # EDW's queries are services' queries: the same conversion, the
+        # same request
+        fake = RecordingFetch({"type": "FeatureCollection", "features": []})
+        with patched_services(post_json=fake):
+            edw.query_features("EDW_X_01", 0, geometry=POLY)
+        self.assertEqual(fake.last_params["geometryType"], "esriGeometryPolygon")
+        self.assertEqual(fake.last_params["geometry"], S._convert_geometry(POLY, ""))
+        self.assertTrue(fake.calls[-1][0].endswith("/EDW/EDW_X_01/MapServer/0/query"))
 
 
 if __name__ == "__main__":

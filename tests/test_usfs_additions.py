@@ -228,16 +228,17 @@ class SpellingTest(unittest.TestCase):
 
     def test_top_level_aliases_are_the_same_modules(self):
         import georest
-        from georest.usfs import fia, lcms
+        from georest.usfs import edw, fia, lcms
         self.assertIs(georest.fia, fia)
         self.assertIs(georest.lcms, lcms)
+        self.assertIs(georest.edw, edw)
 
     def test_the_package_exposes_its_modules_not_their_functions(self):
         """One spelling per function, and a docs page that shows the
         submodules: usfs, like esri and usgs, exports modules
         (plus the error classes every module raises), not flattened names."""
         self.assertEqual(sorted(fs.__all__),
-                         sorted(["fia", "lcms", "lcms_ee", "align", "vocab",
+                         sorted(["fia", "lcms", "lcms_ee", "align", "vocab", "edw",
                                  "USFSError", "UpstreamError", "UpstreamUnavailable"]))
         for flat in ("estimate", "find_attributes", "lcms_summary", "compare_area"):
             with self.subTest(name=flat):

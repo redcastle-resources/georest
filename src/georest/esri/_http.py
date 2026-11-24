@@ -192,6 +192,27 @@ def _redact(url: str) -> str:
     return urllib.parse.urlunsplit(parts._replace(query=query))
 
 
+class EsriServiceError(ValueError, RuntimeError):
+    """An ArcGIS service answered 200 with an Esri error object in the body.
+
+    It is both a ``ValueError`` (what ``services`` and ``portal`` always
+    raised for this) and a ``RuntimeError`` (what ``usfs.edw`` raised), so
+    code written against either keeps catching it. ``detail`` holds the
+    formatted Esri error without the leading description, for callers that
+    re-word the message.
+    """
+
+    def __init__(self, message: str, detail: str = "") -> None:
+        super().__init__(message)
+        self.detail = detail
+
+
+def esri_error(what: str, err: dict) -> EsriServiceError:
+    """An :class:`EsriServiceError` reading ``"<what>: <formatted error>"``."""
+    detail = format_esri_error(err)
+    return EsriServiceError(f"{what}: {detail}", detail)
+
+
 def build_params(base: dict, token: str | None) -> dict:
     """Merge `token` into a params dict if supplied.
 

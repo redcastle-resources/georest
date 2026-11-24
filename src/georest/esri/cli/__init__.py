@@ -2,7 +2,7 @@
 
 check_themes
     ``georest-check-themes`` - report drift between the live EDW catalog and
-    the hand-curated ``edw._SERVICE_THEMES`` table.
+    the hand-curated ``georest.usfs.edw._SERVICE_THEMES`` table.
 
 Copyright 2026 Ryan Rock and Ian Housman
 

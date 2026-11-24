@@ -19,7 +19,8 @@ Documentation: **[georest.io](https://georest.io)**.
 ## Quick start
 
 ```python
-from georest.esri import edw, portal, services
+from georest.esri import portal, services
+from georest.usfs import edw
 
 # Search the USFS EDW catalog by keyword or theme
 hits = edw.search_edw_services("fire")
@@ -35,8 +36,10 @@ geojson = edw.query_features(
 # or any ArcGIS Enterprise install
 results = portal.searchPortal("naip 2023", portal="agol")
 
-# Generic ArcGIS service operations
+# Generic ArcGIS service operations, on any layer (EDW's queries are these)
 tile_url = services.getImageServiceTileUrl("https://.../ImageServer")
+fires = services.queryFeatureService(edw.layer_url("EDW_MTBS_01", 62),
+                                     max_features=5000, if_more="page")
 
 # USGS Water Data: find gages in a box, pull a month of daily discharge
 from georest.usgs import waterdata
@@ -64,11 +67,11 @@ almost nothing.
 
 | Import path | What it covers |
 |---|---|
-| `georest.esri.edw` | USFS EDW: catalog search, layer-role tagging, FGDC/ISO metadata, feature and analytic queries |
 | `georest.esri.portal` | ArcGIS Portal search and service metadata |
-| `georest.esri.services` | Generic Image/Map/Feature Service queries and raster operations |
+| `georest.esri.services` | Generic Image/Map/Feature Service queries (one request, or paged past the server's limit), window-function analytics, and raster operations |
 | `georest.usgs.waterdata` | USGS Water Data OGC API: monitoring locations, daily/continuous values, field measurements, peaks, time-series metadata |
 | `georest.usfs` | Forest Service FIA estimates (EVALIDator) with sampling errors, LCMS land cover/use/change summaries, and the two side by side |
+| `georest.usfs.edw` | The Forest Service Enterprise Data Warehouse (EDW): catalog search, layer-role tagging, FGDC/ISO metadata, and feature and analytic queries through `georest.esri.services`. It was `georest.esri.edw` until 0.5.2; that name still works, with a deprecation warning |
 | `georest.fema.nfhl` | FEMA's National Flood Hazard Layer: the flood zone at a point, when that map took effect, and new maps that are pending or preliminary |
 | `georest.fema.openfema` | OpenFEMA disaster declarations: by declared county, or one row per disaster |
 | `georest.noaa` | NWS alerts, forecasts and observations (one unit system per call), NWPS river gauges with flood stages, CO-OPS tides, NHC active storms |
@@ -154,7 +157,7 @@ georest-check-themes          # report drift vs. the live EDW catalog
 georest-check-themes --emit   # + paste-ready _SERVICE_THEMES entries
 ```
 
-`edw._SERVICE_THEMES` is hand-curated and powers theme filtering and description
+`georest.usfs.edw._SERVICE_THEMES` is hand-curated and powers theme filtering and description
 matching. EDW publishes and retires services without notice, so the table rots
 quietly - an untyped service still appears in search results, but as theme
 `uncategorized` with no description for keyword matching to reach. Exit status is
@@ -167,7 +170,7 @@ repository root happened to be on `sys.path`. Update imports:
 
 ```python
 from RESTesri import edw                    # before
-from georest.esri import edw            # after
+from georest.usfs import edw            # after
 
 from RESTesri._http import fetch_json       # before
 from georest.esri._http import fetch_json   # after

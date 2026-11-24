@@ -6,7 +6,8 @@ is the configuration that silently drops records.
 """
 import unittest
 
-from georest.esri import edw
+from georest.esri import services
+from georest.usfs import edw
 
 from .support import FakeServer, patched
 
@@ -64,14 +65,14 @@ class ChunkedIdFetch(unittest.TestCase):
     def test_chunks_at_the_layers_real_limit(self):
         _, ctx = with_server(max_record_count=1000, total=4000)
         with ctx:
-            got = edw._fetch_features_by_ids("X", 0, "objectid",
+            got = services._fetch_features_by_ids(edw.layer_url("X", 0), "objectid",
                                              list(range(1, 4001)), "*", 4326, 4000)
         self.assertEqual(len(got["features"]), 4000)
 
     def test_every_requested_id_comes_back(self):
         _, ctx = with_server(max_record_count=1000, total=4000)
         with ctx:
-            got = edw._fetch_features_by_ids("X", 0, "objectid",
+            got = services._fetch_features_by_ids(edw.layer_url("X", 0), "objectid",
                                              list(range(1, 4001)), "*", 4326, 4000)
         ids = [f["properties"]["objectid"] for f in got["features"]]
         self.assertEqual(ids, list(range(1, 4001)))
@@ -79,7 +80,7 @@ class ChunkedIdFetch(unittest.TestCase):
     def test_an_over_wide_chunk_raises_rather_than_truncating(self):
         _, ctx = with_server(max_record_count=1000, total=3000)
         with ctx, self.assertRaises(RuntimeError) as caught:
-            edw._fetch_features_by_ids("X", 0, "objectid", list(range(1, 3001)),
+            services._fetch_features_by_ids(edw.layer_url("X", 0), "objectid", list(range(1, 3001)),
                                        "*", 4326, 3000, chunk_size=2000)
         message = str(caught.exception)
         self.assertIn("1000", message)
@@ -89,13 +90,13 @@ class ChunkedIdFetch(unittest.TestCase):
         with patched(post_json=lambda url, params, *a, **k: {"type": "FeatureCollection"},
                      get_layer_info=lambda s, l: {"maxRecordCount": 1000}):
             with self.assertRaises(RuntimeError):
-                edw._fetch_features_by_ids("X", 0, "objectid", [1, 2, 3],
+                services._fetch_features_by_ids(edw.layer_url("X", 0), "objectid", [1, 2, 3],
                                            "*", 4326, 3)
 
     def test_max_features_truncates_the_id_list(self):
         _, ctx = with_server(max_record_count=1000, total=4000)
         with ctx:
-            got = edw._fetch_features_by_ids("X", 0, "objectid",
+            got = services._fetch_features_by_ids(edw.layer_url("X", 0), "objectid",
                                              list(range(1, 4001)), "*", 4326, 1500)
         self.assertEqual(len(got["features"]), 1500)
 
@@ -118,10 +119,10 @@ class ResultRecordCount(unittest.TestCase):
 
 class MaxRecordCountCache(unittest.TestCase):
     def setUp(self):
-        edw._MAX_RECORD_COUNT_CACHE.clear()
+        services._MAX_RECORD_COUNT_CACHE.clear()
 
     def tearDown(self):
-        edw._MAX_RECORD_COUNT_CACHE.clear()
+        services._MAX_RECORD_COUNT_CACHE.clear()
 
     def test_value_is_read_from_the_layer_and_cached(self):
         calls = []
@@ -131,19 +132,19 @@ class MaxRecordCountCache(unittest.TestCase):
             return {"maxRecordCount": 1234}
 
         with patched(get_layer_info=info):
-            self.assertEqual(edw._get_max_record_count("SVC", 3), 1234)
-            self.assertEqual(edw._get_max_record_count("SVC", 3), 1234)
-            edw._get_max_record_count("SVC", 4)
+            self.assertEqual(services._max_record_count(edw.layer_url("SVC", 3)), 1234)
+            self.assertEqual(services._max_record_count(edw.layer_url("SVC", 3)), 1234)
+            services._max_record_count(edw.layer_url("SVC", 4))
         self.assertEqual(len(calls), 2, "second lookup of the same layer should hit cache")
 
     def test_falls_back_when_the_value_is_unusable(self):
         for bogus in ({"maxRecordCount": 0}, {"maxRecordCount": None},
                       {"maxRecordCount": "nope"}, {}):
             with self.subTest(bogus=bogus):
-                edw._MAX_RECORD_COUNT_CACHE.clear()
+                services._MAX_RECORD_COUNT_CACHE.clear()
                 with patched(get_layer_info=lambda s, l, _b=bogus: _b):
-                    self.assertEqual(edw._get_max_record_count("S", 1),
-                                     edw._MAX_RECORD_COUNT)
+                    self.assertEqual(services._max_record_count(edw.layer_url("S", 1)),
+                                     services._MAX_RECORD_COUNT)
 
 
 class InputSpatialReference(unittest.TestCase):

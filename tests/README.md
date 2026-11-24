@@ -64,7 +64,7 @@ page served with status 200 looks like).
 | `test_services.py` | `services.py`: all 10 public functions, mocked HTTP |
 | `test_portal.py` | `portal.py`: search parsing, service-type detection, error surfacing |
 | `test_live_catalog.py` | **Live**: catalog↔theme drift, end-to-end smoke |
-| `test_live_examples.py` | **Live**: executes `edw.py`'s own docstring examples |
+| `test_live_examples.py` | **Live**: executes `usfs/edw.py`'s own docstring examples |
 | `test_live_services.py` | **Live**: `services.py` against real Image/Feature Services |
 | `test_usgs_http.py` | `usgs/_http.py`: retry/backoff policy, `RateLimitError`, error-body surfacing, headers - against a fake `urlopen` and clock |
 | `test_usgs_ogc.py` | `usgs/_ogc.py`: cursor paging, `max_items`/`truncated`, `rate_limit`, parameter builders |
@@ -89,7 +89,7 @@ costs freshness rather than the fixture.
 
 ## Checking the theme catalog
 
-`src/georest/esri/edw.py` carries `_SERVICE_THEMES`, a hand-curated table of every
+`src/georest/usfs/edw.py` carries `_SERVICE_THEMES`, a hand-curated table of every
 MapServer service with a theme and description. It drives theme filtering and
 description matching in `search_edw_services`, and rots silently as EDW
 publishes and retires services: an untyped service still appears in results,
@@ -101,7 +101,7 @@ georest-check-themes           # drift report
 georest-check-themes --emit    # + paste-ready entries
 ```
 
-`VALID_THEMES` and `theme_drift()` live in `georest.esri.edw` so this
+`VALID_THEMES` and `theme_drift()` live in `georest.usfs.edw` so this
 shipped CLI does not import the test suite; `tests/support.py` re-exports both,
 so tests can keep importing them from there.
 

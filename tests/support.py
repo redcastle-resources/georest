@@ -15,12 +15,13 @@ import unittest
 import urllib.parse
 from pathlib import Path
 
-from georest.esri import edw, services
+from georest.esri import portal, services
+from georest.usfs import edw
 
 # VALID_THEMES and theme_drift now live in edw itself, so the shipped
 # `georest-check-themes` CLI can use them without importing the test suite.
 # Re-exported here so the existing tests keep importing them from support.
-from georest.esri.edw import VALID_THEMES, theme_drift  # noqa: F401
+from georest.usfs.edw import VALID_THEMES, theme_drift  # noqa: F401
 from georest.usgs import _ogc
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -169,22 +170,40 @@ class FakeServer:
                 "geometry": None}
 
 
-@contextlib.contextmanager
-def patched(**attrs):
-    """Temporarily replace attributes on the edw module, restoring after.
+def _service_and_layer(url):
+    """(service_name, layer_id) of an EDW layer URL."""
+    parts = url.rstrip("/").split("/")
+    return parts[-3], int(parts[-1])
 
-    Used to stand in for the network layer (fetch_json / post_json /
-    get_layer_info) without touching the real server.
+
+@contextlib.contextmanager
+def patched(fetch_json=None, post_json=None, get_layer_info=None):
+    """Stand in for EDW's network layer without touching the real server.
+
+    EDW is built on ``georest.esri``, so its requests go out through
+    ``portal.fetch_json`` (catalog and service JSON), ``services.post_json``
+    (every query) and ``services.getLayerInfo`` (a layer's maxRecordCount).
+    Those are what get replaced. ``get_layer_info`` takes
+    ``(service_name, layer_id)``, as ``edw.get_layer_info`` does.
     """
-    saved = {name: getattr(edw, name) for name in attrs}
+    swaps = []
+    if fetch_json is not None:
+        swaps += [(portal, "fetch_json", fetch_json), (services, "fetch_json", fetch_json)]
+    if post_json is not None:
+        swaps.append((services, "post_json", post_json))
+    if get_layer_info is not None:
+        swaps.append((services, "getLayerInfo",
+                      lambda url, token=None, timeout=None: get_layer_info(*_service_and_layer(url))))
+    saved = [(module, name, getattr(module, name)) for module, name, _ in swaps]
+    services._MAX_RECORD_COUNT_CACHE.clear()
     try:
-        for name, value in attrs.items():
-            setattr(edw, name, value)
+        for module, name, value in swaps:
+            setattr(module, name, value)
         yield
     finally:
-        for name, value in saved.items():
-            setattr(edw, name, value)
-        edw._MAX_RECORD_COUNT_CACHE.clear()
+        for module, name, value in saved:
+            setattr(module, name, value)
+        services._MAX_RECORD_COUNT_CACHE.clear()
 
 
 @contextlib.contextmanager

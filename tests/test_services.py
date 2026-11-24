@@ -17,7 +17,7 @@ import unittest
 
 from georest.esri import services as S
 
-from .support import RecordingFetch, patched_services
+from .support import FakeServer, RecordingFetch, patched_services
 
 IMG = "https://example.gov/arcgis/rest/services/Thing/ImageServer"
 FEAT = "https://example.com/arcgis/rest/services/Thing/FeatureServer/0"
@@ -148,11 +148,15 @@ class EsriToGeoJsonTests(unittest.TestCase):
         self.assertEqual(got["type"], "Polygon")
         self.assertEqual(len(got["coordinates"]), 2)
 
-    def test_services_and_edw_share_one_converter(self):
-        """Two copies is how the fallback drifted; there is one now."""
-        from georest.esri import edw
-        self.assertIs(S._esri_geometry_to_geojson, edw._esri_geometry_to_geojson)
-        self.assertIs(S._sanitize_geojson, edw._sanitize_geojson)
+    def test_edw_has_no_query_code_of_its_own(self):
+        """Two copies is how the fallback drifted; EDW queries through
+        services now, so it has no converter, transport or paging of its own."""
+        from georest.usfs import edw
+        for name in ("_sanitize_geojson", "_esri_geometry_to_geojson", "_convert_geometry",
+                     "post_json", "fetch_json", "_fetch_features_by_ids",
+                     "_get_max_record_count", "_build_out_analytics"):
+            with self.subTest(name=name):
+                self.assertFalse(hasattr(edw, name))
 
     def test_empty_and_unrecognised_geometry_are_none(self):
         self.assertIsNone(S._esri_geometry_to_geojson(None))
@@ -250,13 +254,22 @@ class CountTests(unittest.TestCase):
 
     def test_spatial_filter_sends_geometry_type_rel_and_insr(self):
         fake = RecordingFetch({"count": 42})
-        with patched_services(fetch_json=fake):
+        with patched_services(post_json=fake):
             S.queryFeatureServiceCount(FEAT, geometry="-125,32,-114,42", in_sr=3857)
         p = fake.last_params
         self.assertEqual(json.loads(p["geometry"])["xmin"], -125.0)
         self.assertEqual(p["geometryType"], "esriGeometryEnvelope")
         self.assertEqual(p["spatialRel"], "esriSpatialRelIntersects")
         self.assertEqual(p["inSR"], "3857")
+
+    def test_a_spatial_count_is_posted(self):
+        # a polygon can be longer than a URL may be
+        get = RecordingFetch(AssertionError("a spatial count must not be a GET"))
+        post = RecordingFetch({"count": 7})
+        with patched_services(fetch_json=get, post_json=post):
+            self.assertEqual(S.queryFeatureServiceCount(FEAT, geometry="0,0,1,1"), 7)
+        self.assertEqual(get.calls, [])
+        self.assertTrue(post.calls[0][0].endswith("/query"))
 
     def test_no_geometry_means_no_spatial_params_at_all(self):
         fake = RecordingFetch({"count": 1})
@@ -322,7 +335,7 @@ class QueryFeatureServiceTests(unittest.TestCase):
 
     def test_preflight_uses_out_sr_as_the_geometry_input_sr(self):
         fake = RecordingFetch({"count": 1}, self.GEOJSON)
-        with patched_services(fetch_json=fake):
+        with patched_services(fetch_json=fake, post_json=fake):
             S.queryFeatureService(FEAT, geometry="0,0,1,1", out_sr=3857)
         self.assertEqual(fake.calls[0][1]["inSR"], "3857")
         self.assertEqual(fake.calls[1][1]["inSR"], "3857")
@@ -913,6 +926,109 @@ class DocstringContractTests(unittest.TestCase):
 
     def test_getsamples_documents_that_it_does_not_raise_per_point(self):
         self.assertIn("does not raise", S.getSamples.__doc__)
+
+
+# ---------------------------------------------------------------------------
+# queryFeatureService(if_more=...), queryAnalytic, EsriServiceError: what
+# georest.usfs.edw is built on, for any ArcGIS layer
+# ---------------------------------------------------------------------------
+class IfMoreTests(unittest.TestCase):
+    def serve(self, max_record_count=1000, total=2500):
+        server = FakeServer(max_record_count, total)
+        S._MAX_RECORD_COUNT_CACHE.clear()
+        self.addCleanup(S._MAX_RECORD_COUNT_CACHE.clear)
+        return server, patched_services(
+            post_json=server.post_json,
+            getLayerInfo=lambda url, token=None, timeout=None: {"maxRecordCount": max_record_count})
+
+    def test_page_fetches_every_feature_a_page_at_a_time(self):
+        server, ctx = self.serve()
+        with ctx:
+            got = S.queryFeatureService(FEAT, max_features=10_000, if_more="page")
+        ids = [f["properties"]["objectid"] for f in got["features"]]
+        self.assertEqual(ids, list(range(1, 2501)))
+        # pages of the layer's own maxRecordCount, never a wider guess
+        self.assertEqual([(p["resultOffset"], p["resultRecordCount"]) for p in server.requests],
+                         [("0", "1000"), ("1000", "1000"), ("2000", "1000")])
+
+    def test_truncate_is_one_request_and_no_error(self):
+        server, ctx = self.serve()
+        with ctx:
+            got = S.queryFeatureService(FEAT, max_features=10_000, if_more="truncate")
+        self.assertEqual(len(got["features"]), 1000)  # the server's own cap
+        self.assertEqual(len(server.requests), 1)
+
+    def test_raise_is_still_the_default(self):
+        fake = RecordingFetch({"count": 5000})
+        with patched_services(fetch_json=fake):
+            with self.assertRaisesRegex(ValueError, 'if_more="page"'):
+                S.queryFeatureService(FEAT, max_features=10)
+
+    def test_an_unknown_if_more_is_refused(self):
+        with self.assertRaisesRegex(ValueError, "if_more must be one of"):
+            S.queryFeatureService(FEAT, if_more="all")
+
+    def test_truncate_and_page_read_geometry_as_4326_unless_told(self):
+        for mode in ("truncate", "page"):
+            with self.subTest(mode=mode):
+                server, ctx = self.serve(total=1)
+                with ctx:
+                    S.queryFeatureService(FEAT, geometry="0,0,1,1", out_sr=3857, if_more=mode)
+                self.assertEqual(server.requests[-1]["inSR"], "4326")
+                self.assertEqual(server.requests[-1]["outSR"], "3857")
+
+    def test_max_allowable_offset_is_sent_in_every_mode(self):
+        for mode in ("truncate", "page"):
+            with self.subTest(mode=mode):
+                server, ctx = self.serve(total=1)
+                with ctx:
+                    S.queryFeatureService(FEAT, max_allowable_offset=0.001, if_more=mode)
+                self.assertEqual(server.requests[-1]["maxAllowableOffset"], "0.001")
+        fake = RecordingFetch({"count": 1}, {"type": "FeatureCollection", "features": []})
+        with patched_services(fetch_json=fake):
+            S.queryFeatureService(FEAT, max_allowable_offset=0.001)
+        self.assertEqual(fake.calls[1][1]["maxAllowableOffset"], "0.001")
+
+    def test_truncate_works_around_the_complex_area_empty_answer(self):
+        # zero features and exceededTransferLimit for a spatial query: the
+        # ids are fetched instead, then the features by id
+        server, ctx = self.serve(total=30)
+        empty = {"type": "FeatureCollection", "features": [], "exceededTransferLimit": True}
+        real = server.post_json
+
+        def post(url, params, *a, **k):
+            if "geometry" in params and params.get("returnIdsOnly") != "true":
+                return empty
+            return real(url, params)
+        with ctx, patched_services(post_json=post):
+            got = S.queryFeatureService(FEAT, geometry="0,0,1,1", if_more="truncate")
+        self.assertEqual(len(got["features"]), 30)
+
+
+class QueryAnalyticTests(unittest.TestCase):
+    def test_top_n_per_group_on_any_layer(self):
+        fake = RecordingFetch({"features": []})
+        with patched_services(post_json=fake):
+            S.topNPerGroup(FEAT, field="acres", group_by=["state", "year"], n=2)
+        url, p = fake.calls[0]
+        self.assertTrue(url.endswith("/FeatureServer/0/queryAnalytic"))
+        analytic = json.loads(p["outAnalytics"])[0]
+        self.assertEqual(analytic["analyticParameters"],
+                         {"orderBy": "acres DESC", "partitionBy": "state,year"})
+        self.assertEqual(p["analyticWhere"], "rank_val <= 2")
+
+
+class EsriServiceErrorTests(unittest.TestCase):
+    ERROR = {"error": {"code": 400, "message": "Invalid query", "details": []}}
+
+    def test_an_esri_error_is_both_a_value_and_a_runtime_error(self):
+        # services and portal always raised ValueError for this, EDW
+        # RuntimeError: code written against either keeps catching it
+        for caught in (ValueError, RuntimeError, S.EsriServiceError):
+            with self.subTest(caught=caught.__name__):
+                with patched_services(post_json=RecordingFetch(self.ERROR)):
+                    with self.assertRaises(caught):
+                        S.queryFeatureService(FEAT, if_more="truncate")
 
 
 if __name__ == "__main__":

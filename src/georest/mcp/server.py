@@ -54,9 +54,9 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 import georest
-from georest.esri import edw, services
 from georest.esri import portal as esri_portal
-from georest.usfs import fia, lcms
+from georest.esri import services
+from georest.usfs import edw, fia, lcms
 from georest.usgs import earthquakes as usgs_earthquakes
 from georest.usgs import nationalmap, nldi, sciencebase, waterdata, wqp
 

@@ -26,8 +26,8 @@ import argparse
 import sys
 import time
 
+from ...usfs.edw import _SERVICE_THEMES, EDW_BASE_URL, search_edw_services, theme_drift
 from .._http import fetch_json
-from ..edw import _SERVICE_THEMES, EDW_BASE_URL, search_edw_services, theme_drift
 
 #: Longest a generated description may run before being elided, matching the
 #: existing entries in _SERVICE_THEMES.
@@ -119,7 +119,7 @@ def main() -> int:
 
     if args.emit and drift["untyped"]:
         print("\n" + "=" * 70)
-        print("Paste into _SERVICE_THEMES in src/georest/esri/edw.py, under")
+        print("Paste into _SERVICE_THEMES in src/georest/usfs/edw.py, under")
         print("the right theme heading, replacing THEME with the category:")
         print("=" * 70)
         for name in drift["untyped"]:

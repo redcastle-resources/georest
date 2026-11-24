@@ -7,7 +7,7 @@ it matters most.
 """
 import unittest
 
-from georest.esri import edw
+from georest.usfs import edw
 
 from .support import patched
 

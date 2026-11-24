@@ -11,7 +11,7 @@ import textwrap
 import unittest
 from pathlib import Path
 
-from georest.esri import edw
+from georest.usfs import edw
 
 from .support import requires_live, retry
 

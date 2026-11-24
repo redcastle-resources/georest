@@ -11,12 +11,13 @@ import pathlib
 import unittest
 
 import georest
-from georest.esri import edw, portal, services
+from georest.esri import portal, services
+from georest.usfs import edw
 
 
 class TestReExports(unittest.TestCase):
     def test_reexports_are_the_same_objects(self):
-        """georest.edw must BE georest.esri.edw, not a copy.
+        """georest.edw must BE georest.usfs.edw, not a copy.
 
         tests/support.py patches the network layer with setattr() on the
         module object. If the two import paths yielded distinct modules, a
@@ -31,10 +32,10 @@ class TestReExports(unittest.TestCase):
         self.assertIs(lazy_edw, edw)
 
     def test_subpackage_is_reachable_both_ways(self):
-        """`from georest import esri` and `georest.esri` agree, and
-        both are the module `edw` actually lives in."""
-        from georest import esri as imported
-        self.assertIs(imported, georest.esri)
+        """`from georest import usfs` and `georest.usfs` agree, and
+        both are the package `edw` actually lives in."""
+        from georest import usfs as imported
+        self.assertIs(imported, georest.usfs)
         self.assertIs(imported.edw, edw)
 
     def test_dunder_all_is_resolvable(self):

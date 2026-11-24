@@ -1,28 +1,31 @@
 # georest - API reference
 
 Python clients for geospatial REST APIs, one provider subpackage per API family:
-`georest.esri` (ArcGIS Image/Map/Feature Services, the USFS EDW, Portal search),
+`georest.esri` (ArcGIS Image/Map/Feature Services, Portal search),
 `georest.usgs` (the USGS Water Data OGC API), and `georest.usfs` (Forest Service
-FIA estimates and LCMS summaries). The full generated reference is at
+FIA estimates, LCMS summaries and the Enterprise Data Warehouse). The full generated reference is at
 [georest.io](https://georest.io).
 
 Contribution guidelines live in [CONTRIBUTING.md](../CONTRIBUTING.md); installation and
 a quick start are in the [README](../README.md).
 
-- [georest.esri](#georestesri) - `services`, `edw`, `portal`, `_http`
+- [georest.esri](#georestesri) - `services`, `portal`, `auth`, `_http`
 - [georest.usgs](#georestusgs) - `waterdata`, `_ogc`, `_http`
-- [georest.usfs](#georestusfs) - `fia`, `vocab`, `lcms`, `lcms_ee`, `align`
+- [georest.usfs](#georestusfs) - `fia`, `vocab`, `lcms`, `lcms_ee`, `align`, `edw`
 - [Using georest from an MCP server](#using-georest-from-an-mcp-server)
 - [Tests](#tests)
 
 ## georest.esri
 
-All four modules live under `georest.esri`:
+The generic ArcGIS clients live under `georest.esri`:
 
 ```python
-from georest.esri import edw, portal, services
-from georest import edw                      # equivalent top-level re-export
+from georest.esri import portal, services
+from georest import services                 # equivalent top-level re-export
 ```
+
+Agency clients built on them live with their agency: `georest.usfs.edw`,
+`georest.fema.nfhl`, `georest.nifc.perimeters`.
 
 ### `services.py` - generic ArcGIS service queries
 
@@ -30,7 +33,9 @@ Tile URLs, feature queries, and Image Service raster operations (export, statist
 
 - `getImageServiceTileUrl(url_or_result, token=None)` - build the `{z}/{y}/{x}` tile URL template for an Image Service or cached Map Service. Pure string construction, so it cannot tell whether the service is actually tiled: an **uncached** service yields a well-formed template whose tiles all answer 404. Check for `tileInfo` in the service's `?f=json` first; render uncached Image Services with `exportImage` instead.
 - `queryFeatureServiceCount(url_or_result, where="1=1", geometry=None, ..., timeout=None)` - return the count of features matching a where clause and/or spatial filter.
-- `queryFeatureService(url_or_result, where="1=1", geometry=None, max_features=1000, ..., timeout=None)` - fetch features as GeoJSON, with a pre-flight count check against `max_features` to avoid huge payloads. Falls back to `f=json` + client-side GeoJSON conversion for services that reject `f=geojson` outright (e.g. an ImageServer's native raster-catalog `/query`).
+- `queryFeatureService(url_or_result, where="1=1", geometry=None, max_features=1000, ..., timeout=None, in_sr=None, max_allowable_offset=None, if_more="raise")` - fetch features as GeoJSON. `if_more` says what happens when more than `max_features` match: `"raise"` (the default) runs a pre-flight count and refuses, to avoid huge payloads; `"truncate"` makes one request and keeps what the server returns, working around servers that answer a complex area with zero features by fetching the ids first; `"page"` fetches a page of the layer's own `maxRecordCount` at a time until `max_features` are in hand. `max_allowable_offset` simplifies geometry on the server. Falls back to `f=json` + client-side GeoJSON conversion for services that reject `f=geojson` outright (e.g. an ImageServer's native raster-catalog `/query`). A spatial count is POSTed, since a polygon can be longer than a URL may be.
+- `queryAnalytic(url_or_result, out_analytics, partition_by=None, ...)` - SQL window functions (RANK, SUM, LAG/LEAD, NTILE, ...) on the server, with the `queryAnalytic` operation; each value is appended to its feature, and `analytic_where` filters on the computed values.
+- `topNPerGroup(url_or_result, field, group_by, n=1, descending=True, ...)` - the top `n` features by a field within each group, through `queryAnalytic`.
 - `getLayerInfo(url_or_result, token=None, timeout=None)` - get layer metadata: fields, geometry type, extent, capabilities. Raises a clear error naming the real sub-layers if pointed at a container rather than a queryable layer - either a group layer (`subLayers`) or a MapServer/FeatureServer **service root** (`layers` and no `fields`). An ImageServer root stays a valid target: it carries its mosaic catalog's own fields.
 - `getSupportedOperations(url_or_result, token=None, timeout=None)` - **added 2026-08-19.** List every REST operation a service or layer actually exposes, parsed from the HTML browse page - the only place ArcGIS Server publishes the full list (the JSON `capabilities` string is an incomplete substitute; a service can expose e.g. `computeStatisticsHistograms` with no corresponding capability flag at all).
 - `exportImage(url_or_result, bbox, size=(512, 512), image_format="tiff", mosaic_rule=None, rendering_rule=None, ..., timeout=None)` - **added 2026-08-19.** Export a rendered image from an ArcGIS Image Service, with support for mosaic/rendering rules, pixel type, NoData, and resampling. Returns raw bytes, or writes to `out_path` if given. Depends on the `fetch_bytes` helper in `_http.py` (see below).
@@ -41,22 +46,7 @@ Tile URLs, feature queries, and Image Service raster operations (export, statist
 
 Every function above accepts an optional `timeout` (seconds; default 60, set in `_http.py`). Some Image Services with large or complex mosaic catalogs (hundreds of contributing rasters) can genuinely take 30–45+ seconds to respond even for a simple result - pass a larger value rather than assuming a hang.
 
-**Error contract.** These functions raise `RuntimeError` for transport failures (unreachable host, HTTP error status) and `ValueError` when a service answers 200 with an Esri error object, or with a body that isn't JSON. They do **not** raise `ConnectionError` - earlier docstrings promised it, but `_http` converts `URLError` to `RuntimeError` before it can be caught, so no caller could ever have received one. The single exception to raising at all is `getSamples`, which reports a point it cannot sample in-band via that entry's `source` field so the remaining points still return values.
-
-### `edw.py` - USFS Enterprise Data Warehouse (EDW) client
-
-Search, metadata, and spatial queries against `https://apps.fs.usda.gov/arcx/rest/services/EDW` only. This is a single flat catalog, not a portal - for portal search (IIPP, ArcGIS Online, etc.) see `portal.py` below.
-
-- `search_edw_services(query="", theme="")` - search the EDW catalog (and only the EDW catalog) by keyword and/or theme (biota, boundaries, environment, geoscientific, inland_waters, planning_cadastre, structure, transportation), using substring, theme, and keyword-alias matching (e.g. "riparian" → inland waters services). To search IIPP or another portal instead, use `portal.searchPortal(query, portal="iipp")`.
-- `get_service_info(service_name)` - metadata for an EDW MapServer service: description, spatial reference, layer list.
-- `get_layer_roles(service_name)` - every layer tagged with its cartographic `role`: `group` (a container, not queryable), `detail` (full resolution), `coarse` (a small-scale duplicate superseded by a `detail` sibling), or `standalone`. Many EDW services publish a theme at several resolutions; querying the coarse one can silently return generalized geometry. Nothing is dropped, and `groupKey` shows why two layers were treated as versions of each other.
-- `get_detail_layers(service_name)` - convenience filter over `get_layer_roles`: just the `detail` and `standalone` layers, i.e. the ones you normally want to query.
-- `get_layer_info(service_name, layer_id)` - layer metadata: fields, geometry type, extent, capabilities.
-- `get_layer_metadata(service_name, layer_id, include_domains=False)` - parse a layer's FGDC/ISO metadata XML for abstract, purpose, keywords, and per-field definitions (and coded-value/range domains if requested).
-- `query_features(service_name, layer_id, geometry=None, where="1=1", max_features=1000, ...)` - query features as GeoJSON, with an automatic object-ID fallback for layers that silently drop features on complex spatial queries.
-- `query_features_analytic(service_name, layer_id, out_analytics, partition_by=None, ...)` - run SQL window-function analytics (RANK, SUM, LAG/LEAD, etc.) via the `queryAnalytic` operation.
-- `top_n_per_group(service_name, layer_id, field, group_by, n=1, ...)` - convenience wrapper over `query_features_analytic` to get the top N features by a field within each group.
-- `query_features_with_pagination(service_name, layer_id, max_features=5000, ...)` - like `query_features` but pages past the server's per-request cap, using the layer's own `maxRecordCount` as the page size.
+**Error contract.** These functions raise `RuntimeError` for transport failures (unreachable host, HTTP error status) and `ValueError` when a service answers 200 with an Esri error object, or with a body that isn't JSON. The Esri error object is raised as `EsriServiceError` (importable from `georest.esri`), which is both a `ValueError` and a `RuntimeError`, so code that caught either keeps working. They do **not** raise `ConnectionError` - earlier docstrings promised it, but `_http` converts `URLError` to `RuntimeError` before it can be caught, so no caller could ever have received one. The single exception to raising at all is `getSamples`, which reports a point it cannot sample in-band via that entry's `source` field so the remaining points still return values.
 
 ### `portal.py` - ArcGIS Portal search and service metadata
 
@@ -71,7 +61,7 @@ Search any ArcGIS Portal (IIPP, ArcGIS Online, USGS, NOAA, USFS, NASA, or a cust
 
 ### `auth.py` - signing in as a user
 
-Makes secured AGOL and Portal content reachable as the signed-in user. Once a session exists, any `portal` or `services` call made **without** `token=` sends the session token, but only to hosts the session covers: the portal host, `*.arcgis.com` for ArcGIS Online, the portal's federated servers (read from `/sharing/rest/portals/self/servers` at sign-in), and hosts added with `trust_host`. Tokens are only ever sent over https unless the portal itself is plain http. An explicit `token=` always wins, and `token=""` forces an anonymous request. `edw.py` is public and unaffected.
+Makes secured AGOL and Portal content reachable as the signed-in user. Once a session exists, any `portal` or `services` call made **without** `token=` sends the session token, but only to hosts the session covers: the portal host, `*.arcgis.com` for ArcGIS Online, the portal's federated servers (read from `/sharing/rest/portals/self/servers` at sign-in), and hosts added with `trust_host`. Tokens are only ever sent over https unless the portal itself is plain http. An explicit `token=` always wins, and `token=""` forces an anonymous request. EDW (`georest.usfs.edw`) is public and unaffected.
 
 - `login(portal=None, client_id=None, *, port=8765, open_browser=True, persist=False, timeout=300)`: OAuth 2.0 authorization code + PKCE. Opens the portal's sign-in page (enterprise SSO such as SAML/eAuth works because the login happens in the browser), receives the redirect on `http://127.0.0.1:<port>/callback`, and exchanges the code for an access token plus a refresh token. `persist=True` saves the refresh token (never the access token) to `~/.georest/esri_credentials.json` with owner-only permissions.
 - `set_token(token, portal=None, *, expires=None, referer=None, refresh=None)`: use a token obtained elsewhere, for example `GIS("Pro")._con.token` from the arcgis API. `expires` takes epoch seconds, epoch milliseconds or a `datetime`. `referer` is sent as a `Referer` header for tokens bound to one. `refresh` is a zero-argument callable returning a fresh token (or `(token, expires)`).
@@ -192,6 +182,27 @@ LCMS's in-body `ParameterError` and FIADB-API's HTML error pages under HTTP 200)
 `UpstreamUnavailable` when it could not be reached, and `FIAValidationError` for a request
 caught locally before it was sent (`fia.FIAValidationError`).
 
+### `edw.py` - the Enterprise Data Warehouse (EDW)
+
+The Forest Service's catalog of ArcGIS map services at `https://apps.fs.usda.gov/arcx/rest/services/EDW`, and only that catalog: it is a single flat catalog, not a portal - for portal search (IIPP, ArcGIS Online, etc.) see `georest.esri.portal`. Standard library only, like `georest.esri`.
+
+What is EDW's own is here: the catalog search with its theme table and keyword aliases, layer roles, and the FGDC/ISO metadata documents. The rest is `georest.esri` pointed at an EDW layer under EDW's short service names: the queries are `services.queryFeatureService` (`if_more="truncate"`, or `"page"` for pagination), `services.queryAnalytic` and `services.topNPerGroup`; `get_layer_info` is `services.getLayerInfo`; `get_service_info` reads `portal.getServiceMetadata`. Their errors read "EDW query error: ...", "EDW layer error: ..." and so on, and are `EsriServiceError`, a `RuntimeError` and a `ValueError`.
+
+This module was `georest.esri.edw` until 0.5.2. That name, and the 0.4 `georest.restesri.edw`, still import this same module, with a `DeprecationWarning`.
+
+- `service_url(service_name)`, `layer_url(service_name, layer_id)` - the full URL of an EDW service or layer, for any `georest.esri` call.
+
+- `search_edw_services(query="", theme="")` - search the EDW catalog (and only the EDW catalog) by keyword and/or theme (biota, boundaries, environment, geoscientific, inland_waters, planning_cadastre, structure, transportation), using substring, theme, and keyword-alias matching (e.g. "riparian" → inland waters services). To search IIPP or another portal instead, use `portal.searchPortal(query, portal="iipp")`.
+- `get_service_info(service_name)` - metadata for an EDW MapServer service: description, spatial reference, layer list.
+- `get_layer_roles(service_name)` - every layer tagged with its cartographic `role`: `group` (a container, not queryable), `detail` (full resolution), `coarse` (a small-scale duplicate superseded by a `detail` sibling), or `standalone`. Many EDW services publish a theme at several resolutions; querying the coarse one can silently return generalized geometry. Nothing is dropped, and `groupKey` shows why two layers were treated as versions of each other.
+- `get_detail_layers(service_name)` - convenience filter over `get_layer_roles`: just the `detail` and `standalone` layers, i.e. the ones you normally want to query.
+- `get_layer_info(service_name, layer_id)` - layer metadata: fields, geometry type, extent, capabilities (`services.getLayerInfo`; a group layer raises `ValueError` naming its sub-layers).
+- `get_layer_metadata(service_name, layer_id, include_domains=False)` - parse a layer's FGDC/ISO metadata XML for abstract, purpose, keywords, and per-field definitions (and coded-value/range domains if requested).
+- `query_features(service_name, layer_id, geometry=None, where="1=1", max_features=1000, ...)` - query features as GeoJSON (`services.queryFeatureService(..., if_more="truncate")`), with an automatic object-ID fallback for layers that silently drop features on complex spatial queries.
+- `query_features_analytic(service_name, layer_id, out_analytics, partition_by=None, ...)` - run SQL window-function analytics (RANK, SUM, LAG/LEAD, etc.) via the `queryAnalytic` operation.
+- `top_n_per_group(service_name, layer_id, field, group_by, n=1, ...)` - convenience wrapper over `query_features_analytic` to get the top N features by a field within each group.
+- `query_features_with_pagination(service_name, layer_id, max_features=5000, ...)` - like `query_features` but pages past the server's per-request cap, using the layer's own `maxRecordCount` as the page size (`if_more="page"`).
+
 ## georest.fema
 
 FEMA data. `nfhl` uses only the standard library; `openfema` returns pandas
@@ -300,4 +311,4 @@ To wrap georest in a server of your own, the library side of the contract:
 
 `pip install -e ".[dev]"` first - this is a `src/` layout, so the package is not importable from the repository root without it. Then `python -m pytest`, or `python -m unittest discover -s tests -t .` for the stdlib runner; the tests are `unittest.TestCase` classes either way. Offline and deterministic by default; set `EDW_LIVE=1` to include tests that hit the real EDW server, `SERVICES_LIVE=1` for the `services.py` tests that hit public ArcGIS hosts, and `USGS_LIVE=1` for the `waterdata` tests against api.waterdata.usgs.gov. See [tests/README.md](../tests/README.md).
 
-`georest-check-themes` reports drift between the live catalog and the hand-curated `_SERVICE_THEMES` table in `edw.py` (`--emit` prints paste-ready entries).
+`georest-check-themes` reports drift between the live catalog and the hand-curated `_SERVICE_THEMES` table in `usfs/edw.py` (`--emit` prints paste-ready entries).

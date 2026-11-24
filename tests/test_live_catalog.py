@@ -8,7 +8,7 @@ matching, so theme filters and alias searches stop finding it.
 """
 import unittest
 
-from georest.esri import edw
+from georest.usfs import edw
 
 from .support import requires_live, retry, theme_drift
 
@@ -162,7 +162,7 @@ class LiveSmoke(unittest.TestCase):
             self.assertEqual(feature["properties"]["rank_val"], 1)
 
     def test_pagination_crosses_the_server_page_boundary(self):
-        page = edw._get_max_record_count(self.SERVICE, self.ALL_YEARS_POINTS)
+        page = edw.get_layer_info(self.SERVICE, self.ALL_YEARS_POINTS)["maxRecordCount"]
         got = retry(lambda: edw.query_features_with_pagination(
             self.SERVICE, self.ALL_YEARS_POINTS, where="1=1",
             out_fields="objectid,fire_name", max_features=page * 2 + 100))

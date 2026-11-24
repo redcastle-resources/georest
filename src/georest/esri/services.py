@@ -13,13 +13,21 @@ Quick start::
     # Image/Map Service tile URL template
     tile_url = services.getImageServiceTileUrl("https://.../ImageServer")
 
-    # Feature Service query (pre-flight count + fetch), like edw.query_features
-    # but for arbitrary (non-EDW) ArcGIS Feature Services
+    # Feature Service query (pre-flight count + fetch)
     geojson = services.queryFeatureService(
         "https://services.arcgis.com/.../FeatureServer/0",
         where="STATE='UT'",
         max_features=2000,
     )
+
+    # More rows than the server hands out at once: fetched a page at a time
+    geojson = services.queryFeatureService(layer_url, max_features=20000, if_more="page")
+
+    # Server-side window functions: the largest feature per group
+    top = services.topNPerGroup(layer_url, field="acres", group_by="state")
+
+``georest.usfs.edw`` is built on these: its queries are these functions
+pointed at a Forest Service Enterprise Data Warehouse layer.
 
 Copyright 2026 Ryan Rock and Ian Housman
 
@@ -38,18 +46,30 @@ import re
 import urllib.parse
 from typing import Any
 
-from ._geojson import (  # shared with edw.py so the f=json paths cannot drift
+from ._geojson import (  # one conversion for every f=json path, so none can drift
     _convert_query_geometry,
     _esri_geometry_to_geojson,  # noqa: F401 - reached as services.<name>
     _esri_json_to_geojson,
     _geometry_type_for,
     _sanitize_geojson,
 )
-from ._http import build_params, fetch_bytes, fetch_json, fetch_text, format_esri_error
+from ._http import (
+    EsriServiceError,  # noqa: F401 - raised here; reached as services.EsriServiceError
+    build_params,
+    esri_error,
+    fetch_bytes,
+    fetch_json,
+    fetch_text,
+    format_esri_error,
+    post_json,
+)
 from .portal import _resolve_url
 
 _FEATURE_QUERY_SUFFIX = "/query"
 _MAX_RECORD_COUNT = 2000  # ArcGIS server default max
+
+#: What queryFeatureService does when more features match than max_features.
+IF_MORE = ("raise", "truncate", "page")
 
 
 #: Backwards-compatible alias. The implementation moved to `_http` so
@@ -168,12 +188,16 @@ def queryFeatureServiceCount(
 
     count_url = f"{url}{_FEATURE_QUERY_SUFFIX}"
     try:
-        resp = fetch_json(count_url, params, timeout=timeout)
+        # A polygon can be too long for a URL, so a spatial count is POSTed.
+        if geometry is not None:
+            resp = post_json(count_url, params, timeout=timeout)
+        else:
+            resp = fetch_json(count_url, params, timeout=timeout)
     except RuntimeError as exc:
         raise RuntimeError(f"Could not reach Feature Service at {count_url!r}: {exc}") from exc
 
     if "error" in resp:
-        raise ValueError(f"Feature Service returned an error: {_format_esri_error(resp['error'])}")
+        raise esri_error("Feature Service returned an error", resp['error'])
 
     return resp.get("count", 0)
 
@@ -189,14 +213,25 @@ def queryFeatureService(
     out_sr: int = 4326,
     token: str | None = None,
     timeout: int | None = None,
+    in_sr: int | None = None,
+    max_allowable_offset: float | None = None,
+    if_more: str = "raise",
 ) -> dict[str, Any]:
     """Fetch features from an ArcGIS Feature Service, Map Service, or mosaic
     layer as GeoJSON, optionally filtered by spatial intersection.
 
-    Performs a ``returnCountOnly=true`` pre-flight (honoring the same
-    spatial filter) before fetching geometry. If the result count exceeds
-    *max_features*, a :class:`ValueError` is raised with a remediation
-    message instead of fetching a huge payload.
+    *if_more* decides what happens when more features match than
+    *max_features*:
+
+    * ``"raise"`` (default): a ``returnCountOnly=true`` pre-flight (honoring
+      the same spatial filter) runs first, and a :class:`ValueError` with a
+      remediation message is raised instead of fetching a huge payload.
+    * ``"truncate"``: one request for up to *max_features* features (the
+      server may cap it lower, at the layer's ``maxRecordCount``); the rest
+      are left behind without an error.
+    * ``"page"``: as many requests as it takes, a page of the layer's
+      ``maxRecordCount`` at a time, until *max_features* features are in
+      hand or none are left.
 
     Args:
         url_or_result (str or dict): Layer URL (e.g. ``".../FeatureServer/0"``,
@@ -214,16 +249,27 @@ def queryFeatureService(
         spatial_rel (str, optional): Spatial relationship. Defaults to
             ``esriSpatialRelIntersects``.
         out_fields (str, optional): Comma-separated field names or ``"*"``.
+            Include the layer's object-id field if you need stable feature
+            ids: some servers omit the GeoJSON ``id`` when it isn't asked for.
         max_features (int, optional): Hard cap on feature count. Defaults
             to 1000.
-        out_sr (int, optional): Output spatial reference WKID. Also used as
-            the input spatial reference for *geometry*. Defaults to 4326
-            (WGS84).
+        out_sr (int, optional): Output spatial reference WKID. Defaults to
+            4326 (WGS84).
         token (str, optional): ArcGIS token for secured services.
         timeout (int, optional): Request timeout in seconds. Defaults to
             60 - some services with large mosaic catalogs can genuinely
             take longer than that to respond; pass a larger value rather
             than assuming a hang.
+        in_sr (int, optional): Spatial reference WKID *geometry* is in.
+            Defaults to *out_sr* with ``if_more="raise"`` (as this function
+            always read it), and to 4326, GeoJSON's own, otherwise.
+        max_allowable_offset (float, optional): Simplify each returned
+            geometry on the server so no vertex moves more than this, in the
+            units of *out_sr* (degrees for 4326; 0.001 is about 100 m). A
+            national forest boundary drops from megabytes to kilobytes.
+            ``None`` (the default) returns full detail.
+        if_more (str, optional): ``"raise"``, ``"truncate"`` or ``"page"``;
+            see above.
 
     Returns:
         dict: GeoJSON ``FeatureCollection``.
@@ -243,16 +289,49 @@ def queryFeatureService(
             multipart polygon comes back as a ``MultiPolygon`` and holes stay
             holes.
 
+    Note:
+        Some servers answer a spatial query against a geometrically complex
+        area (many disjoint parts and holes, e.g. a national forest
+        boundary) with zero features and ``exceededTransferLimit``, though a
+        count of the same query is right. With ``if_more="truncate"`` this
+        is detected and worked around: the matching object ids are fetched
+        (which is not subject to the limitation) and then the features by
+        id, with a plain attribute filter.
+
     Raises:
-        ValueError: If the feature count exceeds *max_features*, or the
-            service answers 200 with an Esri error object in the body, or
-            with a body that isn't JSON at all.
+        ValueError: If the feature count exceeds *max_features* with
+            ``if_more="raise"``, or *if_more* is not one of :data:`IF_MORE`.
+        EsriServiceError: If the service answers 200 with an Esri error
+            object in the body. It is a ``ValueError`` and a
+            ``RuntimeError``.
         RuntimeError: If the service is unreachable or answers with an HTTP
-            error status (see :func:`queryFeatureServiceCount`).
+            error status (see :func:`queryFeatureServiceCount`), or, with
+            ``if_more="truncate"``, if the server drops features while they
+            are fetched by id.
+
+    Example::
+
+        import georest
+        from georest.esri import services
+
+        quakes = "https://sampleserver6.arcgisonline.com/arcgis/rest/services/Earthquakes_Since1970/FeatureServer/0"
+        big = services.queryFeatureService(quakes, where="magnitude >= 8")
+        every = services.queryFeatureService(quakes, where="magnitude >= 6",
+                                             max_features=5000, if_more="page")
+        georest.to_frame(every)
     """
-    url = _resolve_url(url_or_result)
-    if url.lower().endswith("featureserver"):
-        url = f"{url}/0"
+    if if_more not in IF_MORE:
+        raise ValueError(f"if_more must be one of {', '.join(IF_MORE)}; got {if_more!r}")
+    url = _layer_url(url_or_result)
+    if if_more == "truncate":
+        return _query_truncated(url, where, geometry, geometry_type, spatial_rel, out_fields,
+                                max_features, out_sr, 4326 if in_sr is None else in_sr,
+                                max_allowable_offset, token, timeout)
+    if if_more == "page":
+        return _query_paged(url, where, geometry, geometry_type, spatial_rel, out_fields,
+                            max_features, out_sr, 4326 if in_sr is None else in_sr,
+                            max_allowable_offset, token, timeout)
+    in_sr = out_sr if in_sr is None else in_sr
 
     feature_count = queryFeatureServiceCount(
         url,
@@ -260,7 +339,7 @@ def queryFeatureService(
         geometry=geometry,
         geometry_type=geometry_type,
         spatial_rel=spatial_rel,
-        in_sr=out_sr,
+        in_sr=in_sr,
         token=token,
         timeout=timeout,
     )
@@ -269,7 +348,8 @@ def queryFeatureService(
             f"Service layer has {feature_count:,} matching features "
             f"(max_features={max_features:,}).\n"
             f"Increase max_features OR pass a `where` clause to filter, "
-            f"e.g. where=\"STATE_FIPS='06'\"."
+            f"e.g. where=\"STATE_FIPS='06'\", or pass if_more=\"page\" to "
+            f"fetch them all a page at a time."
         )
 
     query_params: dict[str, Any] = {
@@ -278,11 +358,13 @@ def queryFeatureService(
         "outSR": str(out_sr),
         "f": "geojson",
     }
+    if max_allowable_offset is not None:
+        query_params["maxAllowableOffset"] = str(float(max_allowable_offset))
     if geometry is not None:
         query_params["geometry"] = _convert_geometry(geometry, geometry_type)
         query_params["geometryType"] = _geometry_type_for(query_params["geometry"], geometry_type)
         query_params["spatialRel"] = spatial_rel
-        query_params["inSR"] = str(out_sr)
+        query_params["inSR"] = str(in_sr)
     if token is not None:
         query_params["token"] = token
 
@@ -310,13 +392,402 @@ def queryFeatureService(
         except RuntimeError as exc:
             raise RuntimeError(f"Could not fetch features from {query_url!r}: {exc}") from exc
         if "error" in esri_json:
-            raise ValueError(f"Feature Service query returned an error: {_format_esri_error(esri_json['error'])}")
+            raise esri_error("Feature Service query returned an error", esri_json["error"])
         return _sanitize_geojson(_esri_json_to_geojson(esri_json))
 
     if "error" in geojson:
-        raise ValueError(f"Feature Service query returned an error: {_format_esri_error(geojson['error'])}")
+        raise esri_error("Feature Service query returned an error", geojson["error"])
 
     return geojson
+
+
+def _layer_url(url_or_result: str | dict) -> str:
+    """The layer URL to query: a FeatureServer root means its layer 0."""
+    url = _resolve_url(url_or_result).rstrip("/")
+    if url.lower().endswith("featureserver"):
+        url = f"{url}/0"
+    return url
+
+
+def _spatial_params(params: dict[str, str], geometry, geometry_type: str,
+                    spatial_rel: str, in_sr: int) -> None:
+    """Add the spatial filter to query *params*, if there is a geometry."""
+    if geometry is None:
+        return
+    geom_str = _convert_geometry(geometry, geometry_type)
+    params["geometry"] = geom_str
+    params["geometryType"] = _geometry_type_for(geom_str, geometry_type)
+    params["spatialRel"] = spatial_rel
+    params["inSR"] = str(in_sr)
+
+
+def _post_query(url: str, params: dict[str, str], token: str | None, timeout: int | None,
+                what: str = "Feature Service query returned an error") -> dict:
+    """POST a query (polygons can be too long for a URL); raise on an Esri error."""
+    data = post_json(url, build_params(params, token), timeout=timeout)
+    if "error" in data:
+        raise esri_error(what, data["error"])
+    return data
+
+
+_MAX_RECORD_COUNT_CACHE: dict[str, int] = {}
+
+
+def _max_record_count(url: str, token: str | None = None, timeout: int | None = None) -> int:
+    """The layer's own maxRecordCount, fetched once per layer and cached.
+
+    The server silently truncates every response to this many records, so
+    it - not the 2000 fallback - is the only safe page/chunk stride. Striding
+    wider than the server will actually return makes the caller skip past
+    records it never received: page 2 starts at offset `stride` while the
+    server only handed back `maxRecordCount` rows, and the gap is dropped
+    silently, with no error and no flag.
+    """
+    if url not in _MAX_RECORD_COUNT_CACHE:
+        try:
+            count = int(getLayerInfo(url, token=token, timeout=timeout)["maxRecordCount"])
+        except (RuntimeError, ValueError, KeyError, TypeError):
+            # A metadata fetch failure shouldn't sink an otherwise fine query;
+            # callers pair this with an exceededTransferLimit / short-chunk
+            # check so a wrong guess here still can't silently lose records.
+            count = 0
+        _MAX_RECORD_COUNT_CACHE[url] = count if count > 0 else _MAX_RECORD_COUNT
+    return _MAX_RECORD_COUNT_CACHE[url]
+
+
+def _query_truncated(url, where, geometry, geometry_type, spatial_rel, out_fields,
+                     max_features, out_sr, in_sr, max_allowable_offset, token, timeout) -> dict:
+    """One request for up to *max_features* (``if_more="truncate"``)."""
+    params: dict[str, str] = {
+        "where": where,
+        "outFields": out_fields,
+        "outSR": str(out_sr),
+        "f": "geojson",
+        # Sent unclamped: the server caps this at the layer's own
+        # maxRecordCount anyway (verified - asking 100000 of a 2000-record
+        # layer returns 2000 + exceededTransferLimit, not an error). Clamping
+        # to a hardcoded 2000 here only under-fetched layers allowing more.
+        "resultRecordCount": str(max_features),
+    }
+    if max_allowable_offset is not None:
+        params["maxAllowableOffset"] = str(float(max_allowable_offset))
+    _spatial_params(params, geometry, geometry_type, spatial_rel, in_sr)
+    data = _post_query(f"{url}{_FEATURE_QUERY_SUFFIX}", params, token, timeout)
+
+    if geometry is not None and data.get("exceededTransferLimit") and not data.get("features"):
+        id_field, ids = _query_object_ids(url, where, geometry, geometry_type, spatial_rel,
+                                          in_sr, token, timeout)
+        if ids:
+            return _fetch_features_by_ids(url, id_field, ids, out_fields, out_sr, max_features,
+                                          max_allowable_offset=max_allowable_offset,
+                                          token=token, timeout=timeout)
+    return _sanitize_geojson(data)
+
+
+def _query_object_ids(url, where, geometry, geometry_type, spatial_rel, in_sr,
+                      token=None, timeout=None) -> tuple[str, list[int]]:
+    """Fetch just the object IDs matching a spatial + attribute filter.
+
+    returnIdsOnly is cheap enough that it doesn't hit the exceededTransferLimit
+    empty-features bug that a full feature fetch can hit against a
+    geometrically complex AOI (verified against the live EDW server: a
+    161-part multipolygon returns 0 features via a normal query, but the
+    correct 40 object IDs via returnIdsOnly).
+    """
+    params: dict[str, str] = {"where": where, "f": "json", "returnIdsOnly": "true"}
+    _spatial_params(params, geometry, geometry_type, spatial_rel, in_sr)
+    data = _post_query(f"{url}{_FEATURE_QUERY_SUFFIX}", params, token, timeout)
+    return data.get("objectIdFieldName", "OBJECTID"), data.get("objectIds") or []
+
+
+def _fetch_features_by_ids(url, id_field, ids, out_fields, out_sr, max_features,
+                           chunk_size=None, max_allowable_offset=None,
+                           token=None, timeout=None) -> dict:
+    """Fetch features for a known list of object IDs, in chunks.
+
+    A plain attribute IN (...) filter carries no geometry payload, so it
+    sidesteps the complex-geometry query limitation entirely - used to
+    retrieve attributes/geometry for IDs already resolved by
+    _query_object_ids.
+
+    chunk_size defaults to the layer's own maxRecordCount. It must not exceed
+    it: asking for more IDs than the server will return in one response
+    silently drops the overflow, since each chunk is fetched once and never
+    revisited.
+    """
+    ids = ids[:max_features]
+    if chunk_size is None:
+        chunk_size = _max_record_count(url, token, timeout)
+    all_features: list[dict] = []
+    for start in range(0, len(ids), chunk_size):
+        chunk = ids[start : start + chunk_size]
+        id_list = ",".join(str(oid) for oid in chunk)
+        result = _query_truncated(url, f"{id_field} IN ({id_list})", None, "esriGeometryEnvelope",
+                                  "esriSpatialRelIntersects", out_fields, chunk_size, out_sr, 4326,
+                                  max_allowable_offset, token, timeout)
+        features = result.get("features", [])
+        # Every ID came from this same layer via returnIdsOnly and the filter
+        # is a bare IN (...), so a short chunk means records were dropped
+        # rather than legitimately filtered out. Fail loudly - silently
+        # returning a subset would corrupt any downstream analysis.
+        if len(features) < len(chunk):
+            raise RuntimeError(
+                f"The server returned {len(features)} features for a chunk of "
+                f"{len(chunk)} object IDs on {url} (chunk_size={chunk_size}). "
+                f"Records were dropped; the layer's maxRecordCount may be "
+                f"below the chunk size."
+            )
+        all_features.extend(features)
+    return _sanitize_geojson({"type": "FeatureCollection", "features": all_features})
+
+
+def _query_paged(url, where, geometry, geometry_type, spatial_rel, out_fields,
+                 max_features, out_sr, in_sr, max_allowable_offset, token, timeout) -> dict:
+    """Page through results up to *max_features* (``if_more="page"``).
+
+    Pages are taken by resultOffset without an explicit sort. ArcGIS doesn't
+    guarantee a stable row order across requests absent orderByFields, so a
+    layer that reorders between pages could in principle duplicate or skip
+    rows.
+    """
+    all_features: list[dict] = []
+    offset = 0
+    # Page at the layer's real limit, not a hardcoded guess: a stride wider
+    # than the server will return makes the next offset skip the records it
+    # withheld.
+    server_max = _max_record_count(url, token, timeout)
+
+    while len(all_features) < max_features:
+        page_size = min(max_features - len(all_features), server_max)
+        params: dict[str, str] = {
+            "where": where,
+            "outFields": out_fields,
+            "outSR": str(out_sr),
+            "f": "geojson",
+            "resultRecordCount": str(page_size),
+            "resultOffset": str(offset),
+        }
+        if max_allowable_offset is not None:
+            params["maxAllowableOffset"] = str(float(max_allowable_offset))
+        _spatial_params(params, geometry, geometry_type, spatial_rel, in_sr)
+        data = _post_query(f"{url}{_FEATURE_QUERY_SUFFIX}", params, token, timeout)
+
+        features = data.get("features", [])
+        if not features:
+            break
+        all_features.extend(features)
+        offset += len(features)
+
+        # A short page means end-of-data only if the server isn't also
+        # flagging more rows behind it - belt and braces in case server_max
+        # fell back to a guess after a failed metadata fetch.
+        if len(features) < page_size and not data.get("exceededTransferLimit"):
+            break
+
+    return _sanitize_geojson({"type": "FeatureCollection", "features": all_features[:max_features]})
+
+
+# Ranking/numbering analytics are computed over the window itself rather than
+# over an input field, and take no onAnalyticField. Any `field` supplied for
+# these is dropped rather than forwarded (see _build_out_analytics).
+_FIELDLESS_ANALYTICS = frozenset(
+    {"RANK", "DENSE_RANK", "ROW_NUMBER", "NTILE", "PERCENT_RANK", "CUME_DIST"}
+)
+
+
+def _build_out_analytics(out_analytics: list[dict[str, Any]]) -> str:
+    """Translate simplified analytic defs into Esri's outAnalytics JSON.
+
+    Each input dict has keys: type, field (optional for COUNT/ROW_NUMBER),
+    out_name, and optionally order_by (for LAG/LEAD/ranking functions) and
+    params (dict merged into analyticParameters, e.g. {"offset": 1} for
+    LAG/LEAD or {"buckets": 4} for NTILE).
+
+    Note the key names: queryAnalytic expects onAnalyticField /
+    outAnalyticFieldName. The similar-looking onStatisticField /
+    outStatisticFieldName belong to the separate outStatistics and
+    queryTopFeatures operations; sending those here makes the server reject
+    any analytic that takes an input field ("Unable to complete operation")
+    and silently ignore the requested output name for those that don't.
+    """
+    analytics = []
+    for a in out_analytics:
+        analytic_type = a["type"]
+        entry: dict[str, Any] = {
+            "analyticType": analytic_type,
+            "outAnalyticFieldName": a["out_name"],
+        }
+        if "field" in a and str(analytic_type).upper() not in _FIELDLESS_ANALYTICS:
+            entry["onAnalyticField"] = a["field"]
+
+        analytic_params: dict[str, Any] = dict(a.get("params", {}))
+        if "order_by" in a:
+            analytic_params["orderBy"] = a["order_by"]
+        if analytic_params:
+            entry["analyticParameters"] = analytic_params
+
+        analytics.append(entry)
+    return json.dumps(analytics)
+
+
+def queryAnalytic(
+    url_or_result: str | dict,
+    out_analytics: list[dict[str, Any]],
+    partition_by: str | list[str] | None = None,
+    order_by_fields: str | None = None,
+    where: str = "1=1",
+    analytic_where: str | None = None,
+    geometry: dict | str | None = None,
+    geometry_type: str = "esriGeometryEnvelope",
+    spatial_rel: str = "esriSpatialRelIntersects",
+    out_fields: str = "*",
+    out_sr: int = 4326,
+    return_geometry: bool = True,
+    in_sr: int = 4326,
+    token: str | None = None,
+    timeout: int | None = None,
+) -> dict:
+    """Run SQL window-function analytics (rank, running total, LAG/LEAD, ...)
+    on a layer, with the ArcGIS ``queryAnalytic`` operation.
+
+    Rows are not collapsed: each analytic value is appended as a new field on
+    its source feature. Use *analytic_where* to keep only some computed rows
+    (e.g. ``"rank_val = 1"`` for the top-ranked feature per partition). The
+    layer must support it: ``getLayerInfo(url)["advancedQueryCapabilities"]``
+    reports ``supportsQueryAnalytic``.
+
+    Args:
+        url_or_result (str or dict): Layer URL, or a
+            :func:`portal.searchPortal` result dict.
+        out_analytics: List of analytic definitions, each a dict with:
+
+            - type (str): Esri analytic type, e.g. "RANK", "SUM", "LAG",
+              "ROW_NUMBER", "PERCENTILE_CONT".
+            - field (str, optional): Input field the analytic operates on
+              (omit for COUNT/ROW_NUMBER and the ranking types).
+            - out_name (str): Output field name for the computed value.
+            - order_by (str, optional): Field ordering within each
+              partition, e.g. "ACRES DESC" (required by ranking and
+              LAG/LEAD functions).
+            - params (dict, optional): Extra analyticParameters, e.g.
+              {"offset": 1} for LAG/LEAD, {"buckets": 4} for NTILE.
+        partition_by: Field name(s) to group rows into separate windows.
+            Omit to treat the whole result set as one partition.
+        order_by_fields: Sort order applied before analytics are computed
+            (separate from an analytic's own ``order_by``).
+        where: SQL WHERE clause filtering the source rows.
+        analytic_where: SQL filter applied *after* analytics are computed,
+            evaluated against output field names (e.g. "acres_rank = 1").
+        geometry, geometry_type, spatial_rel: Spatial filter, as for
+            :func:`queryFeatureService`.
+        out_fields: Comma-separated field names or "*" for all.
+        out_sr: Output spatial reference WKID. Default: 4326 (WGS84).
+        return_geometry: If False, omit geometry from results (cheaper when
+            only the computed values are needed).
+        in_sr: Spatial reference WKID of *geometry*. Default: 4326 (WGS84).
+        token (str, optional): ArcGIS token for secured services.
+        timeout (int, optional): Request timeout in seconds.
+
+    Returns:
+        GeoJSON FeatureCollection dict with the analytic fields appended to
+        each feature's properties.
+
+    Raises:
+        EsriServiceError: If the service answers with an Esri error object.
+    """
+    url = _layer_url(url_or_result)
+    if partition_by:
+        # queryAnalytic has no top-level partitionBy request parameter - the
+        # partition must be nested in each analytic's own analyticParameters,
+        # or the server silently computes the analytic over the whole result
+        # set instead of per partition (verified against the live EDW server).
+        partition_str = ",".join(partition_by) if isinstance(partition_by, list) else partition_by
+        out_analytics = [
+            {**a, "params": {**a.get("params", {}), "partitionBy": partition_str}}
+            for a in out_analytics
+        ]
+
+    params: dict[str, str] = {
+        "where": where,
+        "outFields": out_fields,
+        "outSR": str(out_sr),
+        "f": "json",  # queryAnalytic does not support f=geojson (returns 400)
+        "returnGeometry": "true" if return_geometry else "false",
+        "outAnalytics": _build_out_analytics(out_analytics),
+    }
+    if order_by_fields:
+        params["orderByFields"] = order_by_fields
+    if analytic_where:
+        params["analyticWhere"] = analytic_where
+    _spatial_params(params, geometry, geometry_type, spatial_rel, in_sr)
+
+    data = _post_query(f"{url}/queryAnalytic", params, token, timeout,
+                       what="queryAnalytic returned an error")
+    return _sanitize_geojson(_esri_json_to_geojson(data))
+
+
+def topNPerGroup(
+    url_or_result: str | dict,
+    field: str,
+    group_by: str | list[str],
+    n: int = 1,
+    descending: bool = True,
+    where: str = "1=1",
+    geometry: dict | str | None = None,
+    geometry_type: str = "esriGeometryEnvelope",
+    spatial_rel: str = "esriSpatialRelIntersects",
+    out_fields: str = "*",
+    out_sr: int = 4326,
+    in_sr: int = 4326,
+    token: str | None = None,
+    timeout: int | None = None,
+) -> dict:
+    """The top *n* features by *field* within each *group_by* group.
+
+    :func:`queryAnalytic` with RANK() and an *analytic_where*, e.g. the
+    largest timber harvest per ranger district.
+
+    Args:
+        url_or_result (str or dict): Layer URL, or a
+            :func:`portal.searchPortal` result dict.
+        field: Field to rank by, e.g. "gis_acres".
+        group_by: Field name(s) defining each group.
+        n: How many top features to keep per group. Default: 1.
+        descending: If True (default), rank largest-first.
+        where: SQL WHERE clause filtering the source rows.
+        geometry, geometry_type, spatial_rel: Spatial filter, as for
+            :func:`queryFeatureService`.
+        out_fields, out_sr, in_sr, token, timeout: As for
+            :func:`queryAnalytic`.
+
+    Returns:
+        GeoJSON FeatureCollection dict with only the top *n* features per
+        group, each with a ``rank_val`` field. RANK gives tied values the
+        same rank, so a group with ties at the cutoff returns more than *n*
+        rows.
+    """
+    direction = "DESC" if descending else "ASC"
+    return queryAnalytic(
+        url_or_result,
+        out_analytics=[{
+            # RANK takes no input field - `field` reaches the server via the
+            # window's own orderBy.
+            "type": "RANK",
+            "order_by": f"{field} {direction}",
+            "out_name": "rank_val",
+        }],
+        partition_by=group_by,
+        analytic_where=f"rank_val <= {int(n)}",
+        where=where,
+        geometry=geometry,
+        geometry_type=geometry_type,
+        spatial_rel=spatial_rel,
+        out_fields=out_fields,
+        out_sr=out_sr,
+        in_sr=in_sr,
+        token=token,
+        timeout=timeout,
+    )
 
 
 def _convert_geometry(geometry: dict | str, geometry_type: str) -> str:
@@ -324,7 +795,7 @@ def _convert_geometry(geometry: dict | str, geometry_type: str) -> str:
 
     Kept under this name for callers and tests; the conversion (GeoJSON
     -> Esri, with rings wound the way Esri reads them) lives in
-    ``_geojson._convert_query_geometry``, shared with edw.
+    ``_geojson._convert_query_geometry``.
     ``geometry_type`` is unused here -- pair the result with
     ``_geometry_type_for`` to label it.
     """
@@ -382,7 +853,7 @@ def getLayerInfo(url_or_result: str | dict, token: str | None = None, timeout: i
         raise RuntimeError(f"Could not reach layer at {url!r}: {exc}") from exc
 
     if "error" in data:
-        raise ValueError(f"Layer returned an error: {_format_esri_error(data['error'])}")
+        raise esri_error("Layer returned an error", data['error'])
 
     # Two distinct shapes of "you pointed at a container, not a layer", which
     # ArcGIS reports with different keys:
@@ -557,7 +1028,7 @@ def exportImage(
     if raw.lstrip()[:1] == b"{":
         try:
             err = json.loads(raw.decode("utf-8", errors="replace")).get("error", {})
-            raise ValueError(f"exportImage error: {_format_esri_error(err)}")
+            raise esri_error("exportImage error", err)
         except json.JSONDecodeError:
             raise ValueError(f"exportImage returned unexpected content: {raw[:300]!r}") from None
 
@@ -762,7 +1233,7 @@ def computeStatisticsHistograms(
         raise RuntimeError(f"Could not reach ImageServer at {stats_url!r}: {exc}") from exc
 
     if "error" in data:
-        raise ValueError(f"computeStatisticsHistograms error: {_format_esri_error(data['error'])}")
+        raise esri_error("computeStatisticsHistograms error", data['error'])
 
     statistics = data.get("statistics") or []
     histograms = data.get("histograms") or []
@@ -899,7 +1370,7 @@ def identifyPixelValue(
         raise RuntimeError(f"Could not reach ImageServer at {identify_url!r}: {exc}") from exc
 
     if "error" in data:
-        raise ValueError(f"identify error: {_format_esri_error(data['error'])}")
+        raise esri_error("identify error", data['error'])
 
     props = data.get("properties") or {}
     catalog = data.get("catalogItems") or {}
@@ -1130,7 +1601,7 @@ def queryBoundary(
         raise RuntimeError(f"Could not reach ImageServer at {boundary_url!r}: {exc}") from exc
 
     if "error" in data:
-        raise ValueError(f"queryBoundary error: {_format_esri_error(data['error'])}")
+        raise esri_error("queryBoundary error", data['error'])
 
     geom = _esri_geometry_to_geojson(data.get("shape")) or {}
     return {**geom, "area": data.get("area")}

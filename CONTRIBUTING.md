@@ -65,14 +65,14 @@ degrades freshness rather than destroying the fixture.
 
 ## The theme table
 
-`edw._SERVICE_THEMES` is hand-curated and rots as EDW publishes and retires
+`georest.usfs.edw._SERVICE_THEMES` is hand-curated and rots as EDW publishes and retires
 services. Check it with:
 
 ```bash
 georest-check-themes --emit
 ```
 
-Paste the emitted entries into `src/georest/esri/edw.py` under the right theme
+Paste the emitted entries into `src/georest/usfs/edw.py` under the right theme
 heading, replacing `THEME` with the correct category from `edw.VALID_THEMES`.
 
 ## Notebooks
