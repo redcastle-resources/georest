@@ -1,4 +1,4 @@
-// A grouped wind layer (geeViz.weather.addWindLayer) in Delta: the legend is
+// A grouped wind layer (geeViz.weather.addWindLayer) in geoView: the legend is
 // the speed ramp with a particle crossing it, and the layer has a second
 // opacity slider for the particles, as in the original viewer.
 import { test } from "node:test";

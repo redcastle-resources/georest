@@ -1,4 +1,4 @@
-// ArcGIS renderers (a layer's drawingInfo.renderer), drawn by Delta as the
+// ArcGIS renderers (a layer's drawingInfo.renderer), drawn by geoView as the
 // ArcGIS JS API draws them: which symbol each feature gets (simple, unique
 // value, class breaks), visual variables (color, size, transparency and
 // rotation by a field), and the legend built from the same renderer.
@@ -142,7 +142,7 @@ function makeLegend(title, items, r, geom, note) {
   return legend;
 }
 
-const ARCADE = "This layer's renderer uses an Arcade expression, which Delta does not run: features are drawn with one symbol.";
+const ARCADE = "This layer's renderer uses an Arcade expression, which geoView does not run: features are drawn with one symbol.";
 
 function simple(r, geom) {
   const symbol = r.symbol || defaultSymbol(geom);
@@ -232,7 +232,7 @@ function classBreaks(r, geom) {
   };
 }
 
-// A renderer type Delta does not draw: the default symbol, and the legend says so.
+// A renderer type geoView does not draw: the default symbol, and the legend says so.
 function unknown(r, geom) {
   const symbol = r.defaultSymbol || r.symbol || defaultSymbol(geom);
   return {

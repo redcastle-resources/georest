@@ -1,9 +1,9 @@
-// Chart area on ArcGIS services, as Delta charts Earth Engine layers: an
+// Chart area on ArcGIS services, as geoView charts Earth Engine layers: an
 // image service's class areas from computeHistograms (over time for a
 // time-enabled service, and class transitions between periods for a
 // Sankey), and a feature layer's features counted (or summed) by a field
 // with outStatistics. Answers are shaped as Earth Engine's reductions, so
-// Delta's own chart builders (engine/areachart.js) format them: units,
+// geoView's own chart builders (engine/areachart.js) format them: units,
 // percentages, class names and colors.
 import { esriRequest, serviceInfo, normalizeUrl, toEsriPolygon, timeSteps, catalogYears, isWebMercator } from "./rest.js";
 import { classInfoOf } from "./identify.js";

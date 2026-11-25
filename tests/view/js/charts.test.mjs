@@ -88,7 +88,7 @@ test("stackBandNames is label-major, band-minor like prepare_for_reduction", () 
   assert.deepEqual(stackBandNames(["2020", "2021"], ["a", "b"]), ["2020----a", "2020----b", "2021----a", "2021----b"]);
 });
 
-// Delta charts a label whose histogram is missing, null or empty as a gap
+// geoView charts a label whose histogram is missing, null or empty as a gap
 // (null) in that band's columns; charts.py's fillna(0) makes it 0. Apply
 // exactly that difference to charts.py's output; everything else is
 // charts.py's.

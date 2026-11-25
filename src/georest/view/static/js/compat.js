@@ -1,4 +1,4 @@
-// Delta compatibility shim. Classic script, loaded before runGeeViz.js.
+// geoView compatibility shim. Classic script, loaded before runGeeViz.js.
 //
 // The generated per-session script (geeView._build_run_js) calls the original
 // viewer's globals: Map.*, map.*, areaChart.*, synchronousCenterObject(...),
@@ -16,7 +16,7 @@ let authProxyAPIURL = "";
 
 // The layer registry geeView/src/js/wind-particles.js reads, as the original
 // viewer's top-level `let layerObj`: a global lexical binding, not a property
-// of window. engine/wind.js fills it with Delta's wind layers.
+// of window. engine/wind.js fills it with geoView's wind layers.
 let layerObj = {};
 
 (function () {
@@ -39,7 +39,7 @@ let layerObj = {};
       return undefined;
     }
     if (typeof target[name] !== "function") {
-      throw new TypeError(t + "." + name + " is not a function in Delta");
+      throw new TypeError(t + "." + name + " is not a function in geoView");
     }
     return target[name].apply(target, payload);
   }
@@ -184,7 +184,7 @@ let layerObj = {};
   }
   // wind-particles.js looks up the original viewer's layer panel elements
   // (#<layer id>-spinner2, -layer-container, -class-container, -opacity...)
-  // for the layers in layerObj. Delta has no such elements, so those lookups
+  // for the layers in layerObj. geoView has no such elements, so those lookups
   // find nothing, quietly, as jQuery would. A timelapse's are filed under its
   // group key, "tl:<timeLapseID>".
   function windSelector(selector) {
@@ -216,7 +216,7 @@ let layerObj = {};
         get: function (_, key) {
           if (typeof key === "symbol") return undefined;
           return function () {
-            dispatchHandler("notify", ["$(" + JSON.stringify(String(selector)) + ")." + String(key) + "() is not available in Delta yet."]);
+            dispatchHandler("notify", ["$(" + JSON.stringify(String(selector)) + ")." + String(key) + "() is not available in geoView yet."]);
             return stub();
           };
         },

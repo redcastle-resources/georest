@@ -1,5 +1,5 @@
 // ArcGIS symbols (drawingInfo's esriSMS, esriSLS, esriSFS, esriPMS, esriPFS)
-// drawn on Delta's canvas tiles, and as legend glyphs, as the ArcGIS JS API
+// drawn on geoView's canvas tiles, and as legend glyphs, as the ArcGIS JS API
 // draws them. Sizes and widths are in points (4/3 px each).
 
 export const ptToPx = (pt) => (Number(pt) || 0) * (4 / 3);

@@ -1,4 +1,4 @@
-"""Record real ArcGIS REST responses for Delta's Esri plug-in tests.
+"""Record real ArcGIS REST responses for geoView's Esri plug-in tests.
 
 Each fixture is <name>.json: {"request": {"url", "params", "method"},
 "response": <the service's JSON>}. Tests read them through a fake fetch;

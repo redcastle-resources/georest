@@ -122,7 +122,7 @@ test("unsupported calls announce", () => {
   const n = store.get().notices;
   assert.equal(n.length, 1);
   assert.ok(n[0].includes("addPlot"));
-  assert.equal(n[0], 'addPlot is not available in Delta yet. Use Map.setSkin("original") for this map.');
+  assert.equal(n[0], 'addPlot is not available in geoView yet. Use Map.setSkin("original") for this map.');
 });
 
 test("canReorder false pins every layer, including later ones", () => {
@@ -156,7 +156,7 @@ test("removeLayer, query setters and engine hooks", () => {
   api.turnOffUserDefinedAreaCharting();
   assert.equal(store.get().tool, null);
   // port of 4map-manager.js turnOnTimeSeriesCharting: the Pixel Tools time
-  // series tool is Delta's Query tool, not Chart area
+  // series tool is geoView's Query tool, not Chart area
   api.turnOnTimeSeriesCharting();
   assert.equal(store.get().tool, "query");
   api.turnOffTimeSeriesCharting();
@@ -250,8 +250,8 @@ test("setDefaultWorkloadTag stores the tag for the Earth Engine plug-in", () => 
   assert.equal(store.get().eeWorkloadTag, "");
 });
 
-test("a Delta map script sets its workload tag through the page's Map", () => {
-  // geeView._build_run_js (Delta skin) emits Map.setDefaultWorkloadTag(...)
+test("a geoView map script sets its workload tag through the page's Map", () => {
+  // geeView._build_run_js (geoView skin) emits Map.setDefaultWorkloadTag(...)
   // instead of ee.data calls: it must reach the API through compat.js
   const { ctx } = makeContext();
   vm.runInContext(`function runGeeViz(){Map.setDefaultWorkloadTag("geeviz__t");}`, ctx);

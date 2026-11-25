@@ -1,6 +1,6 @@
 // The Query tool on ArcGIS map, tile and image services, as the ArcGIS JS
-// API's popups ask them: identify at the clicked point, within Delta's point
-// tolerance in screen pixels. Answers become Delta's own result cards.
+// API's popups ask them: identify at the clicked point, within geoView's point
+// tolerance in screen pixels. Answers become geoView's own result cards.
 import { esriRequest } from "./rest.js";
 import { layerChoice } from "./legend.js";
 import { tableResults, imageResult, seriesResult, POINT_TOLERANCE_PX } from "../engine/query.js";

@@ -1,4 +1,4 @@
-// Single observable store for Delta. All UI state lives here.
+// Single observable store for geoView. All UI state lives here.
 
 export function defaultState() {
   return {
@@ -52,7 +52,7 @@ export function defaultState() {
     title: null,
     // the viewer's name when the map has no title: {name, accent}, or null for geoView
     brand: null,
-    // Delta stacks a timelapse in layer-list order: other layers stay on
+    // geoView stacks a timelapse in layer-list order: other layers stay on
     turnOffLayersWhenTimeLapseIsOn: false,
   };
 }

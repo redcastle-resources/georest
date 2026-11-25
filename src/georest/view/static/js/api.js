@@ -1,6 +1,6 @@
 // The Map contract: every method of the original viewer's `mp` object, mapped
 // to store changes. This is the single place that translates original call
-// signatures into Delta state. Serialized EE items are kept as given; the
+// signatures into geoView state. Serialized EE items are kept as given; the
 // engine deserializes them later.
 //
 // `engine` is an object of optional hooks (layerAdded, layerRemoved,
@@ -112,7 +112,7 @@ export function createMapApi(store, engine = {}) {
     viz = serialize(viz);
     push(makeLayer(kindFor(item, viz), item, viz, name, visible));
   };
-  // An ArcGIS service (Delta's Esri plug-in draws it in the browser). The
+  // An ArcGIS service (geoView's Esri plug-in draws it in the browser). The
   // kind is a first guess, from geeViz (viz.esriKind); the service's
   // metadata decides. viz.timelapse: a time-enabled service, frame by frame.
   api.addEsriLayer = (url, viz, name, visible) => {
@@ -157,7 +157,7 @@ export function createMapApi(store, engine = {}) {
   };
 
   for (const name of UNSUPPORTED) {
-    api[name] = () => notice(name + ' is not available in Delta yet. Use Map.setSkin("original") for this map.');
+    api[name] = () => notice(name + ' is not available in geoView yet. Use Map.setSkin("original") for this map.');
   }
 
   api.centerObject = (fc, async = true, callback) => hook("centerObject", fc, async, callback);
@@ -174,7 +174,7 @@ export function createMapApi(store, engine = {}) {
   api.turnOnSelectionAreaCharting = () => setTool("chart", "select", "turnOnSelectionAreaCharting");
   api.turnOffSelectionAreaCharting = () => clearTool("chart", "turnOffSelectionAreaCharting");
   // port of 4map-manager.js turnOnTimeSeriesCharting: it toggles the Pixel
-  // Tools time series tool, which is Delta's Query tool.
+  // Tools time series tool, which is geoView's Query tool.
   api.turnOnTimeSeriesCharting = () => setTool("query", null, "turnOnTimeSeriesCharting");
   api.turnOffTimeSeriesCharting = () => clearTool("query", "turnOffTimeSeriesCharting");
 

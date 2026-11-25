@@ -1,4 +1,4 @@
-// Class-transition (Sankey) data for Delta, ported from charts.py
+// Class-transition (Sankey) data for geoView, ported from charts.py
 // prepare_sankey_data: the mode of each period, one transition band per
 // consecutive period pair encoding from*10000 + 9900 + to, every pair
 // stacked and reduced in a single frequencyHistogram reduceRegion. Flows

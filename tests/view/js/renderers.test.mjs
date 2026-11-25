@@ -1,4 +1,4 @@
-// ArcGIS renderers drawn by Delta (js/esri/renderers.js, js/esri/symbols.js):
+// ArcGIS renderers drawn by geoView (js/esri/renderers.js, js/esri/symbols.js):
 // which symbol each feature gets, visual variables, and the legend built
 // from the renderer as the ArcGIS JS API builds it. Recorded drawingInfo.
 import { test } from "node:test";

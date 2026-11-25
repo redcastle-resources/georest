@@ -1,4 +1,4 @@
-// Earth Engine area charting for Delta, ported from geeViz/outputLib/charts.py
+// Earth Engine area charting for geoView, ported from geeViz/outputLib/charts.py
 // so the viewer's numbers are charts.py's numbers.
 //
 // Method from charts.py: an ImageCollection is stacked into one multi-band

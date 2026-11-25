@@ -1,4 +1,4 @@
-// Delta shell: pane layout, resize grips, hamburger, theme, tool strip, phone sheets.
+// geoView shell: pane layout, resize grips, hamburger, theme, tool strip, phone sheets.
 // The static markup lives in delta.html; this module only wires it to the store.
 
 import { logoSrc } from "../logos.js";
@@ -314,7 +314,7 @@ export function mountShell(store, { mapEl } = {}) {
     const t = store.get().title;
     if (t) el.textContent = t;
     else {
-      // the viewer's name: geoView, or the one a map document gives (geeViz Delta)
+      // the viewer's name: geoView, or the one a map document gives (geeViz geoView)
       const brand = store.get().brand || { name: "geo", accent: "View" };
       el.textContent = brand.name || "";
       if (brand.accent) {

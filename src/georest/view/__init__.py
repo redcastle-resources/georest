@@ -1,4 +1,4 @@
-"""geoView: georest's map viewer (the viewer geeViz calls Delta).
+"""geoView: georest's map viewer, and geeViz's default viewer (its "geoview" skin).
 
 The viewer's files are in ``STATIC_DIR``: a page (``geoview.html``), its
 scripts, styles and images. It reads a JSON map document and draws Earth

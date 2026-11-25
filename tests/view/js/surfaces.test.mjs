@@ -1,4 +1,4 @@
-// ArcGIS heatmap, dot density and pie chart renderers drawn by Delta
+// ArcGIS heatmap, dot density and pie chart renderers drawn by geoView
 // (js/esri/surfaces.js), on recorded drawingInfo.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -89,7 +89,7 @@ test("the recorded renderers build, draw whole tiles, and have legends", () => {
   assert.deepEqual(pie.legend("Crops").items.map((i) => i.label), ["Crops_on_Arable", "Garden_Vines", "Trees"]);
 });
 
-test("a renderer type Delta does not know draws with the default symbol and says so", () => {
+test("a renderer type geoView does not know draws with the default symbol and says so", () => {
   const r = rendererFor({ renderer: { type: "flowRenderer" } }, null, "esriGeometryPolygon");
   assert.ok(r.styleFor({}).symbol);
   assert.match(r.legend("x").note, /flowRenderer renderers are not supported/);

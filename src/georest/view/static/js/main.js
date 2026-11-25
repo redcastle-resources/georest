@@ -1,4 +1,4 @@
-// Delta entry point. Boots the store, the UI shell and the Map API.
+// geoView entry point. Boots the store, the UI shell and the Map API.
 //
 // Real boot: Google map, Earth Engine, then the generated runGeeViz(), then
 // the compat shim is installed with the real api and map so every call queued

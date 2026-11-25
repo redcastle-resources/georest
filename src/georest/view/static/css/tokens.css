@@ -1,4 +1,4 @@
-/* Delta design tokens. Teal marks what is on; orange marks what moves or is drawn. */
+/* geoView design tokens. Teal marks what is on; orange marks what moves or is drawn. */
 :root,
 [data-bs-theme="light"] {
   --dz-ground: #ece8e4;

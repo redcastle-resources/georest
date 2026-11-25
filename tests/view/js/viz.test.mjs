@@ -120,7 +120,7 @@ test("tile and dynamic services with no legend information have no legend", () =
   assert.equal(legendFor({ layerType: "dynamicMapService" }, "d"), null);
 });
 
-test("a Delta legend object in the viz wins", () => {
+test("a geoView legend object in the viz wins", () => {
   const own = { type: "outline", color: "#f00", label: "Mine" };
   assert.deepEqual(legendFor({ layerType: "geeImage", min: 0, max: 1, legend: own }, "x"), own);
 });

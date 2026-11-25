@@ -1,5 +1,5 @@
-// Wind layers: the adapter between Delta's layer engine and the shared
-// geeView/src/js/wind-particles.js, which Delta loads unchanged.
+// Wind layers: the adapter between geoView's layer engine and the shared
+// geeView/src/js/wind-particles.js, which geoView loads unchanged.
 //
 // wind-particles.js was written against the original viewer. It reads:
 //   map        the Google map (window.map), which it hands to an OverlayView

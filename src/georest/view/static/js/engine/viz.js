@@ -4,7 +4,7 @@
 // Ports of lcms-viewer 4map-manager.js buildLayer (as bundled in
 // geeView/src/js/lcms-viewer.min.js, which adds _normalizeClassProp to
 // addClassVizDicts), addClassVizDicts, getLookupDicts, getColor and the
-// legend construction of buildLayer. Delta never calls getInfo(): object
+// legend construction of buildLayer. geoView never calls getInfo(): object
 // info is fetched with evaluate().
 
 // port of 4map-manager.js colorList

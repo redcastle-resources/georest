@@ -1,4 +1,4 @@
-// Small pure helpers shared by the Delta modules.
+// Small pure helpers shared by the geoView modules.
 
 const ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 

@@ -54,7 +54,7 @@ export const SATELLITE_LABELS_STYLE = [
   { elementType: "labels.text.stroke", stylers: [{ color: "#000000" }, { weight: 2 }] },
 ];
 // port of smartAddLabelOverlay: on unless the URL says addLabelOverlay=false.
-// The original's urlParams are JSON-parsed (false); Delta's are strings.
+// The original's urlParams are JSON-parsed (false); geoView's are strings.
 export const labelsEnabled = (params) => String((params || {}).addLabelOverlay) !== "false";
 
 const SAME = 1e-7;
@@ -255,7 +255,7 @@ export function createMap(el, store) {
     gmap.fitBounds(bounds);
   }
   // port of 4map-manager.js centerObject. Always evaluates asynchronously:
-  // Delta never blocks the browser with getInfo.
+  // geoView never blocks the browser with getInfo.
   function centerObject(fc, _async, callback) {
     const done = (f) => {
       synchronousCenterObject(f);

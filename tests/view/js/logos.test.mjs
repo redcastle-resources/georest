@@ -10,8 +10,8 @@ test("a map with no brand shows the georest logo for the theme", () => {
 });
 
 test("a document that names the geeViz logo gets it", () => {
-  assert.equal(logoSrc({ name: "geeViz ", accent: "Delta", logo: "geeviz" }, "light"), "./images/geeviz-logo-light.png");
-  assert.equal(logoSrc({ name: "geeViz ", accent: "Delta", logo: "geeviz" }, "dark"), "./images/geeviz-logo-dark.png");
+  assert.equal(logoSrc({ name: "geeViz ", accent: "geoView", logo: "geeviz" }, "light"), "./images/geeviz-logo-light.png");
+  assert.equal(logoSrc({ name: "geeViz ", accent: "geoView", logo: "geeviz" }, "dark"), "./images/geeviz-logo-dark.png");
 });
 
 test("an unknown logo name falls back to georest, never to an arbitrary path", () => {

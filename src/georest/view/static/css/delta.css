@@ -1,4 +1,4 @@
-/* Delta shell: full-window map, overlay panes, map chrome, phone sheets. Colors come from tokens.css only. */
+/* geoView shell: full-window map, overlay panes, map chrome, phone sheets. Colors come from tokens.css only. */
 *, *::before, *::after { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
 body { background: var(--dz-ground); color: var(--dz-ink); font: 13px/1.45 var(--dz-font-body); overflow: hidden; }
