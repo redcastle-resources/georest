@@ -63,6 +63,23 @@ The provider modules are also re-exported at the top level, so `from georest imp
 and `from georest import waterdata` work too. They load lazily, so `import georest` costs
 almost nothing.
 
+## Maps
+
+`georest.view` draws ArcGIS services, GeoJSON and XYZ tiles on an interactive
+map, with query, legends, time lapses and area charts:
+
+```python
+from georest.view import Map
+
+Map.addEsriMapService("https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer",
+                      name="Flood hazard")
+Map.addEsriFeatureService("https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/"
+                          "WFIGS_Interagency_Perimeters_Current/FeatureServer/0", name="Fire perimeters")
+Map.setCenter(-105.1, 40.6, 9)
+Map.turnOnInspector()
+Map.view()                       # or Map.export_html("map.html")
+```
+
 ## Layout
 
 | Import path | What it covers |

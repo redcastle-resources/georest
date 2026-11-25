@@ -6,6 +6,29 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-25
+
+### Added
+
+- `georest.view`: geoView, an interactive map viewer for ArcGIS, GeoJSON and
+  XYZ tile layers (and Earth Engine layers, when a map carries them). It is
+  geeViz's Delta viewer, moved here so it can be used without Earth Engine.
+  - `from georest.view import Map` gives a map with geeViz's method names:
+    `addEsriFeatureService`, `addEsriMapService`, `addEsriImageService`,
+    `addLayer` (GeoJSON), `addTileLayer`, `addTimeLapse`,
+    `addAreaChartLayer`, `setCenter`, `centerObject`, `turnOnInspector` and
+    the rest. `Map.view()` opens it, `Map.export_html(path)` saves it as one
+    page.
+  - A map is a JSON document (`geoview: 1`, its layers, view and commands),
+    read by the page inline or from `?doc=` on the same site.
+  - `Map.view()` runs a small local server (port 8765, or `GEOVIEW_PORT`)
+    whose `/proxy` sends secured ArcGIS requests with the token added on the
+    server, so a token never reaches the page. It forwards only ArcGIS REST
+    paths on public addresses.
+  - In notebooks and exported pages, the viewer's files load from a CDN; a
+    Google Maps key ships by default and `Map.setMapsKey()` or
+    `GOOGLE_MAPS_API_KEY` replaces it.
+
 ## [0.5.2] - 2026-11-24
 
 ### Changed
