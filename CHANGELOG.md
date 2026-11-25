@@ -13,9 +13,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `examples/geoview_example.ipynb`: geoView one capability at a time, from
-  one GeoJSON layer to time lapses charted as line charts and Sankeys, charts
-  of drawn areas, and a saved web page. The other example notebooks gain
+- `examples/geoview_starter.ipynb`, the geoView starter notebook: geoView
+  one capability at a time, from one GeoJSON layer to time lapses charted as
+  line charts and Sankeys, charts of drawn areas, and a saved web page. The other example notebooks gain
   maps and charts too: time lapses with area charts in the imagery, fire
   history and USFS examples, owner groups by county in the forest inventory
   guide, and more maps in the EDW, services, streamflow and water data
