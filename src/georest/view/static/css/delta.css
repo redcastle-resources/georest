@@ -89,8 +89,6 @@ body.no-tips #tool-options:not(:has(> :not(.topt-hint))) { display: none; }
 .topt-hint { font-size: 12px; color: var(--dz-mute); display: flex; gap: 6px; align-items: flex-start; }
 .topt-hint .ti { color: var(--dz-teal); margin-top: 2px; }
 .out-h .spin { width: 11px; height: 11px; }
-.chips { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 12px 8px; }
-.chips:empty { display: none; }
 .chip { border: 1px solid var(--dz-line); background: transparent; color: var(--dz-ink); border-radius: 999px; padding: 1px 9px; font-size: 11.5px; cursor: pointer; font-family: inherit; }
 .chip:hover { border-color: var(--dz-teal); color: var(--dz-teal); }
 .chip:focus-visible { outline: 2px solid var(--dz-teal); outline-offset: 1px; }
@@ -102,6 +100,9 @@ body.no-tips #tool-options:not(:has(> :not(.topt-hint))) { display: none; }
 .card-r .h .ti-chevron-down { color: var(--dz-faint); transition: transform 0.2s; }
 .card-r.closed .h .ti-chevron-down { transform: rotate(-90deg); }
 .card-r.closed .b { display: none; }
+/* a result with nothing in it: the heading alone, nothing to open */
+.card-r.empty .h { cursor: default; }
+.card-r.empty .h b { font-weight: 500; color: var(--dz-mute); }
 .card-r .b { padding: 0 10px 10px; }
 .val-big { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; flex-wrap: wrap; }
 .val-big + .val-big { margin-top: 4px; }
@@ -214,8 +215,8 @@ table.kv tr + tr { border-top: 1px solid var(--dz-line); }
   /* Panes are as tall as their content, so the map controls only make room for a
      pane that actually reaches down to them (shell.js sets the class). The status bar
      always spans the window, below the map. */
-  body.right-over-ctl .mapctl { right: calc(var(--rw, var(--dz-right-default)) + 6px); }
-  body.no-tool.right-over-ctl .mapctl { right: calc(var(--dz-right-folded) + 6px); }
+  body.right-over-ctl .mapctl { right: var(--rw, var(--dz-right-default)); }
+  body.no-tool.right-over-ctl .mapctl { right: var(--dz-right-folded); }
   .pane-right { transition: width 0.2s ease; }
 }
 
@@ -406,12 +407,14 @@ body.left-hidden .status, body.left-hidden .loadbar { left: 0; }
 /* the Street View man while he is dragged onto the map */
 .sv-ghost { position: fixed; z-index: 50; width: 34px; height: 34px; margin: -30px 0 0 -17px; display: grid; place-items: center; border-radius: 50%; background: #f5b400; color: #1b1716; font-size: 22px; box-shadow: var(--dz-shadow); pointer-events: none; }
 #svBtn { touch-action: none; }
-.mapctl { position: absolute; z-index: 3; right: calc(var(--rw, var(--dz-right-default)) + 6px); bottom: calc(var(--dz-status-h) + var(--dz-gstrip)); display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+.mapctl { position: absolute; z-index: 3; right: var(--rw, var(--dz-right-default)); bottom: calc(var(--dz-status-h) + var(--dz-gstrip)); display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
 /* desktop defaults for content-height panes: span the window and hug the right edge;
    the body.right-over-ctl rules above make room for a pane that reaches down */
 @media (min-width: 761px) {
   .status { left: 0; right: 0; }
-  .mapctl { right: 6px; }
+  .mapctl { right: 0; }
+  /* docked: square and borderless on the edge they meet */
+  .mapctl .ctlgrp, .mapctl .basemaps { border-right: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; }
 }
 .ctlgrp { display: flex; flex-direction: column; background: var(--dz-panel); backdrop-filter: blur(10px); border: 1px solid var(--dz-line); border-radius: 10px; overflow: hidden; box-shadow: var(--dz-shadow); }
 .ctlgrp .ib { border-radius: 0; color: var(--dz-ink); }
@@ -455,14 +458,14 @@ body.left-hidden .floating-hb { display: inline-grid; }
   /* one pane, two sheets: Tools holds the tool tabs and settings, Output the results */
   body.m-tools #pane-right .out-h, body.m-tools #chips, body.m-tools #results-mount { display: none; }
   /* the Tools sheet is as tall as the tool tabs and settings, up to the usual sheet height */
-  body.m-tools:not(.m-full) .pane-right { height: auto; max-height: 62vh; }
+  body.m-tools:not(.m-full) .pane-right, body.m-output:not(.m-full) .pane-right { height: auto; max-height: 62vh; }
   body.m-output #pane-right .tools, body.m-output #pane-right .units, body.m-output #tool-options { display: none; }
   .mtab-ic { position: relative; display: inline-flex; }
   .mdot { position: absolute; top: -1px; right: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--dz-orange); box-shadow: 0 0 0 2px var(--dz-panel); }
   .mdot[hidden] { display: none; }
   /* the active tool, beside the Tools icon */
-  .mtool { position: absolute; top: -5px; left: calc(100% + 1px); width: 17px; height: 17px; display: grid; place-items: center; border-radius: 50%; background: var(--dz-teal); color: var(--dz-on-accent); box-shadow: 0 0 0 2px var(--dz-panel); }
-  .mtool .ti { font-size: 11px; }
+  .mtool { position: absolute; top: 50%; left: calc(100% + 2px); transform: translateY(-50%); display: grid; place-items: center; color: var(--dz-teal); line-height: 1; }
+  .mtabs .mtool .ti { font-size: 13px; }
   .mtool[hidden] { display: none; }
   body.left-hidden .pane-left { transform: translateY(calc(100% + 70px)); }
   body.m-full .pane { height: calc(100vh - 140px); }
@@ -479,6 +482,7 @@ body.left-hidden .floating-hb { display: inline-grid; }
   .mapctl { right: 10px; top: 64px; bottom: auto; }
   /* the map ends at the tab bar, so Google's strip (logo, scale, credits) shows above it */
   #map { bottom: 64px; }
+  body.sv #map { bottom: 0; }
   /* zoom and full screen are the phone's own gestures; Street View has none, so its button stays, under the basemaps */
   .mapctl .ctlgrp { order: 2; padding: 0; background: none; border: 0; box-shadow: none; backdrop-filter: none; }
   .mapctl .ctlgrp [data-act] { display: none; }

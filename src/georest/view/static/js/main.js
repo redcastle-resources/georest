@@ -59,7 +59,6 @@ const toolsUI = mountTools(store, {
 const outputUI = mountOutput(store, {
   mountEl: document.getElementById("results-mount"),
   whereEl: document.getElementById("where"),
-  chipsEl: document.getElementById("chips"),
   busyEl: document.getElementById("out-busy"),
   notify: notice,
   query: () => queryTool,

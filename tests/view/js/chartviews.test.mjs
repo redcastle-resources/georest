@@ -8,7 +8,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chartParams, lineResult, sankeyResult } from "../../../src/georest/view/static/js/engine/areachart.js";
 import { chartFigure, barData, quantile, pngTitle, pngLegend } from "../../../src/georest/view/static/js/charts/plotly.js";
-import { sankeyGraph, nodeLabelShown, linkTip, sankeyTitle, wrapText } from "../../../src/georest/view/static/js/charts/sankey.js";
+import { sankeyGraph, nodeLabelShown, linkTip, sankeyTitle, wrapText, sankeySizes, SANKEY_PNG_WIDTH } from "../../../src/georest/view/static/js/charts/sankey.js";
 
 const FIX = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "charts");
 const load = (n) => JSON.parse(readFileSync(join(FIX, n), "utf-8"));
@@ -173,4 +173,24 @@ test("saved Sankey image: title lines wrap to the chart width", () => {
   assert.deepEqual(wrapText("short", 160, measure), ["short"]);
   // a word longer than the width gets its own line rather than vanishing
   assert.deepEqual(wrapText("a verylongwordthatoverflows b", 100, measure), ["a", "verylongwordthatoverflows", "b"]);
+});
+
+test("a saved Sankey is drawn at the line and bar charts' width, its type sized for it", () => {
+  // on screen: the card's width, the sizes it always had
+  assert.deepEqual(sankeySizes(300), { W: 300, H: 216, font: 10, colFont: 10, nodeWidth: 9, nodePadding: 7, minLabel: 10, top: 18 });
+  assert.equal(sankeySizes(100).W, 240);
+  // saved: 900 px wide, as the line and bar charts are (plotly.js chartPng),
+  // with type and nodes in proportion, not a small card scaled up
+  assert.equal(SANKEY_PNG_WIDTH, 900);
+  const big = sankeySizes(SANKEY_PNG_WIDTH, { saved: true });
+  assert.equal(big.W, 900);
+  assert.equal(big.H, 600);
+  assert.ok(big.font >= 12 && big.font <= 14, big.font);
+  assert.ok(big.colFont >= 12, big.colFont);
+  assert.ok(big.nodeWidth > 9 && big.nodePadding > 7, big);
+  assert.equal(big.minLabel, big.font);
+  assert.ok(big.top >= big.colFont + 8, big);
+  // a node too short for its label hides it, at either size
+  assert.equal(nodeLabelShown({ col: 0, y0: 0, y1: 11 }, 3, big.minLabel), false);
+  assert.equal(nodeLabelShown({ col: 0, y0: 0, y1: 14 }, 3, big.minLabel), true);
 });

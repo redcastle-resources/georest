@@ -8,7 +8,19 @@
 import { downloadUrl } from "./theme.js";
 
 const LINK_OPACITY = 0.55;
-const MIN_LABEL_HEIGHT = 10;
+
+// The saved image's width: the line and bar charts' (plotly.js chartPng).
+export const SANKEY_PNG_WIDTH = 900;
+
+// Sizes for a diagram drawn at a width. On screen it fills the card, with
+// small type. Saved, it is drawn again at SANKEY_PNG_WIDTH by 600, as the
+// line and bar charts are, with type and nodes in proportion to that, rather
+// than the card's small diagram scaled up.
+export function sankeySizes(width, { saved = false } = {}) {
+  if (saved) return { W: width, H: Math.round((width * 2) / 3), font: 13, colFont: 12, nodeWidth: 14, nodePadding: 10, minLabel: 13, top: 22 };
+  const W = Math.max(240, Math.round(width || 300));
+  return { W, H: Math.round(W * 0.72), font: 10, colFont: 10, nodeWidth: 9, nodePadding: 7, minLabel: 10, top: 18 };
+}
 
 // The d3-sankey graph for a Sankey result: one node per period and class
 // that carries flow, links re-indexed to them, colors from the classes.
@@ -39,8 +51,8 @@ export function sankeyGraph(r) {
 }
 
 // Outer columns only, and only nodes tall enough to hold a line of text.
-export function nodeLabelShown(node, columnCount) {
-  return (node.col === 0 || node.col === columnCount - 1) && node.y1 - node.y0 > MIN_LABEL_HEIGHT;
+export function nodeLabelShown(node, columnCount, minHeight = 10) {
+  return (node.col === 0 || node.col === columnCount - 1) && node.y1 - node.y0 > minHeight;
 }
 
 const fmt = (v) => (typeof v === "number" ? v.toLocaleString("en-US", { maximumFractionDigits: 3 }) : String(v));
@@ -89,8 +101,9 @@ function hideTip() {
 
 let uid = 0;
 
-// Draw a Sankey result into el at el's width. Returns the svg element.
-export function renderSankey(el, r, theme) {
+// Draw a Sankey result into el at el's width (opts.saved: at opts.width,
+// sized for a saved image). Returns the svg element.
+export function renderSankey(el, r, theme, opts = {}) {
   const d3 = window.d3;
   el.replaceChildren();
   if (!d3 || !d3.sankey) return null;
@@ -103,9 +116,8 @@ export function renderSankey(el, r, theme) {
     return null;
   }
   const unit = r.data.unitText;
-  const W = Math.max(240, Math.round(el.clientWidth || 300));
-  const H = Math.round(W * 0.72);
-  const top = 18;
+  const sz = opts.saved ? sankeySizes(opts.width || SANKEY_PNG_WIDTH, { saved: true }) : sankeySizes(el.clientWidth || 300);
+  const { W, H, top } = sz;
   const id = "dzsk" + ++uid;
   const svg = d3
     .select(el)
@@ -116,8 +128,8 @@ export function renderSankey(el, r, theme) {
     .attr("height", H);
   const sankey = d3
     .sankey()
-    .nodeWidth(9)
-    .nodePadding(7)
+    .nodeWidth(sz.nodeWidth)
+    .nodePadding(sz.nodePadding)
     .nodeSort(null)
     .extent([
       [1, top],
@@ -179,7 +191,7 @@ export function renderSankey(el, r, theme) {
   // --- Labels: outer columns, halo in the background color ---
   const last = g.columns.length - 1;
   nodeG
-    .filter((dd) => nodeLabelShown(dd, g.columns.length))
+    .filter((dd) => nodeLabelShown(dd, g.columns.length, sz.minLabel))
     .append("text")
     .attr("class", "node-label")
     .attr("x", (dd) => (dd.col === last ? dd.x0 - 4 : dd.x1 + 4))
@@ -190,7 +202,7 @@ export function renderSankey(el, r, theme) {
     .attr("stroke", theme.solid)
     .attr("stroke-width", 3)
     .attr("paint-order", "stroke")
-    .attr("font-size", 10)
+    .attr("font-size", sz.font)
     .attr("font-weight", 600)
     .attr("font-family", theme.font)
     .text((dd) => dd.name);
@@ -203,10 +215,10 @@ export function renderSankey(el, r, theme) {
       .append("text")
       .attr("class", "col-label")
       .attr("x", x)
-      .attr("y", 11)
+      .attr("y", sz.colFont + 1)
       .attr("text-anchor", ci === 0 ? "start" : ci === last ? "end" : "middle")
       .attr("fill", theme.faint)
-      .attr("font-size", 10)
+      .attr("font-size", sz.colFont)
       .attr("font-family", theme.mono)
       .text(p);
   });
@@ -240,14 +252,26 @@ export function wrapText(text, maxW, measure) {
   if (cur) lines.push(cur);
   return lines;
 }
-const TITLE = { size: 16, lead: 20 };
-const SUB = { size: 11, lead: 15 };
+// as the line and bar charts' saved titles (plotly.js pngTitle)
+const TITLE = { size: 17, lead: 22 };
+const SUB = { size: 12, lead: 16 };
 
 // port of D3_SANKEY_TEMPLATE's PNG download: serialize the SVG over a
 // background rect, draw it on a 2x canvas, save the PNG. A title band goes
-// above the chart (the original saved it untitled).
+// above the chart (the original saved it untitled). The diagram is drawn
+// again off screen at SANKEY_PNG_WIDTH, so a small card saves a full-size
+// chart with its type in proportion.
 export function sankeyPng(el, filename, theme, r) {
-  const svgEl = el && el.querySelector("svg");
+  let svgEl = null;
+  let scratch = null;
+  if (r && window.d3 && window.d3.sankey) {
+    scratch = document.createElement("div");
+    scratch.style.cssText = `position:fixed;left:-20000px;top:0;width:${SANKEY_PNG_WIDTH}px`;
+    document.body.appendChild(scratch);
+    svgEl = renderSankey(scratch, r, theme, { saved: true, width: SANKEY_PNG_WIDTH });
+    scratch.remove();
+  }
+  svgEl = svgEl || (el && el.querySelector("svg"));
   if (!svgEl) return Promise.resolve(null);
   const NS = "http://www.w3.org/2000/svg";
   const W = Number(svgEl.getAttribute("width"));

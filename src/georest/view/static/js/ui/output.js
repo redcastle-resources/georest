@@ -284,7 +284,18 @@ function nameEnd(r) {
   return p ? " Queried Values for Lng " + p.lng.toFixed(3) + " Lat " + p.lat.toFixed(3) : "";
 }
 
-export function mountOutput(store, { mountEl, whereEl, chipsEl, busyEl, notify, query, measure } = {}) {
+// A result with nothing in it (no features, no data): its heading says so,
+// and there is nothing to open.
+export function isEmptyResult(r) {
+  const d = (r && r.data) || {};
+  if (d.error) return false;
+  if (r.kind === "table") return !(d.rows || []).length;
+  if (r.kind === "value") return !(d.bands || []).length;
+  if (r.kind === "series") return !(d.series || []).length;
+  return false;
+}
+
+export function mountOutput(store, { mountEl, whereEl, busyEl, notify, query, measure } = {}) {
   const phoneMq = matchMedia("(max-width: 760px)");
   const cards = new Map(); // result id -> {el, result, body}
   const closed = new Set();
@@ -330,6 +341,13 @@ export function mountOutput(store, { mountEl, whereEl, chipsEl, busyEl, notify, 
     const card = el("div", "card-r");
     card.dataset.rid = r.id;
     const h = el("div", "h");
+    if (isEmptyResult(r)) {
+      // as though collapsed, with nothing to expand
+      card.classList.add("empty");
+      h.append(el("b", null, r.title), el("span", "val-code mono", r.meta));
+      card.appendChild(h);
+      return { el: card, result: r, body: {} };
+    }
     h.setAttribute("role", "button");
     h.tabIndex = 0;
     h.append(el("b", null, r.title), el("span", "val-code mono", r.meta), el("i", "ti ti-chevron-down"));
@@ -517,22 +535,6 @@ export function mountOutput(store, { mountEl, whereEl, chipsEl, busyEl, notify, 
       if (mountEl.children[i] !== n) mountEl.insertBefore(n, mountEl.children[i] || null);
     });
     fresh.forEach((c) => c.body._plot && c.body._plot());
-
-    // jump chips: two or more results
-    if (chipsEl) {
-      const chips = !infoMode && results.length > 1 ? results : [];
-      chipsEl.replaceChildren(
-        ...chips.map((r) => {
-          const c = el("button", "chip", r.title + (results.filter((x) => x.title === r.title).length > 1 ? " (" + r.meta + ")" : ""));
-          c.type = "button";
-          c.addEventListener("click", () => {
-            const card = cards.get(r.id);
-            if (card) card.el.scrollIntoView({ behavior: "smooth", block: "start" });
-          });
-          return c;
-        })
-      );
-    }
 
     // phones in infoWindow mode: point results open in a Google info window
     const q = getQuery();
