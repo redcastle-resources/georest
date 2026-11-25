@@ -219,7 +219,7 @@ async function boot() {
     let doc = null;
     if (slot && slot.textContent.trim()) doc = JSON.parse(slot.textContent);
     else {
-      const url = documentUrl(location.search, location.origin);
+      const url = documentUrl(location.search, location.href);
       if (url) {
         const res = await fetch(url, { credentials: "same-origin" });
         if (!res.ok) throw new Error("the server answered " + res.status);

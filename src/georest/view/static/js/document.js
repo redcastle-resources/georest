@@ -21,14 +21,16 @@ export const COMMANDS = [
 ];
 const PROPERTIES = ["canReorderLayers", "turnOffLayersWhenTimeLapseIsOn"];
 
-// The document's URL from the page's ?doc=, only when it is on the page's
-// own origin (a map is never read from another site); else null.
-export function documentUrl(search, origin) {
+// The document's URL from the page's ?doc= (resolved against the page's own
+// address, so a path relative to the page works behind a path prefix), only
+// when it is on the page's own origin (a map is never read from another
+// site); else null.
+export function documentUrl(search, pageUrl) {
   const v = new URLSearchParams(search).get("doc");
   if (!v) return null;
   try {
-    const u = new URL(v, origin);
-    return u.origin === new URL(origin).origin ? u.href : null;
+    const u = new URL(v, pageUrl);
+    return u.origin === new URL(pageUrl).origin ? u.href : null;
   } catch (e) {
     return null;
   }

@@ -74,6 +74,9 @@ test("a document is fetched only from the page's own origin", () => {
   assert.equal(documentUrl("?doc=https://evil.example/x.json", o), null);
   assert.equal(documentUrl("?doc=//evil.example/x.json", o), null);
   assert.equal(documentUrl("?other=1", o), null);
+  // a path relative to the page (geeViz behind a path prefix, as on Workbench)
+  assert.equal(documentUrl("?doc=../geeView/src/gee/gee-run/map-a.json", "https://host/proxy/8001/geoview/geoview.html?doc=x"), "https://host/proxy/8001/geeView/src/gee/gee-run/map-a.json");
+  assert.equal(documentUrl("?doc=../../../../evil", "https://host/geoview/geoview.html"), "https://host/evil");
 });
 
 test("a chart-only ArcGIS layer: charted, not drawn, listed or queried", async () => {
