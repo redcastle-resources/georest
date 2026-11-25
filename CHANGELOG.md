@@ -6,6 +6,21 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `Map.view()` in a notebook no longer prints IPython's "Consider using
+  IPython.display.IFrame instead" warning under every map.
+
+### Changed
+
+- The example notebooks map with `georest.view` instead of folium, and every
+  example with something to place on a map now has one: the guides to fire
+  history, streamflow, imagery services and forest inventory (Oregon's FIA
+  county estimates, by county), and the EDW, water data, services and USFS
+  examples. The fire history guide asks EDW to simplify perimeters
+  (`max_allowable_offset`) instead of thinning them in Python, which had
+  collapsed every ring. The `examples` extra no longer installs folium.
+
 ## [0.6.0] - 2026-11-25
 
 ### Added

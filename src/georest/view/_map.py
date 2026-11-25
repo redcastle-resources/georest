@@ -507,8 +507,10 @@ def _interactive() -> bool:
 
 
 def _display_html(markup):
-    from IPython.display import HTML, display
-    display(HTML(markup))
+    # published as text/html directly: IPython's HTML() warns about markup
+    # that is one <iframe>, and the warning would show under every map
+    from IPython.display import display
+    display({"text/html": markup}, raw=True)
 
 
 def _display_frame(url, height):

@@ -43,7 +43,7 @@ Map.addLayer("https://basemap.nationalmap.gov/arcgis/rest/services/USGSHydroCach
 
 # GeoJSON: a URL (loaded by the viewer), text, or a dict
 Map.addLayer("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson",
-             {"strokeColor": "d62728", "pointRadius": 6}, "Earthquakes this week (GeoJSON URL)", visible=False)
+             {"strokeColor": "d62728", "strokeWeight": 4}, "Earthquakes this week (GeoJSON URL)", visible=False)
 Map.addLayer({"type": "Feature", "properties": {"name": "Cameron Peak study area"},
               "geometry": {"type": "Polygon", "coordinates": [[[-105.9, 40.5], [-105.5, 40.5], [-105.5, 40.75],
                                                                [-105.9, 40.75], [-105.9, 40.5]]]}},

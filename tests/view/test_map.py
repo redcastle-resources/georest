@@ -205,6 +205,22 @@ def test_a_notebook_map_is_a_self_contained_page(monkeypatch):
     assert "<script" not in frame  # the page is escaped into the attribute
 
 
+def test_a_notebook_map_shows_without_a_warning(monkeypatch):
+    """IPython's HTML() warns ("Consider using IPython.display.IFrame") for
+    markup that is one <iframe>; that warning landed under every map in a
+    notebook. The frame is published as text/html directly instead."""
+    pytest.importorskip("IPython")
+    import warnings
+    import IPython.display
+    from georest.view import _map
+    published = []
+    monkeypatch.setattr(IPython.display, "display", lambda *a, **k: published.append((a, k)))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        _map._display_html('<iframe srcdoc="x"></iframe>')
+    ((args, kwargs),) = published
+    assert args == ({"text/html": '<iframe srcdoc="x"></iframe>'},) and kwargs == {"raw": True}
+
 def test_a_notebook_map_with_a_secured_layer_uses_the_local_server(monkeypatch):
     from georest.view import _map
     shown = []
