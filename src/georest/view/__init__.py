@@ -15,3 +15,21 @@ You may obtain a copy of the License at
 import os
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+
+from ._map import mapper  # noqa: E402  (after STATIC_DIR, which the modules read)
+
+#: The module's map, as geeViz's ``geeViz.geeView.Map``; ``mapper()`` makes another.
+Map = mapper()
+
+
+def view(open_browser=None, open_iframe=None, iframe_height=525):
+    """Show ``Map`` (see :meth:`mapper.view`)."""
+    return Map.view(open_browser=open_browser, open_iframe=open_iframe, iframe_height=iframe_height)
+
+
+def export_html(filename=None, asset_base=None, title=None):
+    """Write ``Map`` as a page (see :meth:`mapper.export_html`)."""
+    return Map.export_html(filename=filename, asset_base=asset_base, title=title)
+
+
+__all__ = ["Map", "mapper", "view", "export_html", "STATIC_DIR"]

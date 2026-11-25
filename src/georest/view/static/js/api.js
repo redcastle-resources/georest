@@ -8,7 +8,7 @@
 // hideSpinner, populateChartLayerSelect, ...). Missing hooks are ignored.
 
 import { particleOpacityFor } from "./engine/viz.js";
-import { isTimelapseKind } from "./util.js";
+import { isTimelapseKind, isChartOnly } from "./util.js";
 
 const UNSUPPORTED = ["addExport", "addPlot", "addFeatureView", "addREST", "addMBSankey", "addSelectLayerGroup"];
 
@@ -71,7 +71,7 @@ export function createMapApi(store, engine = {}) {
       // a grouped wind layer's second slider (see particleOpacityFor)
       ...(particleOpacityFor(viz) === undefined ? {} : { particleOpacity: particleOpacityFor(viz) }),
       // port of 4map-manager.js addSelectLayerToMap: select layers set canQuery = false
-      queryable: viz.canQuery !== false && kind !== "areaChartOnly" && kind !== "select",
+      queryable: viz.canQuery !== false && kind !== "areaChartOnly" && !viz.chartOnly && kind !== "select",
       ...extra,
     };
     layer.pinned = isPinned(layer, store.get().canReorder);
@@ -83,7 +83,7 @@ export function createMapApi(store, engine = {}) {
       (s) => ({
         ...s,
         layers: [...s.layers, layer],
-        order: layer.kind === "areaChartOnly" ? s.order : [layer.id, ...s.order],
+        order: isChartOnly(layer) ? s.order : [layer.id, ...s.order],
       }),
       "addLayer"
     );
@@ -118,7 +118,8 @@ export function createMapApi(store, engine = {}) {
   api.addEsriLayer = (url, viz, name, visible) => {
     viz = viz || {};
     const kind = viz.timelapse ? "esri.timelapse" : viz.esriKind || "esri.map";
-    push(makeLayer(kind, String(url), viz, name, visible));
+    // chartOnly: charted by Chart area, never drawn (Map.addAreaChartLayer)
+    push(makeLayer(kind, String(url), viz, name, visible, viz.chartOnly ? { chartable: true, chartOnly: true } : {}));
   };
   api.addTimeLapse = (item, viz, name, visible) => {
     push(makeLayer("timelapse", item, viz || {}, name, visible));
@@ -191,7 +192,7 @@ export function createMapApi(store, engine = {}) {
   // Every layer in the layer list on or off (not select or area-chart-only layers).
   const setAllVisible = (visible, reason) =>
     store.update(
-      (s) => ({ ...s, layers: s.layers.map((l) => (l.kind === "select" || l.kind === "areaChartOnly" ? l : { ...l, visible })) }),
+      (s) => ({ ...s, layers: s.layers.map((l) => (l.kind === "select" || isChartOnly(l) ? l : { ...l, visible })) }),
       reason
     );
   api.turnOffAllLayers = () => setAllVisible(false, "turnOffAllLayers");

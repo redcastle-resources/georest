@@ -11,6 +11,7 @@
 //
 // The only DOM this module touches is through Google map objects (markers,
 // rectangles, Data layers and the InfoWindow, whose content the UI builds).
+import { isChartOnly } from "../util.js";
 import { smartToFixed, tokenSource } from "../util.js";
 import { addColorHash } from "./viz.js";
 import { lazyEE } from "./ee.js";
@@ -451,7 +452,7 @@ export function errorResult(layer, point, err) {
 // port of 4map-manager.js addSelectLayerToMap (viz.canQuery = false): select
 // layers are never point queried; their selections feed Chart area.
 export function queryableLayers(layers) {
-  return layers.filter((l) => l.visible && l.queryable && l.kind !== "areaChartOnly" && l.kind !== "select" && canQuery(l.kind));
+  return layers.filter((l) => l.visible && l.queryable && !isChartOnly(l) && l.kind !== "select" && canQuery(l.kind));
 }
 
 // A layer kind the Query tool can ask: its plug-in has a query.

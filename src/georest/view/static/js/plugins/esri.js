@@ -52,6 +52,7 @@ export const esriPlugin = {
   ownsViz: true,
   // a time-enabled service played frame by frame (engine/timelapse.js)
   start(layer, ctx) {
+    if (layer.chartOnly) return true; // charted, never drawn
     if (layer.kind !== "esri.timelapse") return false;
     ctx.addTimelapse(layer, esriFrameLoader);
     return true;

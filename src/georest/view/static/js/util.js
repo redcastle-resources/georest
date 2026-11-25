@@ -6,6 +6,9 @@ const ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&
 // time-enabled ArcGIS service.
 export const isTimelapseKind = (kind) => kind === "timelapse" || kind === "esri.timelapse";
 export const isTimelapse = (layer) => !!layer && isTimelapseKind(layer.kind);
+// A layer that is charted but never drawn, listed or queried: an Earth Engine
+// area-chart-only layer, or an ArcGIS layer added with chartOnly.
+export const isChartOnly = (layer) => !!layer && (layer.kind === "areaChartOnly" || !!layer.chartOnly);
 
 export function escapeText(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ESCAPES[c]);

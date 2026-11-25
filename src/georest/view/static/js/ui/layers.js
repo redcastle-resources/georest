@@ -9,7 +9,7 @@
 // and urlParams.layerOrders.
 import { legendMarkup, swatchColors, gradient, cometGradient, restorePinned, orderFromStored, toStoredOrder, isSymbolLegend, vectorGlyphs } from "./legend.js";
 import { timelapseBlock } from "./timelapse.js";
-import { isTimelapse } from "../util.js";
+import { isTimelapse, isChartOnly } from "../util.js";
 
 const LIST_ID = "layer-list";
 // Area-chart-only layers have no row. Select layers are listed (Task 7) but,
@@ -22,7 +22,7 @@ const patchLayer = (store, id, p, reason) =>
 
 export function setAllVisible(store, visible, reason) {
   store.update(
-    (s) => ({ ...s, layers: s.layers.map((l) => (NOT_ALL_KINDS.indexOf(l.kind) > -1 ? l : { ...l, visible })) }),
+    (s) => ({ ...s, layers: s.layers.map((l) => (NOT_ALL_KINDS.indexOf(l.kind) > -1 || isChartOnly(l) ? l : { ...l, visible })) }),
     reason
   );
 }

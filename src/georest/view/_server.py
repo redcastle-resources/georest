@@ -30,6 +30,7 @@ import urllib.request
 
 from . import STATIC_DIR
 from ._document import to_json
+from ._page import with_maps_key
 
 DEFAULT_PORT = 8765
 _REST_PATHS = ("/rest/services/", "/sharing/rest/")
@@ -132,6 +133,8 @@ class ViewServer:
     def __init__(self):
         self.docs = {}
         self.tokens = {}
+        # the Google Maps key the page is served with (None: the shipped one)
+        self.maps_key = None
         self.port = None
         self.base = None
         self._httpd = None
@@ -219,6 +222,8 @@ def _handler_for(server: ViewServer):
                     with open(full, "rb") as f:
                         data = f.read()
                     ext = os.path.splitext(full)[1].lower()
+                    if server.maps_key and os.path.basename(full) == "geoview.html":
+                        data = with_maps_key(data.decode("utf-8"), server.maps_key).encode("utf-8")
                     return self._send(200, data, _TYPES.get(ext) or mimetypes.guess_type(full)[0] or "application/octet-stream")
             self._send(404, b"not found")
 

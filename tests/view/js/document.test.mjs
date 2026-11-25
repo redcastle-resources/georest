@@ -75,3 +75,18 @@ test("a document is fetched only from the page's own origin", () => {
   assert.equal(documentUrl("?doc=//evil.example/x.json", o), null);
   assert.equal(documentUrl("?other=1", o), null);
 });
+
+test("a chart-only ArcGIS layer: charted, not drawn, listed or queried", async () => {
+  const { chartJobs } = await import("../../../src/georest/view/static/js/engine/areachart.js");
+  const { queryableLayers } = await import("../../../src/georest/view/static/js/engine/query.js");
+  const { esriPlugin } = await import("../../../src/georest/view/static/js/plugins/esri.js");
+  const s = setup();
+  applyDocument({ api: s.api }, { geoview: 1, layers: [{ id: "c", type: "esri.image", name: "Classes", visible: true, viz: { canAreaChart: true, chartOnly: true }, source: { url: "https://x/arcgis/rest/services/a/ImageServer" } }] }, { notify: s.notify });
+  const st = s.store.get();
+  const l = st.layers[0];
+  assert.equal(l.chartOnly, true);
+  assert.deepEqual(st.order, [], "no row in the layer list");
+  assert.deepEqual(chartJobs(st).map((j) => j.layer.name), ["Classes"]);
+  assert.deepEqual(queryableLayers(st.layers), []);
+  assert.equal(esriPlugin.start(l, { addTimelapse: () => assert.fail("not a timelapse") }), true, "never drawn");
+});

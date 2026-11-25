@@ -4,6 +4,7 @@
 // mockup's renderResults and card(); the time series chart is a port of
 // 5chart-manager.js makeQueryTable (Plotly, lines and markers, class names
 // as y tick labels). Names, labels and values are set as text.
+import { isChartOnly } from "../util.js";
 import { formatArea, smartToFixed } from "../util.js";
 import { breakLabels, resultCsv, resultText, isInfoWindowMode } from "../engine/query.js";
 import { chartCsv } from "../engine/areachart.js";
@@ -433,7 +434,7 @@ export function mountOutput(store, { mountEl, whereEl, chipsEl, busyEl, notify, 
     const byId = new Map(s.layers.map((l) => [l.id, l]));
     return s.order
       .map((id) => byId.get(id))
-      .filter((l) => l && l.chartable && !l.visible && l.kind !== "select" && l.kind !== "areaChartOnly");
+      .filter((l) => l && l.chartable && !l.visible && l.kind !== "select" && !isChartOnly(l));
   };
   let listSig = "";
   let offEl = null;

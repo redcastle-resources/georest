@@ -8,6 +8,7 @@
 // change rebuilds the results from the cached raw reduction with no Earth
 // Engine call. A new area takes a new request token: answers for an older
 // area are dropped. Never touches the DOM or Google Maps.
+import { isChartOnly } from "../util.js";
 import { AREA_FORMAT_DICT, SPLIT_STR, areaChartInputs, getObjInfo, parseReduction, reducerName, zonalStats } from "./charts.js";
 import { SANKEY_MIN_PERCENTAGE, buildSankeyFromHistogram, ensureHexColor, formatPeriod, prepareSankeyData } from "./sankey.js";
 import { evaluateAsync, getObjType } from "./viz.js";
@@ -88,7 +89,7 @@ export function chartJobs(s) {
   const jobs = [];
   listOrder(s).forEach((layer) => {
     if (!layer.chartable || layer.kind === "select") return;
-    const chosen = layer.kind === "areaChartOnly" ? (given(choices[layer.id]) ? !!choices[layer.id] : !!layer.visible) : layer.visible && choices[layer.id] !== false;
+    const chosen = isChartOnly(layer) ? (given(choices[layer.id]) ? !!choices[layer.id] : !!layer.visible) : layer.visible && choices[layer.id] !== false;
     if (!chosen) return;
     const params = chartParams(layer);
     if (params.line) jobs.push({ layer, params, kind: "line" });

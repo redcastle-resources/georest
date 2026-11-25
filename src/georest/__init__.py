@@ -59,10 +59,10 @@ __version__ = "0.5.2"
 
 __all__ = ["esri", "edw", "portal", "services", "usgs", "waterdata",
            "usfs", "fia", "lcms", "fema", "nfhl", "noaa", "nws", "nwps", "coops",
-           "nhc", "to_frame", "__version__"]
+           "nhc", "view", "to_frame", "__version__"]
 
 if TYPE_CHECKING:  # so IDEs, mypy and pyright resolve the re-exports statically
-    from . import esri, fema, noaa, usfs, usgs
+    from . import esri, fema, noaa, usfs, usgs, view
     from .esri import portal, services
     from .fema import nfhl
     from .noaa import coops, nhc, nwps, nws
@@ -91,6 +91,7 @@ _LAZY = {
     "nwps": ".noaa.nwps",
     "coops": ".noaa.coops",
     "nhc": ".noaa.nhc",
+    "view": ".view",
     # Pre-0.5 names, kept importable (with a DeprecationWarning); not in __all__.
     "restesri": ".restesri",
     "restusgs": ".restusgs",

@@ -16,7 +16,7 @@ import { createTileOverlay, progressOf } from "./tiles.js";
 import { createVectorTileOverlay, tileBounds, flatten } from "./vectortiles.js";
 import { geomKinds } from "../ui/legend.js";
 import { pluginFor } from "../plugins/index.js";
-import { isTimelapse } from "../util.js";
+import { isTimelapse, isChartOnly } from "../util.js";
 import { lazyEE } from "./ee.js";
 import { windQueryItem, WIND_UNIT_PROPS } from "./wind.js";
 
@@ -475,7 +475,7 @@ export function createLayerEngine(gmap, store, deps = {}) {
       // loads. Not one that is off, nor one a plug-in starts itself (a
       // timelapse reports its own frames; an area-chart-only layer is never
       // drawn): those would show loading with nothing to load.
-      const shows = layer.visible && !isTimelapse(layer) && layer.kind !== "areaChartOnly";
+      const shows = layer.visible && !isTimelapse(layer) && !isChartOnly(layer);
       if (shows) store.update((s) => ({ ...s, layers: s.layers.map((l) => (l.id === layer.id ? { ...l, loading: true } : l)) }), "layer-loading");
       try {
         await deps.eeLoader.ensure();

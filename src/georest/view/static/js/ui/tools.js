@@ -5,6 +5,7 @@
 // "Show as" switches and a settings panel (layers to chart, Sankey
 // transition periods: port of area-charting.js populateChartLayerSelect and
 // 2templates.js setupTransitionPeriodUI). Names are set as text.
+import { isChartOnly } from "../util.js";
 import { UPLOAD_ACCEPT } from "../engine/areasources.js";
 import { currentDefaults, insertPeriod, removePeriod, validatePeriods, yearRange } from "../engine/areachart.js";
 
@@ -196,7 +197,7 @@ export function mountTools(store, { optionsEl, unitsEl, toolsEl, chart, measure,
     if (!layers.length) box.appendChild(el("div", "val-code", "No layer can be charted. Add one with canAreaChart or Map.addAreaChartLayer."));
     const choices = s.chartChoices || {};
     layers.forEach((l) => {
-      const only = l.kind === "areaChartOnly";
+      const only = isChartOnly(l);
       const on = only ? (choices[l.id] !== undefined ? !!choices[l.id] : !!l.visible) : choices[l.id] !== false;
       const lab = el("label", "cset-layer");
       const cb = el("input");
