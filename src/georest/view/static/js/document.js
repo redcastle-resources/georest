@@ -80,7 +80,7 @@ function runCommand(target, name, args) {
 
 // applyDocument(target, doc, {notify}) -> {layers, skipped}. target: {api
 // (createMapApi), map (the Google map, for mapSetZoom),
-// synchronousCenterObject, setAuthProxy(url), setBrand({name, accent})}.
+// synchronousCenterObject, setAuthProxy(url), setBrand({name, accent, logo})}.
 export function applyDocument(target, doc, opts = {}) {
   const notify = opts.notify || (() => {});
   const api = target.api;
@@ -91,7 +91,11 @@ export function applyDocument(target, doc, opts = {}) {
   if (ee && ee.workloadTag !== undefined && ee.workloadTag !== null) api.setDefaultWorkloadTag(ee.workloadTag);
   if (doc.title) api.setTitle(doc.title);
   if (target.setProxy) target.setProxy(doc.proxy || null);
-  if (doc.brand && doc.brand.name && target.setBrand) target.setBrand({ name: String(doc.brand.name), accent: doc.brand.accent ? String(doc.brand.accent) : "" });
+  if (doc.brand && doc.brand.name && target.setBrand) {
+    const brand = { name: String(doc.brand.name), accent: doc.brand.accent ? String(doc.brand.accent) : "" };
+    if (doc.brand.logo) brand.logo = String(doc.brand.logo);
+    target.setBrand(brand);
+  }
   (doc.layers || []).forEach((layer) => {
     try {
       addOne(api, layer);

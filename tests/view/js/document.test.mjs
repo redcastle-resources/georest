@@ -102,3 +102,10 @@ test("a GeoJSON layer can come from a URL, loaded by the viewer", () => {
   assert.deepEqual(l.item, { geojsonUrl: "https://example.com/parks.geojson" });
   assert.deepEqual(s.notes, []);
 });
+
+test("a document's brand passes its logo name to the viewer", () => {
+  const s = setup();
+  let brand = null;
+  applyDocument({ api: s.api, setBrand: (b) => (brand = b) }, { geoview: 1, brand: { name: "geeViz ", accent: "Delta", logo: "geeviz" }, layers: [] }, { notify: s.notify });
+  assert.deepEqual(brand, { name: "geeViz ", accent: "Delta", logo: "geeviz" });
+});

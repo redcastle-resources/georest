@@ -54,7 +54,8 @@ def test_nothing_points_back_at_geeviz():
 
 
 def test_the_logos_and_wind_are_there():
-    for name in ("images/geeviz-logo-light.png", "images/geeviz-logo-dark.png", "js/vendor/wind-particles.js"):
+    for name in ("images/georest-logo-light.png", "images/georest-logo-dark.png",
+                 "images/geeviz-logo-light.png", "images/geeviz-logo-dark.png", "js/vendor/wind-particles.js"):
         assert (STATIC / name).is_file(), name
 
 
@@ -68,3 +69,8 @@ def test_the_wheel_ships_the_viewer():
     assert "georest/view/static/geoview.html" in names
     assert "georest/view/static/js/main.js" in names
     assert not any(n.startswith("georest/view/static/tests") for n in names)
+
+
+def test_the_tab_icon_is_georest():
+    html = (STATIC / "geoview.html").read_text(encoding="utf-8")
+    assert '<link rel="icon" href="./images/georest-logo-dark.png" />' in html

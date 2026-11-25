@@ -5,7 +5,8 @@ plug-in's source), where the map looks, and the map commands to run, each a
 name from a fixed list with its arguments. It can be saved, embedded in a
 page, compared and read without running anything.
 
-    {"geoview": 1, "title": str, "brand": {"name": str} | None,
+    {"geoview": 1, "title": str,
+     "brand": {"name": str, "accent": str, "logo": "georest" | "geeviz"} | None,
      "layers": [{"id", "type", "name", "source", "viz", "visible", "opacity"}],
      "view": {"center": [lng, lat], "zoom": z} | {"bounds": [w, s, e, n]} | None,
      "commands": [[name, *args], ...],

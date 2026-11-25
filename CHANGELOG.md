@@ -13,6 +13,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- geoView shows the georest logo (in the sidebar, the phone menu and the
+  browser tab) instead of geeViz's. A map document can name a logo the
+  viewer ships with `brand.logo`; geeViz names `"geeviz"` for its own maps.
 - The example notebooks map with `georest.view` instead of folium, and every
   example with something to place on a map now has one: the guides to fire
   history, streamflow, imagery services and forest inventory (Oregon's FIA

@@ -1,10 +1,11 @@
 // Delta shell: pane layout, resize grips, hamburger, theme, tool strip, phone sheets.
 // The static markup lives in delta.html; this module only wires it to the store.
 
+import { logoSrc } from "../logos.js";
+
 const LEFT_MIN = 240;
 // wide enough for the tool tabs with their labels
 const RIGHT_MIN = 330;
-const LOGO = "./images/geeviz-logo-";
 
 function lsGet(key) {
   try {
@@ -91,7 +92,9 @@ export function mountShell(store, { mapEl } = {}) {
     const eff = effectiveTheme();
     root.setAttribute("data-bs-theme", eff);
     $$("#theme-btn i").forEach((icon) => (icon.className = "ti " + (eff === "dark" ? "ti-sun" : "ti-moon")));
-    $$(".logo-img").forEach((img) => (img.src = LOGO + (eff === "dark" ? "dark" : "light") + ".png"));
+    const logo = logoSrc(store.get().brand, eff);
+    $$(".logo-img").forEach((img) => (img.src = logo));
+    $$('link[rel="icon"]').forEach((link) => (link.href = logo));
     $$("#mmenu [data-t]").forEach((b) => b.classList.toggle("on", b.dataset.t === store.get().theme));
   }
   store.on("change:theme", (t) => {
@@ -323,6 +326,7 @@ export function mountShell(store, { mapEl } = {}) {
   }
   store.on("change:title", renderTitle);
   store.on("change:brand", renderTitle);
+  store.on("change:brand", renderTheme);
 
   // ---- tools: one active at a time, none folds the right pane ----
   // A button can stand for several tools (Measure: data-tools="distance area",
