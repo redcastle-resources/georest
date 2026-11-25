@@ -2,7 +2,7 @@
 // step (from its timeInfo interval, or an image service's catalog years),
 // each drawn with the service's time= parameter. The frame loader contract is
 // engine/timelapse.js's: {prepare(), years(), frame(i), queryTarget()}.
-import { serviceInfo, serviceKind, normalizeUrl, sublayerOf, timeSteps, catalogYears } from "./rest.js";
+import { serviceInfo, serviceKind, normalizeUrl, sublayerOf, timeSteps, catalogYears, registerSecured } from "./rest.js";
 import { exportTileUrl } from "./draw.js";
 import { serviceLegend, withSwatchColors } from "./legend.js";
 
@@ -13,6 +13,7 @@ export function esriFrameLoader(engine, layer) {
   const drawUrl = sub ? sub.parent : url;
   const opts = { ...((layer.viz && layer.viz.esri) || {}), ...(sub ? { layers: `show:${sub.id}` } : {}) };
   const req = { fetch: engine.fetch };
+  if (opts.secured) registerSecured(drawUrl, opts.secured);
   let steps = null;
   const info = () => serviceInfo(url, req);
 

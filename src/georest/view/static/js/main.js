@@ -7,6 +7,7 @@
 import { createStore } from "./state.js";
 import { createMapApi } from "./api.js";
 import { applyDocument, documentUrl } from "./document.js";
+import { setProxyBase } from "./esri/rest.js";
 import { mountShell, initialShellState } from "./ui/shell.js";
 import { mountStatus } from "./ui/status.js";
 import { mountMapControls } from "./ui/mapctl.js";
@@ -234,6 +235,7 @@ async function boot() {
           synchronousCenterObject: engine.synchronousCenterObject,
           setAuthProxy: (u) => (authProxyAPIURL = u),
           setBrand: (b) => store.set({ brand: b }, "brand"),
+          setProxy: setProxyBase,
         },
         doc,
         { notify: notice }

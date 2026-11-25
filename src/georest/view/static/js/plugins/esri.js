@@ -4,7 +4,7 @@
 // (layers, renderingRule, mosaicRule, bandIds, time, where, outFields, bbox,
 // maxFeatures, simplify, maxLayerMB). The kind given is a first guess: the
 // service's metadata decides (a cached map service draws as tiles).
-import { serviceInfo, serviceKind, normalizeUrl, sublayerOf } from "../esri/rest.js";
+import { serviceInfo, serviceKind, normalizeUrl, sublayerOf, registerSecured } from "../esri/rest.js";
 import { exportTileUrl, tileUrl, maxTileZoom } from "../esri/draw.js";
 import { serviceLegend } from "../esri/legend.js";
 import { identifyMap, identifyImage } from "../esri/identify.js";
@@ -59,6 +59,8 @@ export const esriPlugin = {
   async draw(r, item, ctx) {
     const url = normalizeUrl(item);
     r.url = url;
+    // a secured layer's requests go through the page's proxy (esri/rest.js)
+    if (esriOptsOf(r).secured) registerSecured(url, esriOptsOf(r).secured);
     let info;
     try {
       info = await serviceInfo(url, { fetch: ctx.fetch });

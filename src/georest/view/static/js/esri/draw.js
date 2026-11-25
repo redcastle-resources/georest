@@ -1,3 +1,5 @@
+import { proxied } from "./rest.js";
+
 // How ArcGIS map and image services are drawn as map tiles: a cached
 // service's own tiles, or one export image per map tile (as the ArcGIS JS
 // API's MapImageLayer and ImageryLayer ask the server for the view).
@@ -10,7 +12,7 @@ export function tile3857(x, y, z) {
   return { xmin: -HALF + x * size, xmax: -HALF + (x + 1) * size, ymax: HALF - y * size, ymin: HALF - (y + 1) * size };
 }
 
-export const tileUrl = (url) => (coord, zoom) => `${url}/tile/${zoom}/${coord.y}/${coord.x}`;
+export const tileUrl = (url) => (coord, zoom) => proxied(`${url}/tile/${zoom}/${coord.y}/${coord.x}`);
 
 const INTEGER_PIXELS = ["U1", "U2", "U4", "U8", "S8", "U16", "S16", "U32", "S32"];
 // A single integer band is most likely classes: smoothing would invent values between them.
@@ -42,7 +44,7 @@ export function exportUrl(url, kind, esriOpts = {}, b, size = 256, info = null) 
   }
   if (Array.isArray(o.time) && o.time.length === 2) p.set("time", o.time.join(","));
   p.set("f", "image");
-  return `${url}/${kind === "esri.image" ? "exportImage" : "export"}?${p.toString()}`;
+  return proxied(`${url}/${kind === "esri.image" ? "exportImage" : "export"}?${p.toString()}`);
 }
 
 // The URL for each map tile of an export: from zoom 2, one 1024 px image per

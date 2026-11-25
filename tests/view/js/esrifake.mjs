@@ -11,7 +11,7 @@ export const response = (name) => fixture(name).response;
 
 // A request's URL and its params, whether sent as GET or a POST form.
 export function parseRequest(url, init = {}) {
-  const u = new URL(url);
+  const u = new URL(url, "http://127.0.0.1:8765"); // a relative URL: the page's own server
   const params = Object.fromEntries(u.searchParams.entries());
   if (init.body) {
     const body = typeof init.body === "string" ? init.body : init.body.toString();

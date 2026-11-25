@@ -14,6 +14,35 @@ export class EsriError extends Error {
 
 const CROSS_SITE = "This service does not allow requests from this page.";
 
+// ---- secured services ----
+// A layer added with a token is secured: its token stays with the server
+// behind the page (georest.view's /proxy, or the geeViz agent), and every
+// request for that service goes there with the layer's key, never a token.
+export const SECURED_MESSAGE = "This layer is secured. View it from Python (Map.view()) or the geeViz agent, which hold its token.";
+let proxyBase = null;
+const SECURED = new Map(); // service root URL -> layer key
+const serviceRoot = (url) => {
+  const m = /^(.*?\/(?:MapServer|FeatureServer|ImageServer))(?:[/?]|$)/i.exec(String(url));
+  return m ? m[1] : String(url);
+};
+// The proxy the page's server offers ("/proxy"), or null for none.
+export function setProxyBase(base) {
+  proxyBase = base || null;
+}
+export function registerSecured(url, key) {
+  SECURED.set(serviceRoot(url), String(key));
+}
+export function resetSecured() {
+  SECURED.clear();
+}
+// A URL as the page must ask for it: through the proxy for a secured service.
+export function proxied(url) {
+  const key = SECURED.get(serviceRoot(url));
+  if (!key) return url;
+  if (!proxyBase) throw new EsriError(SECURED_MESSAGE);
+  return `${proxyBase}?url=${encodeURIComponent(url)}&layer=${encodeURIComponent(key)}`;
+}
+
 function encodeParams(params) {
   const out = new URLSearchParams();
   Object.keys(params).forEach((k) => {
@@ -36,9 +65,9 @@ export async function esriRequest(url, params = {}, opts = {}) {
   const getUrl = url + (url.indexOf("?") > -1 ? "&" : "?") + query;
   let res;
   try {
-    if (getUrl.length <= maxGet) res = await fetchFn(getUrl, { signal: opts.signal });
+    if (getUrl.length <= maxGet) res = await fetchFn(proxied(getUrl), { signal: opts.signal });
     else {
-      res = await fetchFn(url, {
+      res = await fetchFn(proxied(url), {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: query,
@@ -46,7 +75,7 @@ export async function esriRequest(url, params = {}, opts = {}) {
       });
     }
   } catch (e) {
-    if (e && e.name === "AbortError") throw e;
+    if (e && (e.name === "AbortError" || e instanceof EsriError)) throw e;
     // fetch rejects with a TypeError when the browser blocks the answer
     // (no CORS headers) or the network is down; the page cannot tell which.
     if (e instanceof TypeError) throw new EsriError(CROSS_SITE);

@@ -86,6 +86,7 @@ export function applyDocument(target, doc, opts = {}) {
   if (ee && ee.authProxyAPIURL && target.setAuthProxy) target.setAuthProxy(ee.authProxyAPIURL);
   if (ee && ee.workloadTag !== undefined && ee.workloadTag !== null) api.setDefaultWorkloadTag(ee.workloadTag);
   if (doc.title) api.setTitle(doc.title);
+  if (target.setProxy) target.setProxy(doc.proxy || null);
   if (doc.brand && doc.brand.name && target.setBrand) target.setBrand({ name: String(doc.brand.name), accent: doc.brand.accent ? String(doc.brand.accent) : "" });
   (doc.layers || []).forEach((layer) => {
     try {
