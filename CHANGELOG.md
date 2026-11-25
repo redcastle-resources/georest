@@ -11,8 +11,20 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `Map.view()` in a notebook no longer prints IPython's "Consider using
   IPython.display.IFrame instead" warning under every map.
 
+### Added
+
+- `examples/geoview_example.ipynb`: geoView one capability at a time, from
+  one GeoJSON layer to time lapses charted as line charts and Sankeys, charts
+  of drawn areas, and a saved web page. The other example notebooks gain
+  maps and charts too: time lapses with area charts in the imagery, fire
+  history and USFS examples, owner groups by county in the forest inventory
+  guide, and more maps in the EDW, services, streamflow and water data
+  examples.
+
 ### Changed
 
+- The viewer's messages say geoView, not Delta (its name while it was built
+  in geeViz, where it is now the "geoview" skin).
 - geoView shows the georest logo (in the sidebar, the phone menu and the
   browser tab) instead of geeViz's. A map document can name a logo the
   viewer ships with `brand.logo`; geeViz names `"geeviz"` for its own maps.
