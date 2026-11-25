@@ -12,6 +12,7 @@ from georest.view._document import add_layer, new_document
 from georest.view._server import ProxyRefused, ViewServer, check_proxy_url, forward
 
 FS = "https://services.arcgis.com/x/arcgis/rest/services/a/FeatureServer/0/query"
+ROOT = "https://services.arcgis.com/x/arcgis/rest/services/a/FeatureServer"
 
 
 def resolver(*ips):
@@ -49,9 +50,11 @@ class FakeOpener:
     def __init__(self, answers):
         self.answers = list(answers)
         self.asked = []
+        self.ips = []
 
-    def __call__(self, req, timeout=None):
+    def __call__(self, req, timeout=None, ip=None):
         self.asked.append(req)
+        self.ips.append(ip)
         return self.answers.pop(0)
 
 
@@ -66,13 +69,13 @@ def test_a_redirect_to_a_private_address_is_not_followed():
 
 def test_the_token_goes_to_the_service_and_cookies_do_not_come_back():
     op = FakeOpener([(200, {"Content-Type": "application/json", "Set-Cookie": "a=b"}, b'{"ok":1}')])
-    status, headers, body = forward(FS + "?f=json", "GET", None, {}, token="SECRET", opener=op, resolve=PUBLIC)
+    status, headers, body = forward(FS + "?f=json", "GET", None, {}, token="SECRET", root=ROOT, opener=op, resolve=PUBLIC)
     assert status == 200 and body == b'{"ok":1}'
     assert "token=SECRET" in op.asked[0].full_url
     assert "Set-Cookie" not in headers
     assert headers["Content-Type"] == "application/json"
     op = FakeOpener([(200, {"Content-Type": "application/json"}, b"{}")])
-    forward(FS, "POST", b"f=json&where=1%3D1", {"Content-Type": "application/x-www-form-urlencoded"}, token="SECRET", opener=op, resolve=PUBLIC)
+    forward(FS, "POST", b"f=json&where=1%3D1", {"Content-Type": "application/x-www-form-urlencoded"}, token="SECRET", root=ROOT, opener=op, resolve=PUBLIC)
     assert b"token=SECRET" in op.asked[0].data and "token" not in op.asked[0].full_url
 
 
@@ -123,12 +126,13 @@ def test_the_proxy_adds_a_secured_layers_token(srv, monkeypatch):
 
     def fake_forward(url, method, body, headers, token=None, **k):
         seen.append((url, method, token))
-        return 200, {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"}, b"{}"
+        return 200, {"Content-Type": "application/json"}, b"{}"
 
     monkeypatch.setattr(_server, "forward", fake_forward)
-    srv.secure("k1", "SECRET")
+    srv.secure("k1", "SECRET", FS)
     status, _, _ = get(srv.base + "/proxy?layer=k1&url=" + urllib.request.quote(FS, safe=""))
     assert status == 200 and seen[-1] == (FS, "GET", "SECRET")
+    assert srv.tokens["k1"] == (ROOT, "SECRET")
     get(srv.base + "/proxy?url=" + urllib.request.quote(FS, safe=""), data=b"f=json")
     assert seen[-1] == (FS, "POST", None)
 
@@ -142,3 +146,67 @@ def test_one_server_per_process_and_a_taken_port_moves_on():
         assert b.port != a.port
     finally:
         b.stop()
+
+
+def test_a_token_goes_only_to_its_own_service():
+    # asked for another site with a secured layer's key: refused, nothing sent
+    op = FakeOpener([])
+    with pytest.raises(ProxyRefused, match="its own service"):
+        forward("https://attacker.example/rest/services/x/MapServer", "GET", None, {}, token="SECRET", root=ROOT,
+                opener=op, resolve=PUBLIC)
+    assert op.asked == []
+    # a redirect away from the service is followed without the token
+    op = FakeOpener([(302, {"Location": "https://elsewhere.example/rest/services/x/MapServer"}, b""),
+                     (200, {"Content-Type": "application/json"}, b"{}")])
+    forward(FS, "GET", None, {}, token="SECRET", root=ROOT, opener=op, resolve=PUBLIC)
+    assert "token=SECRET" in op.asked[0].full_url and "token" not in op.asked[1].full_url
+    op = FakeOpener([(307, {"Location": "https://elsewhere.example/rest/services/x/MapServer"}, b""),
+                     (200, {"Content-Type": "application/json"}, b"{}")])
+    forward(FS, "POST", b"f=json", {}, token="SECRET", root=ROOT, opener=op, resolve=PUBLIC)
+    assert b"SECRET" in op.asked[0].data and op.asked[1].data == b"f=json"
+
+
+def test_the_connection_goes_to_the_address_that_was_checked():
+    # DNS rebinding: a second lookup would answer a private address. The
+    # opener is handed the checked address and must connect there.
+    answers = iter(["52.0.0.1", "10.0.0.5"])
+
+    def rebinding(host, port, *a, **k):
+        return resolver(next(answers))(host, port)
+    op = FakeOpener([(200, {}, b"{}")])
+    forward(FS, "GET", None, {}, opener=op, resolve=rebinding)
+    assert op.ips == ["52.0.0.1"]
+
+
+def test_the_default_opener_connects_to_the_given_address(srv):
+    # a host name that does not resolve, sent to the address given: the
+    # request reaches the local server, so no second lookup happened
+    req = urllib.request.Request(f"http://never-resolves.invalid:{srv.port}/geoview/geoview.html")
+    status, _, body = _server._open(req, timeout=10, ip="127.0.0.1")
+    assert status in (200, 404)
+
+
+def _raw(srv, path, headers):
+    import http.client
+    c = http.client.HTTPConnection("127.0.0.1", srv.port, timeout=10)
+    c.putrequest("GET", path, skip_host=True)
+    for k, v in headers.items():
+        c.putheader(k, v)
+    c.endheaders()
+    r = c.getresponse()
+    return r.status, dict(r.getheaders()), r.read()
+
+
+def test_the_proxy_answers_only_its_own_pages(srv, monkeypatch):
+    monkeypatch.setattr(_server, "forward", lambda *a, **k: (200, {"Content-Type": "application/json"}, b"{}"))
+    path = "/proxy?url=" + urllib.request.quote(FS, safe="")
+    own = f"127.0.0.1:{srv.port}"
+    status, headers, _ = _raw(srv, path, {"Host": own, "Sec-Fetch-Site": "same-origin"})
+    assert status == 200
+    assert "Access-Control-Allow-Origin" not in headers
+    assert _raw(srv, path, {"Host": f"localhost:{srv.port}"})[0] == 200
+    # another site's page (a cross-site fetch), and DNS rebinding (a foreign Host)
+    status, _, body = _raw(srv, path, {"Host": own, "Origin": "https://evil.example", "Sec-Fetch-Site": "cross-site"})
+    assert status == 403 and b"page" in body
+    assert _raw(srv, path, {"Host": own, "Sec-Fetch-Site": "same-site"})[0] == 403
+    assert _raw(srv, path, {"Host": f"evil.example:{srv.port}"})[0] == 403

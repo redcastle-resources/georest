@@ -132,7 +132,7 @@ def test_a_token_never_reaches_the_document_or_the_page():
     assert key and "SECRET" not in key
     assert "SECRET-TOKEN" not in json.dumps(doc)
     assert "SECRET-TOKEN" not in m.export_html()
-    assert _server.server().tokens[key] == "SECRET-TOKEN"
+    assert _server.server().tokens[key] == ("https://services.arcgis.com/x/arcgis/rest/services/fires/FeatureServer", "SECRET-TOKEN")
 
 
 def test_export_html_inlines_the_document_with_assets_from_the_cdn(monkeypatch):
@@ -185,3 +185,53 @@ def test_view_serves_each_map_on_one_server(monkeypatch):
         assert d["layers"][0]["name"] == name and d["proxy"] == "/proxy"
     with urllib.request.urlopen(ua, timeout=10) as r:
         assert b"key=AIzaVIEWKEY" in r.read()
+
+
+def test_a_notebook_map_is_a_self_contained_page(monkeypatch):
+    """Spec (user decision 2026-11-24): in a notebook the map is a page with
+    the document inline and geoView's files from jsDelivr, so it shows on
+    hosted notebooks and in saved output; no local server."""
+    from georest.view import _map, _server
+    shown = []
+    monkeypatch.setattr(_map, "_in_notebook", lambda: True)
+    monkeypatch.setattr(_map, "_display_html", shown.append)
+    monkeypatch.setattr(_server, "server", lambda: pytest.fail("a notebook map must not need the local server"))
+    m = mapper()
+    m.addLayer({"type": "Feature", "properties": {"n": "</script>"}, "geometry": {"type": "Point", "coordinates": [0, 0]}},
+               {}, "Pt")
+    assert m.view() is None
+    (frame,) = shown
+    assert frame.startswith("<iframe srcdoc=\"") and "cdn.jsdelivr.net/gh/redcastle-resources/georest@v" in frame
+    assert "<script" not in frame  # the page is escaped into the attribute
+
+
+def test_a_notebook_map_with_a_secured_layer_uses_the_local_server(monkeypatch):
+    from georest.view import _map
+    shown = []
+    monkeypatch.setattr(_map, "_in_notebook", lambda: True)
+    monkeypatch.setattr(_map, "_display_frame", lambda url, h: shown.append(url))
+    m = mapper()
+    m.addEsriMapService("https://example.com/arcgis/rest/services/a/MapServer", token="T")
+    url = m.view()
+    assert shown == [url] and url.startswith("http://127.0.0.1:")
+
+
+def test_a_script_keeps_serving_its_map_after_it_ends(monkeypatch):
+    """python mymap.py: the server is a daemon thread, so without this the
+    page would find nothing once the script returns."""
+    from georest.view import _map
+    registered = []
+    monkeypatch.setattr(_map, "_in_notebook", lambda: False)
+    monkeypatch.setattr(_map, "_interactive", lambda: False)
+    monkeypatch.setattr(_map.webbrowser, "open", lambda u: None)
+    monkeypatch.setattr(_map.atexit, "register", lambda f, *a: registered.append(f))
+    monkeypatch.setattr(_map, "_KEEP_SERVING", [False])
+    mapper().view()
+    mapper().view()
+    assert registered == [_map._keep_serving]
+    # at a Python prompt nothing waits
+    registered.clear()
+    monkeypatch.setattr(_map, "_interactive", lambda: True)
+    monkeypatch.setattr(_map, "_KEEP_SERVING", [False])
+    mapper().view()
+    assert registered == []

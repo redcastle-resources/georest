@@ -57,7 +57,5 @@ Map.turnOnInspector()
 Map.setTitle("Everything addLayer takes")
 
 if __name__ == "__main__":
-    import time
+    # run as a script, view() keeps the local server up after the script ends
     print(Map.view(), flush=True)
-    while True:  # keep the local server (and its /proxy) up while the page is open
-        time.sleep(3600)

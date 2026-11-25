@@ -17,14 +17,15 @@ You may obtain a copy of the License at
 """
 from __future__ import annotations
 
+import http.client
 import http.server
 import ipaddress
 import mimetypes
 import os
+import re
 import secrets
 import socket
 import threading
-import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -43,9 +44,11 @@ class ProxyRefused(Exception):
     """A URL the proxy will not forward to; the message says why."""
 
 
-def check_proxy_url(url: str, resolve=socket.getaddrinfo) -> None:
-    """Raise ProxyRefused unless ``url`` is an http(s) ArcGIS REST URL on a
-    host whose every address is public."""
+def check_proxy_url(url: str, resolve=socket.getaddrinfo) -> str:
+    """The address to connect to for ``url``: ProxyRefused unless it is an
+    http(s) ArcGIS REST URL on a host whose every address is public. The
+    request must go to the address returned, not to a second lookup, which
+    could answer a private address (DNS rebinding)."""
     p = urllib.parse.urlsplit(url)
     if p.scheme not in ("http", "https"):
         raise ProxyRefused("only http and https URLs are forwarded")
@@ -65,50 +68,77 @@ def check_proxy_url(url: str, resolve=socket.getaddrinfo) -> None:
         ip = ipaddress.ip_address(str(info[4][0]).split("%", 1)[0])
         if not ip.is_global:
             raise ProxyRefused(f"{p.hostname} is not a public address")
+    return str(infos[0][4][0])
 
 
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, *a, **k):
-        return None
+_SERVICE_ROOT = re.compile(r"^(.*?/rest/services/.+?/(?:FeatureServer|MapServer|ImageServer))(?:[/?#]|$)", re.I)
 
 
-_OPENER = urllib.request.build_opener(_NoRedirect)
+def service_root(url: str) -> str:
+    """The service a URL belongs to (up to .../FeatureServer, MapServer or
+    ImageServer), or the URL without its query when it names none."""
+    m = _SERVICE_ROOT.match(url)
+    return m.group(1) if m else url.split("?", 1)[0].rstrip("/")
 
 
-def _open(req, timeout=60):
-    """(status, headers, body) for a request, redirects not followed."""
+def _under(url: str, root: str) -> bool:
+    u, r = urllib.parse.urlsplit(url), urllib.parse.urlsplit(root)
+    if (u.scheme, (u.hostname or "").lower(), u.port) != (r.scheme, (r.hostname or "").lower(), r.port):
+        return False
+    up, rp = u.path.lower().rstrip("/"), r.path.lower().rstrip("/")
+    return up == rp or up.startswith(rp + "/")
+
+
+def _open(req, timeout=60, ip=None):
+    """(status, headers, body) for a request, redirects not followed. With
+    ``ip``, the connection goes to that address; the host name is still sent
+    (the Host header, and the TLS name the certificate is checked against)."""
+    p = urllib.parse.urlsplit(req.full_url)
+    cls = http.client.HTTPSConnection if p.scheme == "https" else http.client.HTTPConnection
+    conn = cls(p.hostname, p.port, timeout=timeout)
+    if ip:
+        conn._create_connection = lambda addr, *a, **k: socket.create_connection((ip, addr[1]), *a, **k)
     try:
-        with _OPENER.open(req, timeout=timeout) as r:
-            return r.status, dict(r.headers.items()), r.read()
-    except urllib.error.HTTPError as e:
-        return e.code, dict(e.headers.items()), e.read()
+        conn.request(req.get_method(), (p.path or "/") + ("?" + p.query if p.query else ""), body=req.data,
+                     headers=dict(req.header_items()))
+        r = conn.getresponse()
+        return r.status, dict(r.getheaders()), r.read()
+    finally:
+        conn.close()
 
 
 def forward(url: str, method: str, body: bytes | None, headers: dict, token: str | None = None,
-            opener=None, resolve=socket.getaddrinfo):
+            root: str | None = None, opener=None, resolve=socket.getaddrinfo):
     """Forward a request to an ArcGIS service: (status, headers, body).
 
-    ``token`` (a secured layer's) is added as a query parameter, or a form
-    field for a POST. Redirects are followed here, at most three, each
-    checked like the first URL."""
+    ``token`` (a secured layer's) goes only to URLs under ``root``, the
+    service it was given for: as a query parameter, or a form field for a
+    POST. A request for anywhere else with a token is refused. Redirects are
+    followed here, at most three, each checked like the first URL; one that
+    leaves the service is followed without the token."""
     opener = opener or _open
     if token:
-        if method == "POST":
-            body = (body or b"") + (b"&" if body else b"") + urllib.parse.urlencode({"token": token}).encode()
-        else:
-            url = url + ("&" if "?" in url else "?") + urllib.parse.urlencode({"token": token})
+        root = root or service_root(url)
+        if not _under(url, root):
+            raise ProxyRefused("a secured layer's token is sent only to its own service")
     send = {k: v for k, v in (headers or {}).items() if k.lower() in ("content-type", "accept")}
     for _ in range(_MAX_REDIRECTS + 1):
-        check_proxy_url(url, resolve=resolve)
-        req = urllib.request.Request(url, data=body if method == "POST" else None, method=method, headers=send)
+        ip = check_proxy_url(url, resolve=resolve)
+        hop_url, hop_body = url, body if method == "POST" else None
+        if token and _under(url, root):
+            if method == "POST":
+                hop_body = (hop_body or b"") + (b"&" if hop_body else b"") + urllib.parse.urlencode({"token": token}).encode()
+            else:
+                hop_url = url + ("&" if "?" in url else "?") + urllib.parse.urlencode({"token": token})
+        req = urllib.request.Request(hop_url, data=hop_body, method=method, headers=send)
         req.add_header("User-Agent", "georest-geoview")
-        status, got, data = opener(req, timeout=60)
+        status, got, data = opener(req, timeout=60, ip=ip)
         if status in (301, 302, 303, 307, 308) and got.get("Location"):
             url = urllib.parse.urljoin(url, got["Location"])
             if status == 303:
                 method, body = "GET", None
             continue
-        out = {"Access-Control-Allow-Origin": "*"}
+        out = {}
         ctype = got.get("Content-Type") or got.get("content-type")
         if ctype:
             out["Content-Type"] = ctype
@@ -157,9 +187,10 @@ class ViewServer:
         self.docs[key] = to_json(doc).encode("utf-8")
         return f"{self.base}/geoview/geoview.html?doc=/maps/{key}.json"
 
-    def secure(self, layer_key: str, token: str) -> None:
-        """Keep a secured layer's token here; the page asks /proxy?layer=<key>."""
-        self.tokens[layer_key] = token
+    def secure(self, layer_key: str, token: str, service_url: str) -> None:
+        """Keep a secured layer's token here, for its service only; the page
+        asks /proxy?layer=<key>."""
+        self.tokens[layer_key] = (service_root(service_url), token)
 
     def stop(self) -> None:
         if self._httpd:
@@ -194,15 +225,32 @@ def _handler_for(server: ViewServer):
             self.end_headers()
             self.wfile.write(body)
 
+        def _own_page(self):
+            """Why a /proxy call is refused, or None: only this server's own
+            pages may use it. A foreign Host is DNS rebinding; Origin and
+            Sec-Fetch-Site name a page from another site."""
+            host = (self.headers.get("Host") or "").lower()
+            if host not in {f"{h}:{server.port}" for h in ("127.0.0.1", "localhost", "[::1]")}:
+                return "the proxy answers only pages opened from 127.0.0.1 or localhost"
+            origin = self.headers.get("Origin")
+            if origin and origin.lower() != f"http://{host}":
+                return "the proxy answers only this server's own pages"
+            if self.headers.get("Sec-Fetch-Site", "same-origin").lower() not in ("same-origin", "none"):
+                return "the proxy answers only this server's own pages"
+            return None
+
         def _proxy(self, method):
+            why = self._own_page()
+            if why:
+                return self._send(403, why.encode())
             q = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             url = (q.get("url") or [""])[0]
-            token = server.tokens.get((q.get("layer") or [""])[0])
+            root, token = server.tokens.get((q.get("layer") or [""])[0], (None, None))
             body = None
             if method == "POST":
                 body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
             try:
-                status, headers, data = forward(url, method, body, dict(self.headers.items()), token=token)
+                status, headers, data = forward(url, method, body, dict(self.headers.items()), token=token, root=root)
             except ProxyRefused as e:
                 return self._send(403, str(e).encode())
             except (OSError, ValueError) as e:

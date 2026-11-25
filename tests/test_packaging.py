@@ -132,7 +132,8 @@ class TestNoThirdPartyImports(unittest.TestCase):
     #: noaa returns DataFrames, with no Earth Engine path.
     NOAA_EXTRA = {"pandas"}
     #: view serves pages from the standard library; IPython is optional.
-    VIEW_EXTRA = {"socket", "socketserver", "ipaddress", "mimetypes", "shutil", "string", "copy", "calendar", "IPython"}
+    VIEW_EXTRA = {"socket", "socketserver", "ipaddress", "mimetypes", "shutil", "string", "copy", "calendar", "atexit",
+                  "IPython"}
 
     def _allowed_for(self, path):
         # georest.frames turns esri's GeoJSON into DataFrames; it is the one

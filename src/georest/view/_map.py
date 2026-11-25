@@ -14,12 +14,16 @@ You may obtain a copy of the License at
 """
 from __future__ import annotations
 
+import atexit
 import calendar
 import copy
 import datetime
+import html as _html
 import os
 import re
 import secrets
+import sys
+import time as _time
 import webbrowser
 
 from ._document import add_layer, new_document, validate
@@ -256,7 +260,7 @@ class mapper:
         if token:
             from ._server import server
             secured = "s" + secrets.token_hex(6)
-            server().secure(secured, token)
+            server().secure(secured, token, url)
         viz_params = dict(viz_params or {})
         if visible is None:
             visible = viz_params.get("visible", True)
@@ -435,20 +439,38 @@ class mapper:
         return self._maps_key or os.environ.get("GOOGLE_MAPS_API_KEY") or None
 
     def view(self, open_browser=None, open_iframe=None, iframe_height=525):
-        """Show the map from the local server: in a notebook as a frame, else
-        in the browser. Returns the page URL."""
+        """Show the map.
+
+        In a notebook, the map is a self-contained page in a frame: the
+        document inline and geoView's files from jsDelivr, so it shows on
+        hosted notebooks and in saved output (returns None). A map with a
+        secured layer needs the local server, which holds the token, so it is
+        framed from there instead.
+
+        Elsewhere the local server shows it in the browser (returns the page
+        URL). Run as a script, the server keeps serving after the script ends,
+        until Ctrl+C."""
+        in_notebook = _in_notebook()
+        frame = open_iframe if open_iframe is not None else in_notebook
+        doc = self.document()
+        secured = any((l.get("viz") or {}).get("esri", {}).get("secured") for l in doc["layers"])
+        if frame and in_notebook and not secured:
+            page = page_html(doc, cdn_base(), self._key())
+            _display_html('<iframe srcdoc="{}" style="width:100%;height:{}px;border:0" allowfullscreen>'
+                          '</iframe>'.format(_html.escape(page, quote=True), int(iframe_height)))
+            return None
         from ._server import server
         srv = server()
         srv.maps_key = self._key()
-        doc = self.document()
         doc["proxy"] = "/proxy"
         url = srv.url_for(doc)
-        in_notebook = _in_notebook()
-        if open_iframe if open_iframe is not None else in_notebook:
-            from IPython.display import IFrame, display
-            display(IFrame(url, width="100%", height=iframe_height))
+        if frame:
+            _display_frame(url, iframe_height)
         elif open_browser if open_browser is not None else not in_notebook:
             webbrowser.open(url)
+            if not in_notebook and not _interactive() and not _KEEP_SERVING[0]:
+                _KEEP_SERVING[0] = True
+                atexit.register(_keep_serving)
         return url
 
     def export_html(self, filename=None, asset_base=None, title=None):
@@ -463,6 +485,35 @@ class mapper:
             with open(filename, "w", encoding="utf-8") as f:
                 f.write(html)
         return html
+
+
+_KEEP_SERVING = [False]
+
+
+def _keep_serving():
+    """At the end of a script: keep the local server up so the opened page
+    can load its map, until Ctrl+C."""
+    print("geoView is serving the map. Press Ctrl+C to stop.", flush=True)
+    try:
+        while True:
+            _time.sleep(3600)
+    except KeyboardInterrupt:
+        pass
+
+
+def _interactive() -> bool:
+    """A Python prompt (python -i, the REPL): the process stays up anyway."""
+    return bool(getattr(sys, "ps1", None) or sys.flags.interactive)
+
+
+def _display_html(markup):
+    from IPython.display import HTML, display
+    display(HTML(markup))
+
+
+def _display_frame(url, height):
+    from IPython.display import IFrame, display
+    display(IFrame(url, width="100%", height=height))
 
 
 def _in_notebook() -> bool:

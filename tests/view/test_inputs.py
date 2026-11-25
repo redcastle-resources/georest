@@ -131,3 +131,37 @@ def test_addLayer_keeps_visible_for_every_service_kind():
     for url in (NFHL, FS, LANDSAT, XYZ, GJ_URL):
         m.addLayer(url, {}, url[-12:], visible=False)
     assert [l["visible"] for l in _doc(m)["layers"]] == [False] * 5
+
+
+@pytest.mark.parametrize("obj, value", [
+    # a portal search result carries a "type" (the item's), unlike GeoJSON's
+    ({"title": "NFHL", "type": "Map Service", "url": NFHL + "/"}, NFHL),
+    ({"title": "Fires", "type": "Feature Service", "url": FS}, FS),
+    # the query is the viewer's to write; the service is the URL without it
+    (FS + "?f=json", FS),
+    (NFHL + "/?f=pjson#x", NFHL),
+])
+def test_search_results_and_query_strings_name_the_service(obj, value):
+    assert classify(obj) == ("esri", value)
+
+
+def test_geojson_with_a_url_property_stays_geojson():
+    f = dict(POINT, url="https://example.com/x")
+    assert classify(f) == (None, f)
+
+
+def test_a_token_in_the_url_is_refused_so_it_never_reaches_the_document():
+    with pytest.raises(ValueError, match="token="):
+        classify(LANDSAT + "?token=SECRET")
+    m = mapper()
+    with pytest.raises(ValueError, match="token="):
+        m.addLayer(FS + "?f=json&token=SECRET", {}, "Fires")
+    assert "SECRET" not in json.dumps(m.document())
+
+
+def test_a_query_string_does_not_change_the_layer_or_drop_viz():
+    m = mapper()
+    m.addLayer(FS + "?f=json", {"where": "S='CO'"}, "Fires")
+    lay = _doc(m)["layers"][0]
+    assert lay["type"] == "esri.feature" and lay["source"]["url"] == FS
+    assert lay["source"]["options"]["where"] == "S='CO'"

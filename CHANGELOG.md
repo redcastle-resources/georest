@@ -24,7 +24,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   - `Map.view()` runs a small local server (port 8765, or `GEOVIEW_PORT`)
     whose `/proxy` sends secured ArcGIS requests with the token added on the
     server, so a token never reaches the page. It forwards only ArcGIS REST
-    paths on public addresses.
+    paths on public addresses, answers only the server's own pages, and sends
+    a token only to the service it was given for. A public service that
+    refuses cross-site requests is asked again through `/proxy`. Run as a
+    script, the server keeps serving after the script ends, until Ctrl+C.
+  - In a notebook, `Map.view()` shows a self-contained page (the map inline,
+    geoView's files from jsDelivr at this release), so maps show on hosted
+    notebooks and in saved output. A map with a secured layer is shown from
+    the local server instead.
   - `Map.addLayer` works out what it was given: an ArcGIS service URL (feature
     layer, map service or image service, its options in `viz`), a tile URL
     with `{z}`, `{x}` and `{y}`, a GeoJSON URL (loaded by the viewer), GeoJSON

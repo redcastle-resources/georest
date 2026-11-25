@@ -19,6 +19,8 @@ ACCEPTED = ("an ArcGIS service URL (.../FeatureServer, MapServer or ImageServer)
 
 _ESRI = re.compile(r"/rest/services/.+/(FeatureServer|MapServer|ImageServer)(/\d+)?$", re.I)
 _ASSET = re.compile(r"^[A-Za-z0-9_-]+(/[A-Za-z0-9_.-]+)+$")
+_GEOJSON_TYPES = {"Feature", "FeatureCollection", "Point", "MultiPoint", "LineString", "MultiLineString",
+                  "Polygon", "MultiPolygon", "GeometryCollection"}
 
 
 def classify(obj):
@@ -26,7 +28,9 @@ def classify(obj):
     "geojson_url", "geojson" (parsed GeoJSON text), "asset" (an Earth Engine
     asset id), or None for anything that is not a string or a search result
     (the caller handles objects). ValueError for a string none of these."""
-    if isinstance(obj, dict) and "url" in obj and "type" not in obj:
+    # a portal search result: a dict with a url, whose "type" (if any) is
+    # the item's ("Map Service"), not a GeoJSON type
+    if isinstance(obj, dict) and "url" in obj and obj.get("type") not in _GEOJSON_TYPES:
         obj = str(obj["url"] or "")
         if not obj:
             raise ValueError("this search result has no service url")
@@ -44,7 +48,11 @@ def classify(obj):
             return "xyz", s
         path = u.path.rstrip("/")
         if _ESRI.search(path):
-            return "esri", s.rstrip("/")
+            if "token" in {k.lower() for k in parse_qs(u.query)}:
+                raise ValueError("This URL carries a token. Give the service URL without it and pass the token "
+                                 "as token=, so it stays out of the map document and saved pages.")
+            # the viewer writes its own queries: the service is the URL without one
+            return "esri", "{}://{}{}".format(u.scheme, u.netloc, path)
         q = {k.lower(): [x.lower() for x in v] for k, v in parse_qs(u.query).items()}
         if path.lower().endswith((".geojson", ".json")) or "geojson" in q.get("f", []):
             return "geojson_url", s

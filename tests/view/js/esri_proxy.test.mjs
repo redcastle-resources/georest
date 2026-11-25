@@ -73,3 +73,27 @@ test("with no proxy behind the page a secured layer says how to see it; others d
   assert.equal(SECURED_MESSAGE, "This layer is secured. View it from Python (Map.view()) or the geeViz agent, which hold its token.");
   assert.deepEqual(tiles, ["open"]);
 });
+
+test("a service that refuses cross-site requests is asked again through /proxy", async () => {
+  resetSecured();
+  setProxyBase("/proxy");
+  const open = "https://nocors.example.com/arcgis/rest/services/a/MapServer";
+  const calls = [];
+  const fetch = async (url) => {
+    calls.push(url);
+    if (!String(url).startsWith("/proxy?")) throw new TypeError("Failed to fetch");
+    return { ok: true, status: 200, text: async () => '{"layers":[]}' };
+  };
+  assert.deepEqual(await esriRequest(open, {}, { fetch }), { layers: [] });
+  assert.equal(calls.length, 2);
+  assert.ok(calls[1].startsWith("/proxy?") && inner(calls[1]).startsWith(open + "?"), calls[1]);
+  assert.equal(layerOf(calls[1]), null);
+  // the next request for that service goes to /proxy at once
+  await esriRequest(open + "/0/query", { where: "1=1" }, { fetch });
+  assert.equal(calls.length, 3);
+  assert.ok(calls[2].startsWith("/proxy?"), calls[2]);
+  // with no proxy behind the page, the cross-site message stands
+  resetSecured();
+  setProxyBase(null);
+  await assert.rejects(esriRequest("https://other.example.com/arcgis/rest/services/b/MapServer", {}, { fetch }), /does not allow requests from this page/);
+});

@@ -21,6 +21,8 @@ const CROSS_SITE = "This service does not allow requests from this page.";
 export const SECURED_MESSAGE = "This layer is secured. View it from Python (Map.view()) or the geeViz agent, which hold its token.";
 let proxyBase = null;
 const SECURED = new Map(); // service root URL -> layer key
+// services that refused a cross-site request: asked through the proxy
+const VIA_PROXY = new Set();
 const serviceRoot = (url) => {
   const m = /^(.*?\/(?:MapServer|FeatureServer|ImageServer))(?:[/?]|$)/i.exec(String(url));
   return m ? m[1] : String(url);
@@ -34,11 +36,14 @@ export function registerSecured(url, key) {
 }
 export function resetSecured() {
   SECURED.clear();
+  VIA_PROXY.clear();
 }
-// A URL as the page must ask for it: through the proxy for a secured service.
+// A URL as the page must ask for it: through the proxy for a secured
+// service, or for one that refused a cross-site request.
 export function proxied(url) {
-  const key = SECURED.get(serviceRoot(url));
-  if (!key) return url;
+  const root = serviceRoot(url);
+  const key = SECURED.get(root);
+  if (!key) return proxyBase && VIA_PROXY.has(root) ? `${proxyBase}?url=${encodeURIComponent(url)}` : url;
   if (!proxyBase) throw new EsriError(SECURED_MESSAGE);
   return `${proxyBase}?url=${encodeURIComponent(url)}&layer=${encodeURIComponent(key)}`;
 }
@@ -63,16 +68,26 @@ export async function esriRequest(url, params = {}, opts = {}) {
   if (p.f === undefined) p.f = "json";
   const query = encodeParams(p).toString();
   const getUrl = url + (url.indexOf("?") > -1 ? "&" : "?") + query;
+  const send = () =>
+    getUrl.length <= maxGet
+      ? fetchFn(proxied(getUrl), { signal: opts.signal })
+      : fetchFn(proxied(url), {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: query,
+          signal: opts.signal,
+        });
   let res;
   try {
-    if (getUrl.length <= maxGet) res = await fetchFn(proxied(getUrl), { signal: opts.signal });
-    else {
-      res = await fetchFn(proxied(url), {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: query,
-        signal: opts.signal,
-      });
+    try {
+      res = await send();
+    } catch (e) {
+      // the service refused a cross-site request: when the page has a proxy
+      // (Map.view()), ask again through it, and keep asking that way
+      const root = serviceRoot(url);
+      if (!(e instanceof TypeError) || !proxyBase || SECURED.has(root) || VIA_PROXY.has(root)) throw e;
+      VIA_PROXY.add(root);
+      res = await send();
     }
   } catch (e) {
     if (e && (e.name === "AbortError" || e instanceof EsriError)) throw e;
