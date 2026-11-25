@@ -23,6 +23,7 @@ import secrets
 import webbrowser
 
 from ._document import add_layer, new_document, validate
+from ._inputs import ACCEPTED, classify, mosaic_rule
 from ._page import page_html, with_maps_key
 
 EE_ONLY = "{} needs Earth Engine: use geeViz's Map (geeViz.geeView.Map)."
@@ -115,6 +116,8 @@ def esri_layer(url: str, kind: str, viz_params=None, time=None, opts=None, secur
     viz_params = dict(viz_params or {})
     viz = {k: viz_params[k] for k in _STYLE_KEYS if k in viz_params}
     options = {k: viz_params[k] for k in _ESRI_OPT_KEYS if k in viz_params}
+    if viz_params.get("reducer") is not None and "mosaicRule" not in options:
+        options["mosaicRule"] = mosaic_rule(viz_params["reducer"])
     options.update({k: v for k, v in (opts or {}).items() if v is not None})
     layer_type = kind
     if isinstance(time, str) and time.strip().lower() == "all":
@@ -179,16 +182,58 @@ class mapper:
             self._doc["commands"].append(c)
 
     # ---- layers ----
-    def addLayer(self, obj, viz=None, name=None, visible=True, opacity=None):
-        """GeoJSON (a dict, a list of Features, anything with
-        ``__geo_interface__``, or a table with a ``geometry`` column), or an
-        ArcGIS service URL."""
-        if isinstance(obj, str) and "/rest/services/" in obj:
-            return self.addEsriService(obj, viz_params=dict(viz or {}, **({"opacity": opacity} if opacity is not None else {})),
-                                       name=name, visible=visible)
+    def addLayer(self, obj, viz=None, name=None, visible=True, opacity=None, token=None):
+        """Add a layer, worked out from what ``obj`` is:
+
+        - an ArcGIS service URL (``.../FeatureServer/0``, ``.../MapServer``,
+          ``.../ImageServer``) or a georest portal search result;
+        - a tile URL with ``{z}``, ``{x}`` and ``{y}``;
+        - a GeoJSON URL (``.geojson``, ``.json`` or ``f=geojson``), loaded by
+          the viewer;
+        - GeoJSON: text, a dict, a list of Features, anything with
+          ``__geo_interface__``, or a table with a ``geometry`` column.
+
+        ``viz`` styles it, and for ArcGIS also carries the service options:
+        ``layers``, ``where``, ``maxFeatures``, ``time`` (one period),
+        ``renderingRule``, ``mosaicRule``, ``bandIds``, and ``reducer`` (how
+        an image service combines overlapping rasters: "first", "last",
+        "min", "max", "mean", "sum" or "blend"). ``classLegendDict``
+        ({name: hex}) is the legend; for a tile layer, Query names the
+        class whose color is under the click.
+
+        For a time-enabled image or map service shown as a time lapse (one
+        frame per time step), use ``addTimeLapse`` instead.
+        ``token`` signs in to a secured ArcGIS service (kept by the local
+        server, never put in the map)."""
+        viz = dict(viz or {})
+        if opacity is not None:
+            viz["opacity"] = opacity
+        kind, value = classify(obj)
+        if kind == "esri":
+            time = viz.pop("time", None)
+            where = viz.pop("where", "1=1")
+            max_features = viz.pop("maxFeatures", None)
+            viz["visible"] = visible
+            if esri_kind(value) == "esri.feature":
+                return self.addEsriFeatureService(value, viz_params=viz, name=name, max_features=max_features,
+                                                  where=where, token=token, time=time)
+            return self._esri(value, esri_kind(value), name, visible, viz, time, token)
+        if kind == "xyz":
+            legend = viz.pop("classLegendDict", None)
+            return self.addTileLayer(value, name=name or "Tile Layer", visible=visible,
+                                     opacity=viz.get("opacity", 1.0), max_zoom=viz.get("maxZoom", 20), legend=legend)
+        if kind == "geojson_url":
+            add_layer(self._doc, "geojson", {"url": value}, viz=viz, name=name, visible=visible,
+                      opacity=viz.pop("opacity", None))
+            return None
+        if kind == "asset":
+            raise ValueError("{!r} looks like an Earth Engine asset id: Earth Engine layers need geeViz "
+                             "(geeViz.geeView's Map.addLayer).".format(value))
+        obj = value
+        opacity = viz.pop("opacity", None)
         gj = _features(obj)
         if gj is None:
-            raise TypeError("addLayer takes GeoJSON, a table with a geometry column, or an ArcGIS service URL")
+            raise TypeError("addLayer takes " + ACCEPTED)
         add_layer(self._doc, "geojson", {"geojson": gj}, viz=viz, name=name, visible=visible, opacity=opacity)
 
     def addTileLayer(self, url_template, name="Tile Layer", visible=True, opacity=1.0, max_zoom=20, legend=None):
@@ -249,11 +294,17 @@ class mapper:
         self._esri(url, kind, name, visible, viz_params, time, token)
 
     def addTimeLapse(self, url_or_layers, viz=None, name=None, visible=True):
-        """A time-enabled ArcGIS service, one frame per time step."""
+        """A time-enabled ArcGIS image or map service (its URL or a portal
+        search result), one frame per time step. ``viz["reducer"]`` ("max",
+        "mean", ...) combines the rasters within each step."""
         if not isinstance(url_or_layers, (str, dict)):
             raise NotImplementedError("A timelapse from a list of layers is not supported yet; give a time-enabled "
                                       "ArcGIS service URL.")
-        url = resolve_url(url_or_layers)
+        kind, url = classify(url_or_layers)
+        if kind == "asset":
+            raise ValueError("{!r} looks like an Earth Engine asset id: Earth Engine time lapses need geeViz.".format(url))
+        if kind != "esri":
+            raise ValueError("addTimeLapse takes a time-enabled ArcGIS service URL; got {!r}.".format(url_or_layers))
         self._esri(url, esri_kind(url) if esri_kind(url) != "esri.feature" else "esri.feature", name, visible,
                    viz, "all", None)
 

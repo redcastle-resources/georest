@@ -323,7 +323,7 @@ test("queryPoint: a target with unitProps reads values and units in one request"
   assert.deepEqual(r.data.bands.map((b) => b.display), ["5 kt", "90 degrees"]);
 });
 
-test("queryPoint dispatches by kind: a kind with no query is never asked for a target", async () => {
+test("queryPoint dispatches by kind: a tile layer is asked too, and adds nothing without a target", async () => {
   const { ee, pending, calls } = fakeEE();
   const layers = [
     { id: "g", name: "G", visible: true, queryable: true, kind: "tile" },
@@ -333,8 +333,8 @@ test("queryPoint dispatches by kind: a kind with no query is never asked for a t
   const engine = { layers: { queryTarget: (id) => (asked.push(id), Promise.resolve(TARGETS[id] || null)) } };
   const p = queryPoint(engine, layers, PT, defaultState().query, { ee, token: tokenSource()() });
   await flush();
-  // an XYZ tile service has nothing to query: only the Earth Engine layer is asked and queried
-  assert.deepEqual(asked, ["a"]);
+  // an XYZ tile layer is queried by its pixels (engine/tilequery.js); with no target it adds nothing
+  assert.deepEqual(asked, ["g", "a"]);
   assert.deepEqual(calls.map((c) => c.img), ["imgA"]);
   pending[0].cb({ v: 1 });
   assert.deepEqual((await p).map((r) => r.layerId), ["a"]);

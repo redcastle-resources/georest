@@ -66,19 +66,32 @@ almost nothing.
 ## Maps
 
 `georest.view` draws ArcGIS services, GeoJSON and XYZ tiles on an interactive
-map, with query, legends, time lapses and area charts:
+map, with query, legends, time lapses and area charts. `Map.addLayer` works out
+what it was given: an ArcGIS feature layer, map service or image service URL, a
+tile URL with `{z}`, `{x}` and `{y}`, or GeoJSON (a URL, text or a dict).
 
 ```python
 from georest.view import Map
 
-Map.addEsriMapService("https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer",
-                      name="Flood hazard")
-Map.addEsriFeatureService("https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/"
-                          "WFIGS_Interagency_Perimeters_Current/FeatureServer/0", name="Fire perimeters")
+Map.addLayer("https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer",
+             {"layers": "show:28"}, "Flood hazard")
+Map.addLayer("https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/"
+             "WFIGS_Interagency_Perimeters_Current/FeatureServer/0", {}, "Fire perimeters")
+# an image service: every scene in a window, combined per pixel by a reducer
+Map.addLayer("https://landsat2.arcgis.com/arcgis/rest/services/Landsat/MS/ImageServer",
+             {"time": ("2020-06-01", "2020-09-30"), "reducer": "min"}, "Landsat summer 2020")
+# tiles: Query shows the color under the click, named by classLegendDict
+Map.addLayer("https://basemap.nationalmap.gov/arcgis/rest/services/USGSHydroCached/MapServer/tile/{z}/{y}/{x}",
+             {"classLegendDict": {"Water body": "cbe6ff"}}, "Hydrography")
+Map.addLayer("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson", {}, "Earthquakes")
 Map.setCenter(-105.1, 40.6, 9)
 Map.turnOnInspector()
 Map.view()                       # or Map.export_html("map.html")
 ```
+
+For a time-enabled image or map service shown as a time lapse, one frame per
+time step, use `Map.addTimeLapse(url, viz, name)`. `examples/view_example.py`
+shows every kind of input.
 
 ## Layout
 

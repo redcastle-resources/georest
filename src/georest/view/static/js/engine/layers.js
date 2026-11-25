@@ -26,8 +26,9 @@ const VIZ_KEYS = ["bands", "min", "max", "gain", "bias", "gamma", "palette", "fo
 // the original's possibleVizKeys
 const POSSIBLE_VIZ_KEYS = ["bands", "min", "max", "gain", "bias", "gamma", "palette", "color"];
 // Select layers draw like any vector (port of 4map-manager.js addSelectLayerToMap).
-// GeoJSON is queried by hit test (plugins/geojson.js).
-const NOT_QUERYABLE = ["tileMapService", "dynamicMapService"];
+// GeoJSON is queried by hit test (plugins/geojson.js); a tile layer by the
+// color of its pixel (engine/tilequery.js).
+export const NOT_QUERYABLE = ["dynamicMapService"];
 
 // A wind layer (geeViz.weather addWindLayer / addWindTimeLapse): its tiles
 // are u/v encoded as RGB, decoded and drawn by wind-particles.js through
@@ -517,6 +518,12 @@ export function createLayerEngine(gmap, store, deps = {}) {
         item = eeApi.Deserializer.decode(item);
       }
       if (layerType === "geoJSONVector" && typeof item === "string") item = JSON.parse(item);
+      // GeoJSON by URL (a document's source.url), fetched now; the server must allow it (CORS)
+      if (layerType === "geoJSONVector" && item && item.geojsonUrl) {
+        const res = await fetch(item.geojsonUrl);
+        if (!res.ok) throw new Error("The GeoJSON at " + item.geojsonUrl + " could not be loaded (" + res.status + ")");
+        item = await res.json();
+      }
       const prepared = plugin.ownsViz ? { viz: vizIn, legend: null, item } : await prepareViz(item, vizIn, { name: layer.name, nextColor, ee: eeApi });
       if (!recs.has(r.id)) return resolveTarget(null);
       r.viz = prepared.viz;

@@ -1,8 +1,15 @@
 // XYZ tile services (Map.addTileLayer) and dynamic map services
-// (Map.addDynamicMapService: one export image per map tile).
+// (Map.addDynamicMapService: one export image per map tile). A tile layer
+// answers Query with the color under the click (engine/tilequery.js).
+import { queryTile } from "../engine/tilequery.js";
+
 export const tilesPlugin = {
   kinds: ["tile", "dynamic"],
   needsEE: false,
+  query(target, layer, point, qctx) {
+    if (target.type !== "tileMapService" || typeof target.item !== "function") return Promise.resolve([]);
+    return queryTile(target, layer, point, qctx);
+  },
   draw(r, item, ctx) {
     if (r.layerType === "tileMapService") {
       const maxZoom = Number.isFinite(Number(r.viz.maxZoom)) ? Number(r.viz.maxZoom) : 15;

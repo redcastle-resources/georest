@@ -25,6 +25,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     whose `/proxy` sends secured ArcGIS requests with the token added on the
     server, so a token never reaches the page. It forwards only ArcGIS REST
     paths on public addresses.
+  - `Map.addLayer` works out what it was given: an ArcGIS service URL (feature
+    layer, map service or image service, its options in `viz`), a tile URL
+    with `{z}`, `{x}` and `{y}`, a GeoJSON URL (loaded by the viewer), GeoJSON
+    text, or GeoJSON data. `Map.addTimeLapse` takes a time-enabled ArcGIS
+    service. The specific methods still work.
+  - `viz["reducer"]` on an ArcGIS image service ("first", "last", "min",
+    "max", "mean", "sum", "blend") combines overlapping rasters, as an
+    ArcGIS `mosaicRule` mosaic operation.
+  - Query on a tile layer shows the color under the click, and the
+    `classLegendDict` class nearest that color.
   - In notebooks and exported pages, the viewer's files load from a CDN; a
     Google Maps key ships by default and `Map.setMapsKey()` or
     `GOOGLE_MAPS_API_KEY` replaces it.

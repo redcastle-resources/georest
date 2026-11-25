@@ -49,8 +49,10 @@ function addOne(api, layer) {
   if (t === "ee.areaChart") return api.areaChart.addSerializedLayer(src.serialized, viz, name, visible);
   if (t.startsWith("ee.")) return api.addSerializedLayer(src.serialized, viz, name, visible);
   if (t === "geojson") {
-    if (!src.geojson) throw new Error("GeoJSON by URL is not supported yet: put the GeoJSON in the document.");
-    return api.addLayer(src.geojson, { ...viz, layerType: "geoJSONVector" }, name, visible);
+    // GeoJSON by URL is loaded by the layer engine when the layer is drawn
+    const item = src.geojson || (src.url ? { geojsonUrl: String(src.url) } : null);
+    if (!item) throw new Error("A GeoJSON layer needs geojson or url in its source.");
+    return api.addLayer(item, { ...viz, layerType: "geoJSONVector" }, name, visible);
   }
   if (t === "xyz") {
     const tmpl = String(src.url);

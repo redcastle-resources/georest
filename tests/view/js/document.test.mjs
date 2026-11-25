@@ -93,3 +93,12 @@ test("a chart-only ArcGIS layer: charted, not drawn, listed or queried", async (
   assert.deepEqual(queryableLayers(st.layers), []);
   assert.equal(esriPlugin.start(l, { addTimelapse: () => assert.fail("not a timelapse") }), true, "never drawn");
 });
+
+test("a GeoJSON layer can come from a URL, loaded by the viewer", () => {
+  const s = setup();
+  applyDocument({ api: s.api }, { geoview: 1, layers: [{ id: "layer-1", type: "geojson", name: "Parks", visible: true, viz: {}, source: { url: "https://example.com/parks.geojson" } }] }, { notify: s.notify });
+  const [l] = s.store.get().layers;
+  assert.equal(l.kind, "geojson");
+  assert.deepEqual(l.item, { geojsonUrl: "https://example.com/parks.geojson" });
+  assert.deepEqual(s.notes, []);
+});
