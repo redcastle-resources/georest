@@ -131,6 +131,8 @@ class TestNoThirdPartyImports(unittest.TestCase):
     FEMA_EXTRA = {"pandas"}
     #: noaa returns DataFrames, with no Earth Engine path.
     NOAA_EXTRA = {"pandas"}
+    #: view serves pages from the standard library; IPython is optional.
+    VIEW_EXTRA = {"socket", "socketserver", "ipaddress", "mimetypes", "shutil", "string", "IPython"}
 
     def _allowed_for(self, path):
         # georest.frames turns esri's GeoJSON into DataFrames; it is the one
@@ -149,6 +151,10 @@ class TestNoThirdPartyImports(unittest.TestCase):
             return self.ALLOWED | self.FEMA_EXTRA
         if "noaa" in path.parts:
             return self.ALLOWED | self.NOAA_EXTRA
+        # georest.view (geoView): a local server and pages, standard library
+        # only; IPython only inside the function that shows a notebook frame
+        if "view" in path.parts:
+            return self.ALLOWED | self.VIEW_EXTRA
         return self.ALLOWED
 
     def test_package_imports_only_stdlib(self):
@@ -184,6 +190,25 @@ class TestNoThirdPartyImports(unittest.TestCase):
                     names = [(node.module or "").split(".")[0]]
                 with self.subTest(file=path.name):
                     self.assertNotIn("ee", names)
+
+    def test_ipython_is_only_imported_inside_a_function(self):
+        """georest.view shows a notebook frame when IPython is there; importing
+        georest.view must work without it."""
+        root = pathlib.Path(georest.__file__).parent
+        for path in sorted(root.rglob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in tree.body:
+                names = []
+                if isinstance(node, ast.Import):
+                    names = [a.name.split(".")[0] for a in node.names]
+                elif isinstance(node, ast.ImportFrom) and node.level == 0:
+                    names = [(node.module or "").split(".")[0]]
+                with self.subTest(file=path.name):
+                    self.assertNotIn("IPython", names)
+
+    def test_view_is_part_of_the_package(self):
+        from georest import view
+        self.assertTrue(pathlib.Path(view.STATIC_DIR).is_dir())
 
     def test_declared_runtime_dependencies_are_only_pandas(self):
         import importlib.metadata as md
