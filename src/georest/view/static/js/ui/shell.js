@@ -311,13 +311,18 @@ export function mountShell(store, { mapEl } = {}) {
     const t = store.get().title;
     if (t) el.textContent = t;
     else {
-      el.textContent = "geeViz ";
-      const b = document.createElement("b");
-      b.textContent = "Delta";
-      el.appendChild(b);
+      // the viewer's name: geoView, or the one a map document gives (geeViz Delta)
+      const brand = store.get().brand || { name: "geo", accent: "View" };
+      el.textContent = brand.name || "";
+      if (brand.accent) {
+        const b = document.createElement("b");
+        b.textContent = brand.accent;
+        el.appendChild(b);
+      }
     }
   }
   store.on("change:title", renderTitle);
+  store.on("change:brand", renderTitle);
 
   // ---- tools: one active at a time, none folds the right pane ----
   // A button can stand for several tools (Measure: data-tools="distance area",

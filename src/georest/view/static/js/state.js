@@ -50,6 +50,8 @@ export function defaultState() {
     chartSettings: { yLabelMaxLength: 30, yLabelBreakLength: 10, yLabelMaxLines: 5, yLabelFontSize: 10 },
     canReorder: true,
     title: null,
+    // the viewer's name when the map has no title: {name, accent}, or null for geoView
+    brand: null,
     // Delta stacks a timelapse in layer-list order: other layers stay on
     turnOffLayersWhenTimeLapseIsOn: false,
   };

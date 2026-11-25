@@ -4,7 +4,7 @@
     <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
     <meta content="utf-8" http-equiv="encoding" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>geeViz Delta</title>
+    <title>geoView</title>
     <link rel="icon" href="./images/geeviz-logo-light.png" />
 
     <script type="text/javascript">
@@ -47,6 +47,8 @@
     <script type="text/javascript" src="./js/vendor/wind-particles.js"></script>
 
     <!-- run-script: an exported page carrying a run script inlines it here -->
+    <!-- the map document, when the page carries it (an exported page) -->
+    <script type="application/json" id="geoview-document"></script>
     <script type="module" src="./js/main.js"></script>
   </head>
   <body>
@@ -84,7 +86,7 @@
       <div class="brand">
         <button id="hamburger" class="ib" title="Hide sidebar"><i class="ti ti-menu-2"></i></button>
         <img class="logo-img" alt="" />
-        <span class="name" id="title">geeViz <b>Delta</b></span>
+        <span class="name" id="title">geo<b>View</b></span>
         <button id="theme-btn" class="ib" title="Switch light or dark"><i class="ti ti-sun"></i></button>
       </div>
       <div class="search">

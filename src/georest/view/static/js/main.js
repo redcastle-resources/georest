@@ -6,6 +6,7 @@
 // engine instead (no Google Maps, no Earth Engine) for the shell tests.
 import { createStore } from "./state.js";
 import { createMapApi } from "./api.js";
+import { applyDocument, documentUrl } from "./document.js";
 import { mountShell, initialShellState } from "./ui/shell.js";
 import { mountStatus } from "./ui/status.js";
 import { mountMapControls } from "./ui/mapctl.js";
@@ -210,6 +211,38 @@ async function boot() {
     closeLoading: () => {},
     notify: notice,
   });
+  // The map document: inline in an exported page, or ?doc= on this page's
+  // own server. A map script (window.runGeeViz, above) still works.
+  try {
+    const slot = document.getElementById("geoview-document");
+    let doc = null;
+    if (slot && slot.textContent.trim()) doc = JSON.parse(slot.textContent);
+    else {
+      const url = documentUrl(location.search, location.origin);
+      if (url) {
+        const res = await fetch(url, { credentials: "same-origin" });
+        if (!res.ok) throw new Error("the server answered " + res.status);
+        doc = await res.json();
+      }
+    }
+    if (doc) {
+      delta.document = doc;
+      applyDocument(
+        {
+          api,
+          map: engine.gmap,
+          synchronousCenterObject: engine.synchronousCenterObject,
+          setAuthProxy: (u) => (authProxyAPIURL = u),
+          setBrand: (b) => store.set({ brand: b }, "brand"),
+        },
+        doc,
+        { notify: notice }
+      );
+    }
+  } catch (e) {
+    notice("The map could not be read: " + (e && e.message ? e.message : e));
+  }
+
   // View history starts once the map has fully loaded: the map script's calls
   // replayed (install above), every visible layer's first load done and the
   // map at rest. Where the script and its layers settle (centerObject resolves
