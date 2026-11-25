@@ -233,7 +233,8 @@ async function boot() {
           api,
           map: engine.gmap,
           synchronousCenterObject: engine.synchronousCenterObject,
-          setAuthProxy: (u) => (authProxyAPIURL = u),
+          // a path on this server (/ee-api/t/<tenant>), as geeViz's map script set it
+          setAuthProxy: (u) => (authProxyAPIURL = /^https?:/i.test(u) ? u : location.origin + u),
           setBrand: (b) => store.set({ brand: b }, "brand"),
           setProxy: setProxyBase,
         },
