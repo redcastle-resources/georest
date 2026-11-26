@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-25
+
 ### Fixed
 
 - `Map.view()` in a notebook no longer prints IPython's "Consider using
@@ -420,7 +422,9 @@ on `sys.path`.
 - All five `sys.path.insert(...)` bootstraps (two CLIs, three notebooks), made
   unnecessary by the `src/` layout plus an editable install.
 
-[Unreleased]: https://github.com/redcastle-resources/georest/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/redcastle-resources/georest/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/redcastle-resources/georest/compare/v0.6.0...v0.6.1
+[0.6.0]: https://github.com/redcastle-resources/georest/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/redcastle-resources/georest/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/redcastle-resources/georest/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/redcastle-resources/georest/compare/v0.3.0...v0.4.0
