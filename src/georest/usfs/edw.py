@@ -402,8 +402,13 @@ def search_edw_services(query: str = "", theme: str = "") -> list[dict[str, str]
         from georest.usfs import edw
 
         georest.to_frame(edw.search_edw_services("fire"))               # by keyword
-        georest.to_frame(edw.search_edw_services(theme="recreation"))   # or by theme
+        georest.to_frame(edw.search_edw_services(theme="transportation"))   # or by theme
     """
+    if theme.strip() and theme.lower().strip() not in VALID_THEMES:
+        raise ValueError(
+            f"{theme!r} is not an EDW theme. Themes: {', '.join(sorted(VALID_THEMES))}. "
+            f"To search by a word, pass it as the query: search_edw_services({theme!r})."
+        )
     with _edw_error("EDW catalog error"):
         catalog = portal.getServiceMetadata(EDW_BASE_URL)
     entries = catalog.get("services", [])

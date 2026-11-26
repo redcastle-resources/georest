@@ -6,6 +6,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `edw.search_edw_services(theme=...)` with a theme EDW does not have (the
+  docstring's own `theme="recreation"`) returned no services, silently. It now
+  raises `ValueError` naming the valid themes and suggesting the word as a
+  query instead.
+
 ### Changed
 
 - `Map.view()` takes `open_browser` and `open_iframe` the way geeViz's does:
