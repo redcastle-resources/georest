@@ -451,7 +451,7 @@ body.left-hidden .floating-hb { display: inline-grid; }
   .mtop input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--dz-ink); outline: 0; font-size: 15px; }
   .mtop .ib { width: 36px; height: 36px; }
   .mtop img { height: 22px; margin: 0 4px; }
-  .pane { position: fixed; left: 0 !important; right: 0 !important; top: auto; bottom: 64px; width: auto !important; height: 62vh; border: 0; border-top: 1px solid var(--dz-line);
+  .pane { position: fixed; left: 0 !important; right: 0 !important; top: auto; bottom: var(--dz-mtabs-h); width: auto !important; height: 62vh; border: 0; border-top: 1px solid var(--dz-line);
     border-radius: 18px 18px 0 0; transform: translateY(calc(100% + 70px)); transition: transform 0.25s ease; z-index: 7; }
   .pane::before { content: ""; display: block; width: 38px; height: 4px; border-radius: 2px; background: var(--dz-faint); margin: 8px auto 2px; flex: none; }
   body.m-layers .pane-left, body.m-tools .pane-right, body.m-output .pane-right { transform: none !important; }
@@ -467,21 +467,21 @@ body.left-hidden .floating-hb { display: inline-grid; }
   .mtool { position: absolute; top: 50%; left: calc(100% + 2px); transform: translateY(-50%); display: grid; place-items: center; color: var(--dz-teal); line-height: 1; }
   .mtabs .mtool .ti { font-size: 13px; }
   .mtool[hidden] { display: none; }
-  body.left-hidden .pane-left { transform: translateY(calc(100% + 70px)); }
-  body.m-full .pane { height: calc(100vh - 140px); }
+  body.left-hidden .pane-left { transform: translateY(calc(100% + var(--dz-mtabs-h) + 6px)); }
+  body.m-full .pane { height: calc(100vh - 76px - var(--dz-mtabs-h)); }
   .tools { padding-top: 4px; }
   .tool { padding: 10px 2px; }
   .layer { padding: 10px 14px; }
   .tgl { width: 18px; height: 18px; }
-  .mtabs { display: grid; grid-template-columns: 1fr 1fr 1fr; position: fixed; z-index: 9; left: 0; right: 0; bottom: 0; height: 64px; padding-bottom: 6px;
+  .mtabs { display: grid; grid-template-columns: 1fr 1fr 1fr; position: fixed; z-index: 9; left: 0; right: 0; bottom: 0; height: var(--dz-mtabs-h); padding-bottom: 4px;
     background: var(--dz-solid); border-top: 1px solid var(--dz-line); }
-  .mtabs button { border: 0; background: transparent; color: var(--dz-mute); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-    font: 600 12px var(--dz-font-cond); letter-spacing: 0.02em; position: relative; }
-  .mtabs .ti { font-size: 22px; }
+  .mtabs button { border: 0; background: transparent; color: var(--dz-mute); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+    font: 600 11.5px var(--dz-font-cond); letter-spacing: 0.02em; position: relative; }
+  .mtabs .ti { font-size: 20px; }
   .mtabs button.on { color: var(--dz-teal); }
   .mapctl { right: 10px; top: 64px; bottom: auto; }
   /* the map ends at the tab bar, so Google's strip (logo, scale, credits) shows above it */
-  #map { bottom: 64px; }
+  #map { bottom: var(--dz-mtabs-h); }
   body.sv #map { bottom: 0; }
   /* zoom and full screen are the phone's own gestures; Street View has none, so its button stays, under the basemaps */
   .mapctl .ctlgrp { order: 2; padding: 0; background: none; border: 0; box-shadow: none; backdrop-filter: none; }

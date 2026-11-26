@@ -46,6 +46,7 @@
   --dz-gstrip: 14px;
   --dz-right-default: 330px;
   --dz-right-folded: 64px;
+  --dz-mtabs-h: 3rem; /* the phone tab bar (Layers, Tools, Output) */
   --dz-left-default: clamp(300px, 33.333vw, 560px);
   --dz-font-body: Roboto, system-ui, sans-serif;
   --dz-font-cond: Roboto, system-ui, sans-serif;

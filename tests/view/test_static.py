@@ -38,8 +38,6 @@ def test_every_page_reference_resolves():
 
 def test_every_module_import_resolves():
     for js in STATIC.rglob("*.js"):
-        if "vendor" in js.parts:
-            continue
         text = strip_js_comments(js.read_text(encoding="utf-8"))
         for ref in re.findall(r'(?:from|import)\s*\(?\s*"(\.{1,2}/[^"]+)"', text):
             assert (js.parent / ref).resolve().is_file(), (js, ref)
@@ -55,8 +53,13 @@ def test_nothing_points_back_at_geeviz():
 
 def test_the_logos_and_wind_are_there():
     for name in ("images/georest-logo-light.png", "images/georest-logo-dark.png",
-                 "images/geeviz-logo-light.png", "images/geeviz-logo-dark.png", "js/vendor/wind-particles.js"):
+                 "images/geeviz-logo-light.png", "images/geeviz-logo-dark.png", "js/wind-particles.js"):
         assert (STATIC / name).is_file(), name
+
+
+def test_wind_particles_is_not_filed_as_third_party():
+    # geeViz's own particle code, loaded as a classic script; nothing in the viewer is vendored
+    assert not (STATIC / "js" / "vendor").exists()
 
 
 def test_the_wheel_ships_the_viewer():

@@ -439,34 +439,58 @@ class mapper:
         return self._maps_key or os.environ.get("GOOGLE_MAPS_API_KEY") or None
 
     def view(self, open_browser=None, open_iframe=None, iframe_height=525):
-        """Show the map.
+        """Show the map, in a browser tab, a frame in the notebook, or both.
 
-        In a notebook, the map is a self-contained page in a frame: the
-        document inline and geoView's files from jsDelivr, so it shows on
-        hosted notebooks and in saved output (returns None). A map with a
-        secured layer needs the local server, which holds the token, so it is
-        framed from there instead.
+        With neither argument given, only one opens: a frame in a notebook, the
+        browser elsewhere. As in geeViz, setting one (``open_browser=True``)
+        opens only that one, turning one off (``open_iframe=False``) opens the
+        other, and setting both to True opens both.
 
-        Elsewhere the local server shows it in the browser (returns the page
-        URL). Run as a script, the server keeps serving after the script ends,
-        until Ctrl+C."""
+        A notebook frame is a self-contained page: the document inline and
+        geoView's files from jsDelivr, so it shows on hosted notebooks and in
+        saved output. A map with a secured layer needs the local server, which
+        holds the token, so it is framed from there instead. The browser shows
+        the map from the local server, and view() prints where that serves
+        from.
+
+        Returns the local server's page URL, or None when the map was only
+        framed inline. Run as a script, the server keeps serving after the
+        script ends, until Ctrl+C.
+
+        Args:
+            open_browser (bool | None): open the map in the default browser.
+                Default None: True outside notebooks, False in them.
+            open_iframe (bool | None): show the map in a frame in the
+                notebook. Default None: True in notebooks, False elsewhere.
+            iframe_height (int): the frame's height in pixels."""
         in_notebook = _in_notebook()
-        frame = open_iframe if open_iframe is not None else in_notebook
+        if open_browser is None and open_iframe is None:
+            want_browser, want_frame = not in_notebook, in_notebook
+        else:
+            want_browser = open_browser if open_browser is not None else not open_iframe
+            want_frame = open_iframe if open_iframe is not None else not open_browser
         doc = self.document()
         secured = any((l.get("viz") or {}).get("esri", {}).get("secured") for l in doc["layers"])
-        if frame and in_notebook and not secured:
-            page = page_html(doc, cdn_base(), self._key())
+        inline = want_frame and in_notebook and not secured
+        if inline:
+            base = cdn_base()
+            print("geoView files from {}".format(base), flush=True)
+            page = page_html(doc, base, self._key())
             _display_html('<iframe srcdoc="{}" style="width:100%;height:{}px;border:0" allowfullscreen>'
                           '</iframe>'.format(_html.escape(page, quote=True), int(iframe_height)))
-            return None
+            if not want_browser:
+                return None
         from ._server import server
+        from . import STATIC_DIR
         srv = server()
         srv.maps_key = self._key()
         doc["proxy"] = "/proxy"
         url = srv.url_for(doc)
-        if frame:
+        print("geoView is serving {} at {}/geoview/".format(STATIC_DIR, srv.base), flush=True)
+        print("geoView URL: {}".format(url), flush=True)
+        if want_frame and not inline:
             _display_frame(url, iframe_height)
-        elif open_browser if open_browser is not None else not in_notebook:
+        if want_browser:
             webbrowser.open(url)
             if not in_notebook and not _interactive() and not _KEEP_SERVING[0]:
                 _KEEP_SERVING[0] = True

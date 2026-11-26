@@ -6,6 +6,21 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- `Map.view()` takes `open_browser` and `open_iframe` the way geeViz's does:
+  setting one opens only that one, turning one off opens the other, and both
+  can be on. In a notebook, `Map.view(open_browser=True)` now opens the
+  browser (it used to frame the map anyway).
+- `Map.view()` says where it serves from: the viewer's folder and address,
+  then the map's URL (or, for a map framed inline in a notebook, where its
+  files come from).
+- On phones the tab bar along the bottom (Layers, Tools, Output) is 3rem tall
+  instead of 4rem.
+- `wind-particles.js` moved from `static/js/vendor/` to `static/js/`. It is
+  geeViz's own particle code, not a third-party file.
+- The example notebooks have short titles.
+
 ## [0.6.1] - 2026-11-25
 
 ### Fixed

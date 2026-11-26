@@ -34,8 +34,7 @@ def main(geeviz):
     (STATIC / "images").mkdir(parents=True)
     for name in ("geeviz-logo-light.png", "geeviz-logo-dark.png"):
         shutil.copy2(src / "src" / "assets" / "images" / name, STATIC / "images" / name)
-    (STATIC / "js" / "vendor").mkdir()
-    shutil.copy2(src / "src" / "js" / "wind-particles.js", STATIC / "js" / "vendor" / "wind-particles.js")
+    shutil.copy2(src / "src" / "js" / "wind-particles.js", STATIC / "js" / "wind-particles.js")
 
     page = STATIC / "geoview.html"
     shutil.copy2(src / "delta.html", page)
@@ -52,7 +51,7 @@ def main(geeviz):
     for old, new in (
         ("./src/assets/images/geeViz-logo-light.png", "./images/geeviz-logo-light.png"),
         ("./src/assets/images/", "./images/"),
-        ("./src/js/wind-particles.js", "./js/vendor/wind-particles.js"),
+        ("./src/js/wind-particles.js", "./js/wind-particles.js"),
         ("./delta/", "./"),
     ):
         text = text.replace(old, new)

@@ -251,3 +251,61 @@ def test_a_script_keeps_serving_its_map_after_it_ends(monkeypatch):
     monkeypatch.setattr(_map, "_KEEP_SERVING", [False])
     mapper().view()
     assert registered == []
+
+
+def _spy_view(monkeypatch, notebook):
+    """view() with the notebook check, the frames and the browser recorded."""
+    from georest.view import _map
+    seen = {"inline": [], "frame": [], "browser": []}
+    monkeypatch.setattr(_map, "_in_notebook", lambda: notebook)
+    monkeypatch.setattr(_map, "_interactive", lambda: True)
+    monkeypatch.setattr(_map, "_display_html", seen["inline"].append)
+    monkeypatch.setattr(_map, "_display_frame", lambda url, h: seen["frame"].append(url))
+    monkeypatch.setattr(_map.webbrowser, "open", seen["browser"].append)
+    m = mapper()
+    m.addLayer(SQUARE, name="Square")
+    return m, seen
+
+
+def test_open_browser_in_a_notebook_opens_the_browser_instead(monkeypatch):
+    """As in geeViz: setting one of open_browser/open_iframe opens only that one."""
+    m, seen = _spy_view(monkeypatch, notebook=True)
+    url = m.view(open_browser=True)
+    assert seen["browser"] == [url] and url.startswith("http://127.0.0.1:")
+    assert seen["inline"] == [] and seen["frame"] == []
+
+
+def test_open_iframe_false_in_a_notebook_opens_the_browser(monkeypatch):
+    m, seen = _spy_view(monkeypatch, notebook=True)
+    url = m.view(open_iframe=False)
+    assert seen["browser"] == [url] and seen["inline"] == []
+
+
+def test_both_can_open_in_a_notebook(monkeypatch):
+    m, seen = _spy_view(monkeypatch, notebook=True)
+    url = m.view(open_browser=True, open_iframe=True)
+    assert seen["browser"] == [url] and len(seen["inline"]) == 1
+
+
+def test_a_script_with_open_iframe_shows_no_browser(monkeypatch):
+    m, seen = _spy_view(monkeypatch, notebook=False)
+    url = m.view(open_iframe=True)
+    assert seen["frame"] == [url] and seen["browser"] == []
+
+
+def test_view_says_where_it_serves_from(monkeypatch, capsys):
+    """Like geeViz's view(): the server's address and folder, then the map's URL."""
+    from georest.view import STATIC_DIR
+    m, seen = _spy_view(monkeypatch, notebook=False)
+    url = m.view()
+    out = capsys.readouterr().out
+    base = url.split("/geoview/")[0]
+    assert f"geoView is serving {STATIC_DIR} at {base}/geoview/" in out
+    assert f"geoView URL: {url}" in out
+
+
+def test_an_inline_notebook_map_says_where_its_files_come_from(monkeypatch, capsys):
+    from georest.view._map import cdn_base
+    m, seen = _spy_view(monkeypatch, notebook=True)
+    m.view()
+    assert f"geoView files from {cdn_base()}" in capsys.readouterr().out
