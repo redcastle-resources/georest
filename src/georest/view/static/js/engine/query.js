@@ -1,21 +1,24 @@
-// The Query tool: double-click (tap on phones) queries every visible layer at
-// a point; select layers turn clicked features into selections.
+// The Query tool: a click (a tap on phones) queries every visible layer at a
+// point; select layers turn clicked features into selections.
 //
 // port of lcms-viewer 5chart-manager.js getQueryImages, makeQueryTable,
-// startQuery (the doubletap handler), addClickMarker, setupAreaLayerSelection
-// and addSelectedFeaturesToMapWrapper. Differences, by design: an image
-// collection is stacked into one multi-band image and reduced once with
-// reduceRegion (the original used getRegion over the query box), every call
-// is evaluate() (the original used getInfo for the time property), and each
-// query carries a request token so answers to an older point are dropped.
+// startQuery (the doubletap handler; here a single click), addClickMarker,
+// setupAreaLayerSelection and addSelectedFeaturesToMapWrapper. Differences,
+// by design: an image collection is stacked into one multi-band image and
+// reduced once with reduceRegion (the original used getRegion over the query
+// box), every call is evaluate() (the original used getInfo for the time
+// property), and each query carries a request token so answers to an older
+// point are dropped.
 //
 // The only DOM this module touches is through Google map objects (markers,
-// rectangles, Data layers and the InfoWindow, whose content the UI builds).
+// rectangles, Data layers and the InfoWindow, whose content the UI builds),
+// plus one keydown listener: Escape closes the InfoWindow.
 import { isChartOnly } from "../util.js";
 import { smartToFixed, tokenSource } from "../util.js";
 import { addColorHash } from "./viz.js";
 import { lazyEE } from "./ee.js";
 import { pluginFor } from "../plugins/index.js";
+import { createClickGate } from "./hover.js";
 
 // port of 1variables.js plotRadius default
 const DEFAULT_PLOT_RADIUS = 15;
@@ -557,7 +560,7 @@ function viewOf(gmap) {
 // Pixel size in meters at a latitude and zoom: the simplify tolerance for drawn selections.
 const metersPerPixel = (lat, zoom) => (156543.03392 * Math.cos((lat * Math.PI) / 180)) / Math.pow(2, zoom);
 
-// The map side of the Query tool and of select layers. opts: isPhone(),
+// The map side of the Query tool and of select layers. opts:
 // colors() -> {pin, pinEdge, selection}, notify(msg).
 export function createQueryTool(engine, store, opts = {}) {
   const g = opts.google || window.google.maps;
@@ -566,7 +569,6 @@ export function createQueryTool(engine, store, opts = {}) {
   const tokens = tokenSource();
   const colors = () => (opts.colors ? opts.colors() : { pin: "#ff834c", pinEdge: "#fff", selection: "#ff834c" });
   const notify = opts.notify || (() => {});
-  const isPhone = opts.isPhone || (() => false);
 
   let pin = null;
   let box = null;
@@ -719,19 +721,26 @@ export function createQueryTool(engine, store, opts = {}) {
   // port of setupAreaLayerSelection: only the dedicated select mode selects
   // ("Area Tools-Select an Area on map" is Chart area with the Select source).
   const selecting = (s) => s.tool === "chart" && s.areaFrom === "select";
-  gmap.addListener("dblclick", (ev) => {
-    if (!ev.latLng || picking() || isPhone()) return;
-    if (store.get().tool === "query") run(ev.latLng);
+  // A single click (a tap on phones) queries; the clicks of a double-click
+  // (a double tap) zoom and query nothing (engine/hover.js createClickGate).
+  const gate = createClickGate((ev) => {
+    if (store.get().tool === "query" && !picking()) run(ev.latLng);
   });
+  gmap.addListener("dblclick", () => gate.dblclick());
   gmap.addListener("click", (ev) => {
     if (!ev.latLng || picking()) return;
     const s = store.get();
     if (selecting(s) && s.layers.some((l) => l.kind === "select" && l.visible)) selectAt(ev.latLng);
-    // Phones: a tap queries (a double tap zooms on touch screens).
-    if (isPhone() && s.tool === "query") run(ev.latLng);
+    if (s.tool === "query") gate.click(ev);
   });
+  // Escape closes the query popup (phones in infoWindow mode).
+  const onKey = (e) => {
+    if (e.key === "Escape" && info.getMap && info.getMap()) info.close();
+  };
+  if (typeof document !== "undefined") document.addEventListener("keydown", onKey);
 
   store.on("change:tool", (tool) => {
+    gate.cancel();
     if (tool === "query") return;
     tokens(); // whatever is in flight is now stale
     clearMarks();

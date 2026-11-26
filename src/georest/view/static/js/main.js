@@ -20,10 +20,11 @@ import { mountTimelapseHud } from "./ui/timelapse.js";
 import { mountTools } from "./ui/tools.js";
 import { mountOutput } from "./ui/output.js";
 import { createQueryTool } from "./engine/query.js";
+import { createHover } from "./engine/hover.js";
 import { createAreaCharter } from "./engine/areachart.js";
 import { createAreaSources } from "./engine/areasources.js";
 import { createMeasure } from "./engine/measure.js";
-import { createCursor } from "./engine/cursor.js";
+import { createCursor, createDoubleClickZoom } from "./engine/cursor.js";
 import { createWind } from "./engine/wind.js";
 
 const store = createStore();
@@ -143,6 +144,16 @@ async function boot() {
     });
     delta.query = queryTool;
     store.on("change:theme", () => setTimeout(() => queryTool.restyle(), 0));
+    // Hover names features while Query is on, only with a pointer that hovers.
+    const hovers = matchMedia("(hover: hover) and (pointer: fine)");
+    const hover = createHover(engine, store, {
+      canHover: () => hovers.matches && !phone.matches,
+      picking: () => (engine.isPicking ? engine.isPicking() : false),
+      colors: () => ({ stroke: cssToken("--dz-orange", "#e2602a") }),
+    });
+    delta.hover = hover;
+    store.on("change:theme", () => setTimeout(() => hover.restyle(), 0));
+    document.addEventListener("keydown", (e) => e.key === "Escape" && hover.hide());
   } catch (e) {
     notice("The query tool could not start: " + (e && e.message));
   }
@@ -173,6 +184,7 @@ async function boot() {
     });
     delta.measure = measure;
     delta.cursor = createCursor(engine.gmap, store);
+    createDoubleClickZoom(engine.gmap, store);
     store.on("change:theme", () => setTimeout(() => measure.restyle(), 0));
   } catch (e) {
     notice("The distance and area tools could not start: " + (e && e.message));

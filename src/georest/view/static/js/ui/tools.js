@@ -12,7 +12,7 @@ import { currentDefaults, insertPeriod, removePeriod, validatePeriods, yearRange
 const HINTS = {
   distance: "Click the map to start measuring. Double-click to finish. Drag a point to move it.",
   area: "Click the map to outline an area. Double-click to finish; click again for another polygon. Drag a point to move it.",
-  query: "Double-click the map to query every visible layer at that point.",
+  query: "Click the map to query every visible layer at that point. Point at a vector feature to see its name.",
   chart: "Pick where the area comes from. Every visible chartable layer gets charted inside it.",
 };
 const MEASURE_MODES = [

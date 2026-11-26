@@ -55,3 +55,21 @@ test("drawing helpers", () => {
   restyleShapes([null, { setOptions: (o) => seen.push(o.strokeColor) }], "#123");
   assert.deepEqual(seen, ["#123"]);
 });
+
+test("double-click zooms the map unless the tool finishes a shape with it", async () => {
+  const { doubleClickZooms, createDoubleClickZoom } = await import("../../../src/georest/view/static/js/engine/cursor.js");
+  assert.equal(doubleClickZooms({ tool: null }), true);
+  assert.equal(doubleClickZooms({ tool: "query" }), true);
+  assert.equal(doubleClickZooms({ tool: "chart", areaFrom: "view" }), true);
+  assert.equal(doubleClickZooms({ tool: "chart", areaFrom: "select" }), true);
+  assert.equal(doubleClickZooms({ tool: "distance" }), false);
+  assert.equal(doubleClickZooms({ tool: "area" }), false);
+  assert.equal(doubleClickZooms({ tool: "chart", areaFrom: "draw" }), false);
+  const seen = [];
+  const store = createStore({ tool: null, areaFrom: "draw" });
+  createDoubleClickZoom({ setOptions: (o) => seen.push(o.disableDoubleClickZoom) }, store);
+  store.set({ tool: "area" });
+  store.set({ tool: "query" });
+  store.set({ tool: "chart" });
+  assert.deepEqual(seen, [false, true, false, true]);
+});

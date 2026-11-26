@@ -30,6 +30,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The example notebooks find their services by searching (`portal.searchPortal`,
   `edw.search_edw_services`, the USGS site search) instead of starting from
   typed-in URLs, service names and site ids.
+- geoView's Query tool queries on a single click (a tap on phones) instead of
+  a double-click. A double-click zooms the map and queries nothing: a click
+  waits 300 ms, and a second click near it in that time makes both the
+  double-click. The pin marks the point queried until the next click or until
+  Query is turned off; Escape closes the query popup.
+- While Query is on, pointing at a feature of a visible GeoJSON or ArcGIS
+  feature layer highlights it and shows its name (a name, title or label
+  field, the layer's display field, or the layer name). Hover reads only what
+  is already drawn and asks no server. It is off on touch screens.
+- A double-click zooms the map in geoView unless Distance, Area or Chart
+  area's Draw is using it to finish a shape.
 
 ## [0.6.1] - 2026-11-25
 

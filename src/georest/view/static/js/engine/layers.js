@@ -673,6 +673,16 @@ export function createLayerEngine(gmap, store, deps = {}) {
     return r.target || Promise.resolve(null);
   };
 
+  // The parts a vector drawn in the browser has on the map now (a GeoJSON
+  // layer's all, a feature layer's at the zoom), for hover; null for any
+  // other layer and for a layer that is off. Asks the network nothing.
+  const drawnParts = (id, zoom) => {
+    const r = recs.get(id);
+    if (!r || !r.visible || !r.overlay || typeof r.overlay.loadedParts !== "function") return null;
+    if (r.kind !== "geojson" && r.kind !== "esri.feature") return null;
+    return { parts: r.overlay.loadedParts(zoom) || [], displayField: (r.info && r.info.displayField) || null };
+  };
+
   // React to the store: visibility, opacity and order are state.
   store.on("change:layers", (layers) => {
     layers.forEach((l) => {
@@ -693,5 +703,5 @@ export function createLayerEngine(gmap, store, deps = {}) {
     const overlays = r.timelapse ? r.frames.map((f) => f.overlay).filter(Boolean) : r.overlay && r.overlay.retryFailed ? [r.overlay] : [];
     return overlays.reduce((n, o) => n + o.retryFailed(), 0);
   }
-  return { sync, addLayerToMap, setLayerVisible, setLayerOpacity, applyOrder, removeLayer, zOrder, slotOrder, stats, timelapse, queryTarget, windSources, onChange, setLayerLoading, setLayerProgress, retryTiles };
+  return { sync, addLayerToMap, setLayerVisible, setLayerOpacity, applyOrder, removeLayer, zOrder, slotOrder, stats, timelapse, queryTarget, drawnParts, windSources, onChange, setLayerLoading, setLayerProgress, retryTiles };
 }

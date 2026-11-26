@@ -183,6 +183,11 @@ table.kv tr + tr { border-top: 1px solid var(--dz-line); }
   border-radius: 8px; padding: 5px 9px; font-size: 12px; box-shadow: var(--dz-shadow); white-space: nowrap; font-family: var(--dz-font-body); }
 .tip.on { opacity: 1; }
 .tip b { display: block; font-weight: 600; }
+/* the Query tool's hover: one line naming the feature under the pointer */
+.dz-hover-tip { position: fixed; z-index: 1100; pointer-events: none; background: var(--dz-solid); color: var(--dz-ink); border: 1px solid var(--dz-line);
+  border-radius: 6px; padding: 3px 8px; font-size: 12px; box-shadow: var(--dz-shadow); white-space: nowrap;
+  font-family: var(--dz-font-body); }
+.dz-hover-tip[hidden] { display: none; }
 @media (prefers-reduced-motion: reduce) { .sankey-wrap .link, .tip { transition: none; } }
 
 /* desktop panes are as tall as their content, at most the window; the content area scrolls under the pinned
