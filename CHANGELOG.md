@@ -20,6 +20,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `wind-particles.js` moved from `static/js/vendor/` to `static/js/`. It is
   geeViz's own particle code, not a third-party file.
 - The example notebooks have short titles.
+- The example notebooks find their services by searching (`portal.searchPortal`,
+  `edw.search_edw_services`, the USGS site search) instead of starting from
+  typed-in URLs, service names and site ids.
 
 ## [0.6.1] - 2026-11-25
 
