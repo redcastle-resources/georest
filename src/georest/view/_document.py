@@ -29,7 +29,7 @@ VERSION = 1
 
 LAYER_TYPES = (
     "ee.image", "ee.imageCollection", "ee.vectorImage", "ee.vector", "ee.timelapse",
-    "ee.select", "ee.areaChart", "geojson", "xyz",
+    "ee.select", "ee.areaChart", "geojson", "xyz", "xyz.timelapse",
     "esri.feature", "esri.map", "esri.tile", "esri.image", "esri.timelapse",
 )
 

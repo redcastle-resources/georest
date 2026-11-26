@@ -60,6 +60,59 @@ def test_each_add_method_makes_its_layer():
     assert L[10]["viz"]["chartOnly"] is True and L[10]["viz"]["canAreaChart"] is True
 
 
+GIBS = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Combined_L3_IGBP_Land_Cover_Type_Annual/default/{time}/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png"
+
+
+def test_tile_layers_carry_a_palette_and_chart_settings():
+    m = mapper()
+    m.addTileLayer("https://t/{z}/{x}/{y}.png", name="NDVI", max_zoom=7,
+                   viz={"palette": ["#000000", "ffffff"], "min": 0, "max": 1, "canAreaChart": True,
+                        "areaChartParams": {"line": True}, "legendTitle": "NDVI"})
+    m.addLayer("https://u/{z}/{x}/{y}.png", {"palette": "000000,ffffff", "min": -1, "max": 1, "canAreaChart": True,
+                                             "classLegendDict": {"Forest": "#00ff00"}, "maxZoom": 9}, "Both")
+    L = validate(m.document())["layers"]
+    assert L[0]["type"] == "xyz" and L[0]["source"] == {"url": "https://t/{z}/{x}/{y}.png", "maxZoom": 7}
+    assert L[0]["viz"] == {"palette": ["000000", "ffffff"], "min": 0, "max": 1, "canAreaChart": True,
+                           "areaChartParams": {"line": True}, "legendTitle": "NDVI"}
+    assert L[1]["source"]["maxZoom"] == 9
+    assert L[1]["viz"]["palette"] == ["000000", "ffffff"] and L[1]["viz"]["min"] == -1
+    assert L[1]["viz"]["classLegendDict"] == {"Forest": "00ff00"} and L[1]["viz"]["canAreaChart"] is True
+
+
+def test_a_tile_time_lapse_from_labeled_templates_or_a_time_template():
+    m = mapper()
+    m.addTimeLapse({"2001": "https://t/2001/{z}/{x}/{y}.png", "2002": "https://t/2002/{z}/{x}/{y}.png"},
+                   {"classLegendDict": {"Water": "#0000ff"}, "canAreaChart": True,
+                    "areaChartParams": {"sankey": True}, "maxZoom": 8}, "Cover")
+    m.addTimeLapse(GIBS, {"times": ["2001-01-01", "2024-01-01"], "labels": ["2001", "2024"],
+                          "palette": ["000000", "ffffff"], "min": 0, "max": 1}, "GIBS")
+    doc = validate(m.document())
+    a, b = doc["layers"]
+    assert a["type"] == "xyz.timelapse" and a["name"] == "Cover"
+    assert a["source"] == {"frames": [{"label": "2001", "url": "https://t/2001/{z}/{x}/{y}.png"},
+                                      {"label": "2002", "url": "https://t/2002/{z}/{x}/{y}.png"}], "maxZoom": 8}
+    assert a["viz"] == {"classLegendDict": {"Water": "0000ff"}, "canAreaChart": True, "areaChartParams": {"sankey": True}}
+    assert b["source"]["maxZoom"] == 20
+    assert [f["label"] for f in b["source"]["frames"]] == ["2001", "2024"]
+    assert b["source"]["frames"][1]["url"] == GIBS.replace("{time}", "2024-01-01")
+    assert "times" not in b["viz"] and "labels" not in b["viz"]
+    # a {time} template's labels default to its times
+    m.addTimeLapse(GIBS, {"times": ["2003-01-01"]})
+    assert m.document()["layers"][2]["source"]["frames"][0]["label"] == "2003-01-01"
+
+
+@pytest.mark.parametrize("args, match", [
+    ((GIBS,), "times"),
+    ((GIBS, {"times": []}), "times"),
+    ((GIBS, {"times": ["2001"], "labels": ["a", "b"]}), "labels"),
+    (({"2001": "https://t/2001/{z}/{x}.png"},), "{z}, {x} and {y}"),
+    (("https://t/{z}/{x}/{y}.png",), "{time}"),
+])
+def test_tile_time_lapse_mistakes_say_what_is_wrong(args, match):
+    with pytest.raises(ValueError, match=re.escape(match)):
+        mapper().addTimeLapse(*args)
+
+
 def test_a_table_with_geometry_and_a_geo_interface():
     pd = pytest.importorskip("pandas")
     df = pd.DataFrame([{"name": "a", "geometry": SQUARE["geometry"]}])

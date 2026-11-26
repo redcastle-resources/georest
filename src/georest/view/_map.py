@@ -35,6 +35,31 @@ _STYLE_KEYS = ("strokeColor", "fillColor", "fillOpacity", "strokeWeight", "strok
                "canAreaChart", "chartField", "chartStatistic", "chartValueField", "legendTitle",
                "pointRadius", "areaChartParams")
 _ESRI_OPT_KEYS = ("layers", "renderingRule", "mosaicRule", "bandIds", "outFields")
+_XYZ_TOKENS = ("{x}", "{y}", "{z}")
+
+
+def _is_template(s) -> bool:
+    return isinstance(s, str) and all(tok in s for tok in _XYZ_TOKENS)
+
+
+def _is_url(s) -> bool:
+    return isinstance(s, str) and bool(re.match(r"^https?://[^/]+", s.strip()))
+
+
+def tile_viz(viz=None, legend=None) -> dict:
+    """A tile layer's viz for the document: ``classLegendDict`` and
+    ``palette`` colors without "#", the palette as a list."""
+    viz = dict(viz or {})
+    given = viz.pop("classLegendDict", None)
+    legend = legend if legend is not None else given
+    if legend:
+        viz["classLegendDict"] = {k: str(v).lstrip("#") for k, v in legend.items()}
+    pal = viz.get("palette")
+    if isinstance(pal, str):
+        pal = [p for p in pal.split(",") if p.strip()]
+    if pal is not None:
+        viz["palette"] = [str(p).strip().lstrip("#") for p in pal]
+    return viz
 
 
 def cdn_base(version: str | None = None) -> str:
@@ -203,7 +228,10 @@ class mapper:
         an image service combines overlapping rasters: "first", "last",
         "min", "max", "mean", "sum" or "blend"). ``classLegendDict``
         ({name: hex}) is the legend; for a tile layer, Query names the
-        class whose color is under the click.
+        class whose color is under the click. A tile layer's ``viz`` also
+        takes ``palette``, ``min`` and ``max`` (a continuous layer's color
+        ramp), ``maxZoom``, ``canAreaChart`` and ``areaChartParams``: see
+        ``addTileLayer`` for what Chart area does with each.
 
         For a time-enabled image or map service shown as a time lapse (one
         frame per time step), use ``addTimeLapse`` instead.
@@ -223,9 +251,10 @@ class mapper:
                                                   where=where, token=token, time=time)
             return self._esri(value, esri_kind(value), name, visible, viz, time, token)
         if kind == "xyz":
-            legend = viz.pop("classLegendDict", None)
-            return self.addTileLayer(value, name=name or "Tile Layer", visible=visible,
-                                     opacity=viz.get("opacity", 1.0), max_zoom=viz.get("maxZoom", 20), legend=legend)
+            opacity = viz.pop("opacity", 1.0)
+            max_zoom = viz.pop("maxZoom", 20)
+            return self.addTileLayer(value, name=name or "Tile Layer", visible=visible, opacity=opacity,
+                                     max_zoom=max_zoom, viz=viz)
         if kind == "geojson_url":
             add_layer(self._doc, "geojson", {"url": value}, viz=viz, name=name, visible=visible,
                       opacity=viz.pop("opacity", None))
@@ -240,12 +269,34 @@ class mapper:
             raise TypeError("addLayer takes " + ACCEPTED)
         add_layer(self._doc, "geojson", {"geojson": gj}, viz=viz, name=name, visible=visible, opacity=opacity)
 
-    def addTileLayer(self, url_template, name="Tile Layer", visible=True, opacity=1.0, max_zoom=20, legend=None):
-        if not all(tok in str(url_template) for tok in ("{x}", "{y}", "{z}")):
+    def addTileLayer(self, url_template, name="Tile Layer", visible=True, opacity=1.0, max_zoom=20, legend=None,
+                     viz=None):
+        """An XYZ tile service: ``url_template`` has ``{z}``, ``{x}`` and
+        ``{y}``. ``legend`` ({name: hex}, or ``viz["classLegendDict"]``) names
+        its classes.
+
+        With ``viz={"canAreaChart": True}`` Chart area reads the layer's own
+        tiles over the area (the tile server must allow it: CORS) at the map
+        zoom, capped at ``max_zoom`` and stepped down until at most 64 tiles
+        cover the area. Every pixel with any opacity counts by its ground
+        area. What it charts depends on what the layer says about its colors:
+
+        - a legend (``classLegendDict``): area by class, each pixel the class
+          of the nearest legend color; pixels near no class are left out and
+          the chart says how many.
+        - ``palette``, ``min`` and ``max`` (a color ramp, as Earth Engine's):
+          each color is read back to a value along the ramp, and the chart is
+          the area's mean.
+        - neither: area by color, nearly equal colors grouped, the largest
+          twelve kept and the rest as "Other", each in its own color.
+
+        ``viz["areaChartParams"]`` holds the chart settings, as for any layer
+        (``chartType``, ``yAxisLabel``, ...)."""
+        if not _is_template(str(url_template)):
             raise ValueError(f"url_template must contain {{x}}, {{y}} and {{z}}; got {url_template!r}")
-        viz = {}
-        if legend:
-            viz["classLegendDict"] = {k: str(v).lstrip("#") for k, v in legend.items()}
+        viz = tile_viz(viz, legend)
+        viz.pop("opacity", None)
+        viz.pop("maxZoom", None)
         add_layer(self._doc, "xyz", {"url": url_template, "maxZoom": int(max_zoom)}, viz=viz, name=name,
                   visible=visible, opacity=opacity)
 
@@ -298,12 +349,39 @@ class mapper:
         self._esri(url, kind, name, visible, viz_params, time, token)
 
     def addTimeLapse(self, url_or_layers, viz=None, name=None, visible=True):
-        """A time-enabled ArcGIS image or map service (its URL or a portal
-        search result), one frame per time step. ``viz["reducer"]`` ("max",
-        "mean", ...) combines the rasters within each step."""
+        """A layer played frame by frame, from one of:
+
+        - a time-enabled ArcGIS image or map service (its URL or a portal
+          search result), one frame per time step. ``viz["reducer"]``
+          ("max", "mean", ...) combines the rasters within each step.
+        - tile templates, one per frame: a dict ``{label: template}`` in
+          frame order, or one template with ``{time}`` in it and
+          ``viz["times"]`` the values to put there (``viz["labels"]``, the
+          frames' names, default to the times). Each template has ``{z}``,
+          ``{x}`` and ``{y}``.
+
+        A tile time lapse takes a tile layer's viz (``classLegendDict``, or
+        ``palette``, ``min`` and ``max``, and ``maxZoom``; see
+        ``addTileLayer``). With ``canAreaChart``, Chart area charts each
+        frame: class areas (or the mean) over time as a line chart. With
+        ``areaChartParams={"sankey": True}`` a layer with a legend also
+        charts class transitions between periods as a Sankey, pairing the
+        pixels at the same place in each period's frames; periods are years,
+        read from the frame labels."""
+        frames = self._tile_frames(url_or_layers, viz)
+        if frames is not None:
+            viz = tile_viz(viz)
+            opacity = viz.pop("opacity", None)
+            for k in ("times", "labels"):
+                viz.pop(k, None)
+            max_zoom = int(viz.pop("maxZoom", 20))
+            add_layer(self._doc, "xyz.timelapse", {"frames": frames, "maxZoom": max_zoom}, viz=viz,
+                      name=name or "Tile Time Lapse", visible=visible, opacity=opacity)
+            return None
         if not isinstance(url_or_layers, (str, dict)):
             raise NotImplementedError("A timelapse from a list of layers is not supported yet; give a time-enabled "
-                                      "ArcGIS service URL.")
+                                      "ArcGIS service URL, or tile templates ({label: template}, or one with "
+                                      "{time} and viz['times']).")
         kind, url = classify(url_or_layers)
         if kind == "asset":
             raise ValueError("{!r} looks like an Earth Engine asset id: Earth Engine time lapses need geeViz.".format(url))
@@ -311,6 +389,30 @@ class mapper:
             raise ValueError("addTimeLapse takes a time-enabled ArcGIS service URL; got {!r}.".format(url_or_layers))
         self._esri(url, esri_kind(url) if esri_kind(url) != "esri.feature" else "esri.feature", name, visible,
                    viz, "all", None)
+
+    @staticmethod
+    def _tile_frames(obj, viz):
+        """[{label, url}] when ``obj`` is tile templates, else None."""
+        viz = viz or {}
+        if isinstance(obj, dict) and "url" not in obj and obj and all(_is_url(v) for v in obj.values()):
+            frames = [{"label": str(k), "url": v} for k, v in obj.items()]
+        elif _is_url(obj) and any(t in obj for t in _XYZ_TOKENS + ("{time}",)):
+            if "{time}" not in obj:
+                raise ValueError("addTimeLapse takes one tile template only with {time} in it (and viz['times']); "
+                                 "for one tile layer use addTileLayer, for frames give {label: template}.")
+            times = viz.get("times")
+            if not isinstance(times, (list, tuple)) or not times:
+                raise ValueError("A tile template with {time} needs viz['times'], the values to put there.")
+            labels = viz.get("labels", times)
+            if not isinstance(labels, (list, tuple)) or len(labels) != len(times):
+                raise ValueError("viz['labels'] names the frames: one per entry of viz['times'].")
+            frames = [{"label": str(lb), "url": obj.replace("{time}", str(t))} for lb, t in zip(labels, times)]
+        else:
+            return None
+        for f in frames:
+            if not _is_template(f["url"]):
+                raise ValueError(f"Each tile template must contain {{z}}, {{x}} and {{y}}; got {f['url']!r}")
+        return frames
 
     def addSelectLayer(self, obj, viz=None, name=None):
         raise NotImplementedError("addSelectLayer for GeoJSON and ArcGIS layers is not supported yet; add the "

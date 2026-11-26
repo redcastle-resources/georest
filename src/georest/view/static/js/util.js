@@ -2,9 +2,9 @@
 
 const ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 
-// A layer drawn frame by frame: an Earth Engine timelapse, or a
-// time-enabled ArcGIS service.
-export const isTimelapseKind = (kind) => kind === "timelapse" || kind === "esri.timelapse";
+// A layer drawn frame by frame: an Earth Engine timelapse, a time-enabled
+// ArcGIS service, or tile templates, one per frame.
+export const isTimelapseKind = (kind) => kind === "timelapse" || kind === "esri.timelapse" || kind === "tile.timelapse";
 export const isTimelapse = (layer) => !!layer && isTimelapseKind(layer.kind);
 // A layer that is charted but never drawn, listed or queried: an Earth Engine
 // area-chart-only layer, or an ArcGIS layer added with chartOnly.

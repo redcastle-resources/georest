@@ -6,6 +6,32 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Chart area on XYZ tile layers. With `canAreaChart`, geoView reads the
+  layer's own tiles over the area in the browser (the tile server must allow
+  CORS; one that does not gets an error naming the layer) and charts from
+  their colors: area by class for a layer with a `classLegendDict`, the mean
+  for a layer with a color ramp (`palette`, `min`, `max`, each color read back
+  to a value along the ramp), and area by color, the twelve largest plus
+  "Other", for a layer with neither. Areas are each pixel's Web Mercator
+  ground area; the zoom steps down until at most 64 tiles cover the area.
+- Tile time lapses: `Map.addTimeLapse` takes tile templates, a dict
+  `{label: template}` or one template with `{time}` and `viz["times"]`
+  (`viz["labels"]` names the frames). Chart area charts each frame's class
+  areas or mean over time, and with `"sankey": True` a thematic time lapse's
+  class transitions between periods. Query reads the frame shown. The map
+  document has a new layer type, `xyz.timelapse`.
+- `Map.addTileLayer` takes `viz` (`palette`, `min`, `max`, `canAreaChart`,
+  `areaChartParams`, `legendTitle`), and `Map.addLayer` passes a tile layer's
+  viz through, so a tile layer with a color ramp has a ramp legend.
+- Past its `maxZoom`, a tile layer (and a tile time lapse) shows its
+  `maxZoom` tiles enlarged instead of asking the server for tiles it does not
+  have.
+- The geoView starter notebook charts NASA GIBS tile services: MODIS land
+  cover as a time lapse with class areas and a Sankey, and MODIS NDVI's
+  monthly mean.
+
 ### Fixed
 
 - `edw.search_edw_services(theme=...)` with a theme EDW does not have (the

@@ -124,6 +124,11 @@ export function createMapApi(store, engine = {}) {
   api.addTimeLapse = (item, viz, name, visible) => {
     push(makeLayer("timelapse", item, viz || {}, name, visible));
   };
+  // Tile templates played frame by frame: frames is [{label, url}], each url
+  // an XYZ template (Map.addTimeLapse with tile templates in georest).
+  api.addTileTimeLapse = (frames, viz, name, visible) => {
+    push(makeLayer("tile.timelapse", (frames || []).map((f) => ({ label: String(f.label), url: f.url })), viz || {}, name, visible));
+  };
   api.addSerializedTimeLapse = (item, viz, name, visible) => {
     viz = serialize(viz);
     push(makeLayer("timelapse", item, viz, name, visible));

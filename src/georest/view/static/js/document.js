@@ -59,6 +59,10 @@ function addOne(api, layer) {
     const urlFor = (c, z) => tmpl.replace("{x}", c.x).replace("{y}", c.y).replace("{z}", z);
     return api.addLayer(urlFor, { ...viz, layerType: "tileMapService", maxZoom: src.maxZoom === undefined ? viz.maxZoom : src.maxZoom }, name, visible);
   }
+  if (t === "xyz.timelapse") {
+    if (!Array.isArray(src.frames) || !src.frames.length) throw new Error("A tile time lapse needs frames in its source.");
+    return api.addTileTimeLapse(src.frames, { ...viz, maxZoom: src.maxZoom === undefined ? viz.maxZoom : src.maxZoom }, name, visible);
+  }
   if (t.startsWith("esri.")) {
     return api.addEsriLayer(src.url, { ...viz, esriKind: t === "esri.timelapse" ? viz.esriKind : t, esri: { ...(src.options || {}), ...(viz.esri || {}) }, timelapse: t === "esri.timelapse" }, name, visible);
   }

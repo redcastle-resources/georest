@@ -17,6 +17,7 @@ SOURCES = {
     "ee.areaChart": {"serialized": {"result": "0", "values": {}}},
     "geojson": {"geojson": {"type": "FeatureCollection", "features": []}},
     "xyz": {"url": "https://t/{z}/{x}/{y}.png"},
+    "xyz.timelapse": {"frames": [{"label": "2001", "url": "https://t/2001/{z}/{x}/{y}.png"}], "maxZoom": 8},
     "esri.feature": {"url": "https://x/arcgis/rest/services/a/FeatureServer/0"},
     "esri.map": {"url": "https://x/arcgis/rest/services/a/MapServer"},
     "esri.tile": {"url": "https://x/arcgis/rest/services/a/MapServer"},
