@@ -25,6 +25,24 @@ export function formatPeriod(period) {
   return String(period);
 }
 
+// The years a Sankey covers, as one span: the earliest start to the latest
+// end ("1985-2022"), the same whether its periods are single years or ranges
+// ([[1985, 1987], [2020, 2022]] or formatted "1985-1987"). One year shows alone.
+export function periodSpan(periods) {
+  const years = [];
+  (periods || []).forEach((p) => {
+    const parts = Array.isArray(p) ? p : String(p).split("-");
+    parts.forEach((v) => {
+      const n = Number(v);
+      if (Number.isFinite(n) && String(v).trim() !== "") years.push(n);
+    });
+  });
+  if (!years.length) return (periods || []).length ? `${periods[0]}-${periods[periods.length - 1]}` : "";
+  const a = Math.min(...years);
+  const b = Math.max(...years);
+  return a === b ? String(a) : `${a}-${b}`;
+}
+
 // port of charts.py _ensure_hex_color
 export function ensureHexColor(color) {
   if (color === null || color === undefined) return null;

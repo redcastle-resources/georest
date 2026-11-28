@@ -6,6 +6,25 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- geoView: double-click no longer zooms the map, so a Query click queries at
+  once instead of waiting 300 ms for a possible second click. Zoom with the
+  wheel, the + and - buttons or a pinch.
+- Chart area settings show "Transition years" only when a layer charts as a
+  Sankey.
+- A Sankey's subtitle and saved image show the years it covers as one span,
+  earliest start to latest end ("1985-2022"), with a "-" like the line
+  charts, whether its periods are single years or ranges.
+- A transition period row takes a year (the default) or a range written the
+  older way ("1985-1987"). Ranges given in the url or the run script show as
+  ranges instead of as their start year.
+
+### Fixed
+
+- A long subtitle on an output card no longer squeezes its title to a word
+  per line: the subtitle moves under the title.
+
 ## [0.6.2] - 2026-11-26
 
 ### Added

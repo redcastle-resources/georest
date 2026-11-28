@@ -163,7 +163,7 @@ test("saved image: a legend for charts over time only", () => {
 
 test("saved Sankey image: titled with the card title, then area, periods, unit and grid", () => {
   const r = { title: "LCMS Land Cover transitions", data: { periods: ["2016-2018", "2018-2020", "2020-2022"], areaLabel: "Map view", areaFormat: "Hectares", unitText: "ha", nominalScale: 30 } };
-  assert.deepEqual(sankeyTitle(r), { title: "LCMS Land Cover transitions", sub: "Map view, 2016-2018 to 2020-2022, Hectares, 30 m grid" });
+  assert.deepEqual(sankeyTitle(r), { title: "LCMS Land Cover transitions", sub: "Map view, 2016-2022, Hectares, 30 m grid" });
   assert.equal(sankeyTitle({ data: {} }), null);
 });
 

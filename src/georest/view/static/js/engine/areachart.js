@@ -10,7 +10,7 @@
 // area are dropped. Never touches the DOM or Google Maps.
 import { isChartOnly } from "../util.js";
 import { AREA_FORMAT_DICT, SPLIT_STR, areaChartInputs, getObjInfo, parseReduction, reducerName, zonalStats } from "./charts.js";
-import { SANKEY_MIN_PERCENTAGE, buildSankeyFromHistogram, ensureHexColor, formatPeriod, prepareSankeyData } from "./sankey.js";
+import { SANKEY_MIN_PERCENTAGE, buildSankeyFromHistogram, ensureHexColor, formatPeriod, periodSpan, prepareSankeyData } from "./sankey.js";
 import { evaluateAsync, getObjType } from "./viz.js";
 import { smartToFixed, tokenSource } from "../util.js";
 import { lazyEE } from "./ee.js";
@@ -219,7 +219,7 @@ export function sankeyResult(layer, params, entry, ctx) {
     id: `${layer.id}:sankey:${entry.band}`,
     layerId: layer.id,
     title: `${layer.name}${multi ? " " + entry.band : ""} transitions`,
-    meta: `${periods[0]} to ${periods[periods.length - 1]}, ${ctx.nominalScale} m`,
+    meta: `${periodSpan(entry.periods)}, ${ctx.nominalScale} m`,
     kind: "sankey",
     actions: ["csv", "png", "expand"],
     data: {
@@ -352,6 +352,21 @@ export function currentDefaults(s) {
     if (own) given = own;
   }
   return defaultPeriods(range, given);
+}
+
+// A period row's text, both ways: "1985" is the year 1985 (the default, one
+// year per period); "1985-1987" is a range, as periods were given before.
+// Anything else reads as blank, for validatePeriods to report.
+export function parsePeriodText(text) {
+  const m = /^\s*(\d+)\s*(?:-\s*(\d+)\s*)?$/.exec(String(text === undefined || text === null ? "" : text));
+  if (!m) return [NaN, NaN];
+  const a = Number.parseInt(m[1], 10);
+  return [a, m[2] === undefined ? a : Number.parseInt(m[2], 10)];
+}
+export function periodText(row) {
+  const [a, b] = row || [];
+  if (!Number.isFinite(a)) return "";
+  return !Number.isFinite(b) || a === b ? String(a) : `${a}-${b}`;
 }
 
 // "+": a new single-year row in the middle, between the two rows with the

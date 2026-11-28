@@ -6,6 +6,7 @@
 // mockup, only the outer columns are labeled, each column carries its
 // period, and the diagram is drawn at the card's width. Names are text.
 import { downloadUrl } from "./theme.js";
+import { periodSpan } from "../engine/sankey.js";
 
 const LINK_OPACITY = 0.55;
 
@@ -233,7 +234,7 @@ export function sankeyTitle(r) {
   const title = String((r && r.title) || d.layerName || "").trim();
   if (!title) return null;
   const p = d.periods || [];
-  const span = p.length > 1 ? `${p[0]} to ${p[p.length - 1]}` : p.length ? String(p[0]) : "";
+  const span = periodSpan(p);
   const sub = [d.areaLabel, span, UNIT_NAME[d.areaFormat] || d.unitText, d.nominalScale ? `${d.nominalScale} m grid` : ""].filter((x) => x !== undefined && x !== null && String(x).trim() !== "");
   return { title, sub: sub.join(", ") };
 }

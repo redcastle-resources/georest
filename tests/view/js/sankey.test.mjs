@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import {
   SANKEY_MIN_PERCENTAGE,
   formatPeriod,
+  periodSpan,
   ensureHexColor,
   transitionBandNames,
   buildSankeyFromHistogram,
@@ -34,6 +35,15 @@ const classInfoFor = (fx) => {
   const ci = fx.classInfoPy[fx.band];
   return { classValues: ci.class_values, classNames: ci.class_names, classPalette: ci.class_palette };
 };
+
+test("periodSpan: the earliest start to the latest end, the same for years and ranges", () => {
+  assert.equal(periodSpan([[1985, 1987], [2000, 2002], [2020, 2022]]), "1985-2022");
+  assert.equal(periodSpan([[1985, 1985], [2000, 2000], [2020, 2020]]), "1985-2020");
+  assert.equal(periodSpan([2020, 1985]), "1985-2020");
+  assert.equal(periodSpan(["2016-2018", "2018-2020", "2020-2022"]), "2016-2022");
+  assert.equal(periodSpan([[1990, 1990]]), "1990");
+  assert.equal(periodSpan([]), "");
+});
 
 test("the viewer's default minimum percentage is 0.5", () => {
   assert.equal(SANKEY_MIN_PERCENTAGE, 0.5);

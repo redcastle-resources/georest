@@ -93,9 +93,10 @@ body.no-tips #tool-options:not(:has(> :not(.topt-hint))) { display: none; }
 .chip:hover { border-color: var(--dz-teal); color: var(--dz-teal); }
 .chip:focus-visible { outline: 2px solid var(--dz-teal); outline-offset: 1px; }
 .card-r { margin: 0 12px 8px; border: 1px solid var(--dz-line); border-radius: 12px; background: color-mix(in srgb, var(--dz-solid) 70%, transparent); }
-.card-r .h { display: flex; align-items: center; gap: 8px; padding: 8px 10px; cursor: pointer; }
-.card-r .h b { flex: 1; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
-.card-r .h .val-code { text-align: right; }
+.card-r .h { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 8px 10px; cursor: pointer; }
+/* the title keeps room for its words; a long subtitle moves under it */
+.card-r .h b { flex: 1 1 12em; font-weight: 600; min-width: 0; overflow-wrap: break-word; }
+.card-r .h .val-code { flex: 0 1 auto; margin-left: auto; text-align: right; }
 .card-r .h:focus-visible { outline: 2px solid var(--dz-teal); outline-offset: -2px; border-radius: 12px; }
 .card-r .h .ti-chevron-down { color: var(--dz-faint); transition: transform 0.2s; }
 .card-r.closed .h .ti-chevron-down { transform: rotate(-90deg); }

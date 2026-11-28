@@ -7,7 +7,7 @@
 // 2templates.js setupTransitionPeriodUI). Names are set as text.
 import { isChartOnly } from "../util.js";
 import { UPLOAD_ACCEPT } from "../engine/areasources.js";
-import { currentDefaults, insertPeriod, removePeriod, validatePeriods, yearRange } from "../engine/areachart.js";
+import { currentDefaults, insertPeriod, parsePeriodText, periodText, removePeriod, sankeyLayers, validatePeriods, yearRange } from "../engine/areachart.js";
 
 const HINTS = {
   distance: "Click the map to start measuring. Double-click to finish. Drag a point to move it.",
@@ -238,19 +238,20 @@ export function mountTools(store, { optionsEl, unitsEl, toolsEl, chart, measure,
     const range = yearRange(s);
     if (!draft) {
       const start = s.chartPeriods || currentDefaults(s);
-      if (start) draft = start.map((r) => [r[0], r[0]]);
+      // a range given the older way stays a range
+      if (start) draft = start.map((r) => [r[0], r[r.length - 1]]);
     }
     const box = el("div", "cset-sec");
     box.dataset.role = "periods";
     box.title =
-      "Define the years for transition area charting. Each row is a year, in order. The Sankey chart shows the change from each year to the next. Add or remove rows as needed.";
+      "Define the years for transition area charting. Each row is a year, in order (or a range of years, such as 1985-1987). The Sankey chart shows the change from each row to the next. Add or remove rows as needed.";
     box.appendChild(el("div", "cset-h", "Transition years"));
     if (!draft || !range) {
       box.appendChild(el("div", "val-code", "Reading the years of the Sankey layers."));
       return box;
     }
-    box.appendChild(el("div", "val-code", `Each row is a year from ${range[0]} to ${range[1]}, in order. Drag a row by its handle to reorder.`));
-    const rangeTitle = `Enter a year within the valid range (${range[0]} - ${range[1]})`;
+    box.appendChild(el("div", "val-code", `Each row is a year from ${range[0]} to ${range[1]}, in order, or a range such as ${range[0]}-${Math.min(range[0] + 2, range[1])}. Drag a row by its handle to reorder.`));
+    const rangeTitle = `Enter a year (or a range, such as ${range[0]}-${Math.min(range[0] + 2, range[1])}) within the valid range (${range[0]}-${range[1]})`;
     const head = el("div", "cset-prow cset-phead");
     head.append(el("span"), el("span", "cset-ph", "Year"));
     const table = el("div", "cset-periods");
@@ -275,17 +276,16 @@ export function mountTools(store, { optionsEl, unitsEl, toolsEl, chart, measure,
       r.appendChild(grip);
       {
         const inp = el("input", "cset-year mono");
-        inp.type = "number";
-        inp.step = "1";
-        inp.min = String(range[0]);
-        inp.max = String(range[1]);
+        // text, not a number box: a row can hold a range ("1985-1987")
+        inp.type = "text";
+        inp.inputMode = "numeric";
+        inp.autocomplete = "off";
         inp.title = rangeTitle;
         inp.placeholder = "Year";
-        inp.value = Number.isFinite(row[0]) ? String(row[0]) : "";
+        inp.value = periodText(row);
         inp.setAttribute("aria-label", "Year " + (i + 1));
         inp.addEventListener("input", () => {
-          const y = Number.parseInt(inp.value, 10);
-          draft[i] = [y, y];
+          draft[i] = parsePeriodText(inp.value);
           showErrors();
         });
         r.appendChild(inp);
@@ -404,10 +404,12 @@ export function mountTools(store, { optionsEl, unitsEl, toolsEl, chart, measure,
     const sources = SOURCES.filter(([v]) => v !== "select" || hasSelectLayers(s));
     nodes.push(seg("src", "Area from", sources, s.areaFrom, (v) => store.set({ areaFrom: v }, "areaFrom")));
     const show = seg("showas", "Show as", [["area", s.units === "imperial" ? "Acres" : "Hectares"], ["pct", "% of area"]], s.showAs, (v) => store.set({ showAs: v }, "showAs"));
+    // transition years matter only when a layer charts as a Sankey
+    const hasSankey = sankeyLayers(s).length > 0;
     const gear = el("button", "ib" + (settingsOpen ? " on" : ""));
     gear.type = "button";
     gear.dataset.act = "chart-settings";
-    gear.title = "Choose layers to chart, and transition periods for Sankey charts";
+    gear.title = hasSankey ? "Choose layers to chart, and transition periods for Sankey charts" : "Choose layers to chart";
     gear.setAttribute("aria-label", gear.title);
     gear.setAttribute("aria-expanded", String(settingsOpen));
     gear.appendChild(el("i", "ti ti-adjustments-horizontal"));
@@ -424,7 +426,8 @@ export function mountTools(store, { optionsEl, unitsEl, toolsEl, chart, measure,
     nodes.push(sourceRow(s));
     if (settingsOpen) {
       const panel = el("div", "cset");
-      panel.append(layerChoices(s), periodEditor(s));
+      panel.appendChild(layerChoices(s));
+      if (hasSankey) panel.appendChild(periodEditor(s));
       nodes.push(panel);
     }
     return nodes;

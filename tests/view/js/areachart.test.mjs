@@ -194,6 +194,7 @@ test("chartCsv: Sankey blocks per transition, port of chartArea's outCSV", () =>
   const params = chartParams({ kind: "ee", viz: { areaChartParams: { sankey: true } } });
   const entry = { raw: SANKEY.raw, objInfo: SANKEY.objInfo, band: SANKEY.band, periods: SANKEY.periods, scale: 30 };
   const r = sankeyResult({ id: "s", name: "LCMS" }, params, entry, { units: "metric", showAs: "pct", areaLabel: "a", areaKey: "k", nominalScale: 30 });
+  assert.equal(r.meta, "2016-2022, 30 m"); // one span, as the line charts show it
   const lines = chartCsv(r).split("\n");
   const names = SANKEY.objInfo.classInfo.Land_Cover.classNames;
   const san = (s) => s.replace(/[^A-Za-z0-9 -]/g, "-");
@@ -378,7 +379,7 @@ test("sankey module exports what the charter uses", () => {
 });
 
 // ---- coordinator rulings: class dictionaries, shouldUnmask, per-band Sankey, auto periods ----
-import { classProps, defaultPeriods, yearRange, insertPeriod, removePeriod, currentDefaults } from "../../../src/georest/view/static/js/engine/areachart.js";
+import { classProps, defaultPeriods, yearRange, insertPeriod, removePeriod, currentDefaults, parsePeriodText, periodText } from "../../../src/georest/view/static/js/engine/areachart.js";
 
 test("chartParams: class dictionaries given with the layer, and their bands", () => {
   const viz = { class_names: { lc: ["A", "B"] }, class_values: { lc: [1, 2] }, class_palette: { lc: ["ff0000", "00ff00"] } };
@@ -416,6 +417,18 @@ test("yearRange: visible Sankey layers' years, else every Sankey layer's; curren
   assert.deepEqual(currentDefaults({ ...s, chartPeriodsGiven: [[2010, 2016], [2020, 2025]] }), [[2015, 2016], [2020, 2023]]);
   const own = { ...s, layers: [sk("a", { sankeyTransitionPeriods: [[2016, 2017], [2019, 2020]] })] };
   assert.deepEqual(currentDefaults(own), [[2016, 2017], [2019, 2020]], "the run script's periods");
+});
+
+test("a period row's text: a year, or a range written the older way", () => {
+  assert.deepEqual(parsePeriodText("1985"), [1985, 1985]);
+  assert.deepEqual(parsePeriodText(" 1985 - 1987 "), [1985, 1987]);
+  assert.deepEqual(parsePeriodText("1987-1985"), [1987, 1985]); // left for the backwards check
+  assert.ok(parsePeriodText("").every(Number.isNaN));
+  assert.ok(parsePeriodText("19x5").every(Number.isNaN));
+  assert.ok(parsePeriodText("1985-").every(Number.isNaN));
+  assert.equal(periodText([1985, 1985]), "1985");
+  assert.equal(periodText([1985, 1987]), "1985-1987");
+  assert.equal(periodText([NaN, NaN]), "");
 });
 
 test("insertPeriod: in the middle of the largest gap, at its midpoint year", () => {
