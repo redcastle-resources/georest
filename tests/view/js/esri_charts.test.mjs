@@ -55,6 +55,16 @@ test("a long area goes as a POST", async () => {
   assert.equal(fetch.calls.find((c) => c.base.endsWith("/computeHistograms")).method, "POST");
 });
 
+test("a range of years is refused for an image service Sankey, by name", async () => {
+  const fetch = fakeFetch([[LCMS, "lcms_info"]]);
+  const layer = { id: "l", name: "LCMS", kind: "esri.timelapse", item: LCMS, legend: LEGEND, viz: { timelapse: true, areaChartParams: { sankey: true } } };
+  await assert.rejects(
+    imageChart(layer, { geojson: SQUARE }, { fetch, zoom: 12, kind: "sankey", params: chartParams(layer), periods: [[1990, 1992], [1998, 1998]] }),
+    /LCMS.*single years.*1990-1992/
+  );
+  assert.equal(fetch.calls.filter((c) => c.base.endsWith("/computeHistograms")).length, 0);
+});
+
 test("class transitions between two periods, for a Sankey", async () => {
   const fetch = fakeFetch([
     [LCMS, "lcms_info"],

@@ -7,7 +7,7 @@
 // 2templates.js setupTransitionPeriodUI). Names are set as text.
 import { isChartOnly } from "../util.js";
 import { UPLOAD_ACCEPT } from "../engine/areasources.js";
-import { currentDefaults, insertPeriod, parsePeriodText, periodText, removePeriod, sankeyLayers, validatePeriods, yearRange } from "../engine/areachart.js";
+import { currentDefaults, insertPeriod, normalizePeriods, parsePeriodText, periodText, removePeriod, sankeyLayers, validatePeriods, yearRange } from "../engine/areachart.js";
 
 const HINTS = {
   distance: "Click the map to start measuring. Double-click to finish. Drag a point to move it.",
@@ -56,7 +56,7 @@ export function readPeriodsParam(urlParams) {
     }
   }
   if (!Array.isArray(v)) return null;
-  const rows = v.filter((r) => Array.isArray(r) && r.length === 2).map((r) => [Number.parseInt(r[0], 10), Number.parseInt(r[1], 10)]);
+  const rows = (normalizePeriods(v) || []).filter((r) => r.every(Number.isFinite));
   return rows.length ? rows : null;
 }
 

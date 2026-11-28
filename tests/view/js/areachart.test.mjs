@@ -8,6 +8,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createStore } from "../../../src/georest/view/static/js/state.js";
 import { createMapApi } from "../../../src/georest/view/static/js/api.js";
+import { readPeriodsParam } from "../../../src/georest/view/static/js/ui/tools.js";
 import { parseReduction } from "../../../src/georest/view/static/js/engine/charts.js";
 import { buildSankeyFromHistogram } from "../../../src/georest/view/static/js/engine/sankey.js";
 import * as sankeyMod from "../../../src/georest/view/static/js/engine/sankey.js";
@@ -21,10 +22,31 @@ import {
   sankeyResult,
   chartCsv,
   validatePeriods,
+  normalizePeriods,
   createAreaCharter,
 } from "../../../src/georest/view/static/js/engine/areachart.js";
 
 const FIX = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "charts");
+
+test("normalizePeriods: a year is that year, a list is a range of years; mixed lists work", () => {
+  assert.deepEqual(normalizePeriods([[1985, 1988], 1990, 2000, [2021, 2023]]), [[1985, 1988], [1990, 1990], [2000, 2000], [2021, 2023]]);
+  assert.deepEqual(normalizePeriods(["1990", [2000], [2001, 2002, 2005]]), [[1990, 1990], [2000, 2000], [2001, 2005]]);
+  const bad = normalizePeriods([null, "x", []]);
+  assert.ok(bad.flat().every(Number.isNaN), JSON.stringify(bad));
+  assert.equal(normalizePeriods(null), null);
+  assert.equal(normalizePeriods(1990), null);
+});
+
+test("mixed transition periods from the run script reach the charter as ranges", () => {
+  const p = chartParams({ kind: "ee", viz: { areaChartParams: { sankey: true, sankeyTransitionPeriods: [[1985, 1988], 1990, 2000, [2021, 2023]] } } });
+  assert.deepEqual(p.sankeyTransitionPeriods, [[1985, 1988], [1990, 1990], [2000, 2000], [2021, 2023]]);
+  // and they validate (a bare year used to throw on row.forEach)
+  assert.deepEqual(validatePeriods([[1985, 1988], 1990, 2000, [2021, 2023]]).periods, [[1985, 1988], [1990, 1990], [2000, 2000], [2021, 2023]]);
+  assert.deepEqual(validatePeriods([[1985, 1988], 1990, 2000, [2021, 2023]]).errors, []);
+  // the url (transitionChartingYears) and the defaults take the same lists
+  assert.deepEqual(readPeriodsParam({ transitionChartingYears: "[[1985,1988],1990,2000,[2021,2023]]" }), [[1985, 1988], [1990, 1990], [2000, 2000], [2021, 2023]]);
+  assert.deepEqual(defaultPeriods([1985, 2023], [[1985, 1988], 1990, 2000, [2021, 2023]]), [[1985, 1988], [1990, 1990], [2000, 2000], [2021, 2023]]);
+});
 const load = (n) => JSON.parse(readFileSync(join(FIX, n), "utf-8"));
 const LCMS = load("lcms_land_cover.json");
 const NLCD = load("nlcd_2021.json");

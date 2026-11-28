@@ -19,6 +19,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A transition period row takes a year (the default) or a range written the
   older way ("1985-1987"). Ranges given in the url or the run script show as
   ranges instead of as their start year.
+- Transition periods can mix years and ranges:
+  `[[1985, 1988], 1990, 2000, [2021, 2023]]`, from the run script
+  (`sankeyTransitionPeriods`) or the url. A range charts its years' most
+  common class. Bare years in a mixed list used to be dropped or, in
+  validation, to stop the Sankey. An ArcGIS image service Sankey takes single
+  years and says so when given a range.
+- Every example notebook has Colab and GitHub links, and installs georest
+  when it is missing, so the Colab link runs.
 
 ### Fixed
 

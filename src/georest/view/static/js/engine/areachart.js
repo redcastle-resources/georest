@@ -57,7 +57,7 @@ export function chartParams(layer) {
     yAxisLabel: src.yAxisLabel || null,
     xAxisLabel: src.xAxisLabel || null,
     sankeyMinPercentage: given(src.sankeyMinPercentage) ? src.sankeyMinPercentage : SANKEY_MIN_PERCENTAGE,
-    sankeyTransitionPeriods: src.sankeyTransitionPeriods || null,
+    sankeyTransitionPeriods: normalizePeriods(src.sankeyTransitionPeriods),
     sankeyBandName: src.sankeyBandName || null,
     minZoomSpecifiedScale: src.minZoomSpecifiedScale || 11,
     scale: src.scale,
@@ -279,6 +279,22 @@ export function chartCsv(r) {
   return csvLines([["Class Name", d.yLabel]].concat(d.columns.map((c, i) => [sanitize(c), fix(values[i])])));
 }
 
+// Transition periods as [start, end] pairs. Each entry is a year (1990, the
+// simple way, a period of that one year) or a list of years taken as a range
+// ([1985, 1988]: the first to the last, as periods were given before); a
+// list mixes both: [[1985, 1988], 1990, 2000, [2021, 2023]]. A range charts
+// its years' most common class. An entry that is neither reads as blank, for
+// validatePeriods to report. Null when periods is not a list.
+export function normalizePeriods(periods) {
+  if (!Array.isArray(periods)) return null;
+  const year = (v) => (v === null || v === undefined || String(v).trim() === "" ? NaN : Number(v));
+  return periods.map((p) => {
+    if (Array.isArray(p)) return p.length ? [year(p[0]), year(p[p.length - 1])] : [NaN, NaN];
+    const y = year(p);
+    return [y, y];
+  });
+}
+
 // port of 2templates.js getTransitionRowData's checks, with its year range
 // check against the years of the Sankey layers (yearRange). Wording kept,
 // grammar fixed.
@@ -291,6 +307,7 @@ const PERIOD_ERRORS = {
 };
 export function validatePeriods(periods, range = null) {
   const errs = [];
+  periods = normalizePeriods(periods);
   if (!Array.isArray(periods) || periods.length <= 1) errs.push("noValues");
   else {
     periods.forEach((row, i) => {
@@ -332,7 +349,7 @@ export function defaultPeriods(range, given = null) {
   if (!range) return null;
   const [a, b] = range;
   if (Array.isArray(given)) {
-    const clipped = given
+    const clipped = normalizePeriods(given)
       .filter((r) => Array.isArray(r) && r.length === 2 && Number.isFinite(r[0]) && Number.isFinite(r[1]) && r[1] >= a && r[0] <= b)
       .map((r) => [Math.max(a, r[0]), Math.min(b, r[1])]);
     if (clipped.length >= 2) return clipped;

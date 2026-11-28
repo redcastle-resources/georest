@@ -12,7 +12,7 @@ import { glyphFor } from "./symbols.js";
 import { oidField } from "./features.js";
 import { lineResult, sankeyResult } from "../engine/areachart.js";
 import { SPLIT_STR } from "../engine/charts.js";
-import { transitionBandNames } from "../engine/sankey.js";
+import { formatPeriod, transitionBandNames } from "../engine/sankey.js";
 
 const BAND = "value";
 // Web Mercator meters per map pixel at zoom 0
@@ -105,6 +105,10 @@ export async function imageChart(layer, area, cctx) {
   if (cctx.kind === "sankey") {
     if (!ci) throw new Error(`${layer.name} is not a class map, so it has no class transitions to chart.`);
     const periods = cctx.periods || [];
+    // one image per period: a range's most common class needs a raster
+    // function this code does not have yet
+    const range = periods.find((p) => Array.isArray(p) && p[0] !== p[p.length - 1]);
+    if (range) throw new Error(`${layer.name} is an ArcGIS image service: its transition periods must be single years, not a range such as ${formatPeriod(range)}.`);
     const K = Number(info.maxValues && info.maxValues[0]) + 1;
     if (!(K > 1)) throw new Error(`${layer.name} does not say its largest class value.`);
     const raw = {};
