@@ -18,7 +18,6 @@ import { smartToFixed, tokenSource } from "../util.js";
 import { addColorHash } from "./viz.js";
 import { lazyEE } from "./ee.js";
 import { pluginFor } from "../plugins/index.js";
-import { createClickGate } from "./hover.js";
 
 // port of 1variables.js plotRadius default
 const DEFAULT_PLOT_RADIUS = 15;
@@ -721,17 +720,12 @@ export function createQueryTool(engine, store, opts = {}) {
   // port of setupAreaLayerSelection: only the dedicated select mode selects
   // ("Area Tools-Select an Area on map" is Chart area with the Select source).
   const selecting = (s) => s.tool === "chart" && s.areaFrom === "select";
-  // A single click (a tap on phones) queries; the clicks of a double-click
-  // (a double tap) zoom and query nothing (engine/hover.js createClickGate).
-  const gate = createClickGate((ev) => {
-    if (store.get().tool === "query" && !picking()) run(ev.latLng);
-  });
-  gmap.addListener("dblclick", () => gate.dblclick());
   gmap.addListener("click", (ev) => {
     if (!ev.latLng || picking()) return;
     const s = store.get();
     if (selecting(s) && s.layers.some((l) => l.kind === "select" && l.visible)) selectAt(ev.latLng);
-    if (s.tool === "query") gate.click(ev);
+    // a click (a tap on phones) queries at once: double-click does not zoom
+    if (s.tool === "query") run(ev.latLng);
   });
   // Escape closes the query popup (phones in infoWindow mode).
   const onKey = (e) => {
@@ -740,7 +734,6 @@ export function createQueryTool(engine, store, opts = {}) {
   if (typeof document !== "undefined") document.addEventListener("keydown", onKey);
 
   store.on("change:tool", (tool) => {
-    gate.cancel();
     if (tool === "query") return;
     tokens(); // whatever is in flight is now stale
     clearMarks();

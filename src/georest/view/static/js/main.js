@@ -24,7 +24,7 @@ import { createHover } from "./engine/hover.js";
 import { createAreaCharter } from "./engine/areachart.js";
 import { createAreaSources } from "./engine/areasources.js";
 import { createMeasure } from "./engine/measure.js";
-import { createCursor, createDoubleClickZoom } from "./engine/cursor.js";
+import { createCursor } from "./engine/cursor.js";
 import { createWind } from "./engine/wind.js";
 
 const store = createStore();
@@ -184,7 +184,6 @@ async function boot() {
     });
     delta.measure = measure;
     delta.cursor = createCursor(engine.gmap, store);
-    createDoubleClickZoom(engine.gmap, store);
     store.on("change:theme", () => setTimeout(() => measure.restyle(), 0));
   } catch (e) {
     notice("The distance and area tools could not start: " + (e && e.message));

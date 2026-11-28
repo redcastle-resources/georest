@@ -1,11 +1,5 @@
 // The Query tool's gestures on the map.
 //
-// A single click queries. A click is held for CLICK_DELAY_MS before it
-// queries: a second click near it (or Google's dblclick) inside that window
-// means the click was the first half of a double-click, which zooms, so
-// neither click queries. A second click farther away replaces the first. A
-// drag is never a click (Google fires no click after a drag).
-//
 // While Query is on, the pointer over a visible vector drawn in the browser
 // (GeoJSON, ArcGIS feature layers) highlights the feature under it and shows
 // a one-line tooltip with its name. Hover asks the network nothing: it hit
@@ -14,52 +8,6 @@
 // without a hovering pointer (phones, tablets) get no hover; a tap queries.
 import { hitTest } from "./hittest.js";
 import { isChartOnly } from "../util.js";
-
-export const CLICK_DELAY_MS = 300;
-
-// A second click is the other half of a double-click when it lands within
-// this many pixels of the first; farther away, it is a new click.
-export const DOUBLE_CLICK_PX = 10;
-
-// Whether two Google map mouse events are close enough to be one double-click.
-export function nearClicks(a, b) {
-  const da = a && a.domEvent;
-  const db = b && b.domEvent;
-  if (!da || !db || !Number.isFinite(da.clientX) || !Number.isFinite(db.clientX)) return true;
-  return Math.hypot(da.clientX - db.clientX, da.clientY - db.clientY) <= DOUBLE_CLICK_PX;
-}
-
-// createClickGate(onSingle, {setTimer, clearTimer, delay, near(a, b)})
-//   -> {click(ev), dblclick(), cancel()}
-export function createClickGate(onSingle, opts = {}) {
-  const setTimer = opts.setTimer || ((fn, ms) => setTimeout(fn, ms));
-  const clearTimer = opts.clearTimer || ((id) => clearTimeout(id));
-  const delay = opts.delay === undefined ? CLICK_DELAY_MS : opts.delay;
-  const near = opts.near || nearClicks;
-  let pending = null;
-  let first = null;
-  const cancel = () => {
-    if (pending !== null) clearTimer(pending);
-    pending = first = null;
-  };
-  return {
-    click(ev) {
-      if (pending !== null) {
-        const double = near(first, ev);
-        cancel();
-        // the second click of a double-click: neither queries
-        if (double) return;
-      }
-      first = ev;
-      pending = setTimer(() => {
-        pending = first = null;
-        onSingle(ev);
-      }, delay);
-    },
-    dblclick: cancel,
-    cancel,
-  };
-}
 
 const NAME_KEYS = ["name", "title", "label"];
 const present = (v) => v !== undefined && v !== null && String(v).trim() !== "";
